@@ -147,13 +147,16 @@ def recommend_user(b,user,now,config):
  added=0
  for _,movie,reason in ranked:
   if added>=budget:break
-  try:detail=b.movie(f"movie/{movie['id']}?language=ru-RU")
+  try:detail=b.movie(f"movie/{movie['id']}?language=ru-RU&append_to_response=keywords")
   except Exception:continue
   if detail.get('id')!=movie['id']:continue
   if not detail.get('runtime') or not detail.get('poster_path') or detail.get('adult') or not detail.get('release_date') or detail['release_date']>now.date().isoformat():continue
   fid=10000000+detail['id'];genre_ids=[g['id'] for g in detail.get('genres',[])]
-  metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':'','moods':['wonder'],'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity',0),'tmdbUpdatedAt':now.isoformat()}}
+  metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':'','moods':[],'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity',0),'tmdbUpdatedAt':now.isoformat()}}
   metadata['discoverySources']=movie.get('discovery_sources',[])
+  metadata['keywords']=[k['name'] for k in detail.get('keywords',{}).get('keywords',[]) if isinstance(k,dict) and isinstance(k.get('name'),str)]
+  metadata['originalLanguage']=detail.get('original_language','')
+  metadata['productionCountries']=[c['iso_3166_1'] for c in detail.get('production_countries',[]) if isinstance(c,dict) and isinstance(c.get('iso_3166_1'),str)]
   if os.environ.get('OMDB_API_KEY') and detail.get('imdb_id'):
    try:
     result=b.request('https://www.omdbapi.com/?'+urllib.parse.urlencode({'apikey':os.environ['OMDB_API_KEY'],'i':detail['imdb_id']}),{})
