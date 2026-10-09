@@ -51,14 +51,15 @@ def tmdb_candidates(backend, preferred, config):
            'primary_release_date.lte':now.date().isoformat(),'primary_release_date.gte':str(RULES['selection']['minimum_year'])+'-01-01','vote_count.gte':config['minimum_votes'],'without_genres':','.join(map(str,RULES['selection']['always_excluded_genres']))}
     strategies=[{'sort_by':'popularity.desc','with_genres':27},{'sort_by':'vote_average.desc','with_genres':27},
                 {'sort_by':'popularity.desc','with_keywords':4565}]
-    strategies.extend({'sort_by':'popularity.desc','with_genres':genre} for genre in preferred[:3] if genre in (53,878))
+    # Broad sci-fi/thriller lists waste the shortlist on unrelated family/adventure films.
+    strategies.extend(dict(sort_by='popularity.desc',**({'with_genres':'27,53'} if genre==53 else {'with_genres':878,'with_keywords':4565})) for genre in preferred[:3] if genre in (53,878))
     strategies.extend({'sort_by':'popularity.desc','with_keywords':keyword} for keyword in config.get('_preferred_keywords',[])[:2])
     count=config.get('pages',2);window=max(count,min(20,config.get('page_window',20)))
     slot=int((now.timestamp()-17*60)//3600)+config.get('_page_seed',0)
     # Keep page 1 for fresh hits; rotate deeper pages so an exhausted first page is not the whole catalog.
     pages=[1]+[2+(slot*(count-1)+i)%(window-1) for i in range(count-1)]
     paths=['discover/movie?'+urllib.parse.urlencode(dict(query,**strategy,page=page)) for strategy in strategies for page in pages][:24]
-    paths.extend('movie/'+str(mid)+'/recommendations?language=ru-RU&page=1' for mid in config.get('_preferred_movie_ids',[])[:6] if type(mid) is int and mid>0)
+    paths.extend('movie/'+str(mid)+'/recommendations?language=ru-RU&page='+str(1+config.get('_search_round',0)) for mid in config.get('_preferred_movie_ids',[])[:6] if type(mid) is int and mid>0)
     def fetch(path):
         try:
             data=backend.movie(path)
@@ -141,7 +142,7 @@ def discover(backend, preferred, config):
             continue
         name = source['id']
         try:
-            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _preferred_keywords=config.get('_preferred_keywords',[]), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
+            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _search_round=config.get('_search_round',0), _preferred_movie_ids=config.get('_preferred_movie_ids',[]), _preferred_keywords=config.get('_preferred_keywords',[]), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
             valid = [m for m in candidates if isinstance(m,dict) and type(m.get('id')) is int and m['id'] > 0 and not excluded(config,m['id'])]
             for movie in valid:
                 mid = movie['id']

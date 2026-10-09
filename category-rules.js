@@ -118,7 +118,8 @@ export const categoryRules = {
     ],
     "always_excluded_genres": [
       99,
-      16
+      16,
+      10751
     ],
     "allow_target_mixed_genres": true,
     "excluded_countries": [
@@ -130,7 +131,8 @@ export const categoryRules = {
       "zh",
       "cn",
       "yue"
-    ]
+    ],
+    "require_target": true
   },
   "keyword_groups": {
     "creature-horror": [

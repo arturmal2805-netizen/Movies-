@@ -12,8 +12,8 @@ class ManualTests(unittest.TestCase):
   backend.collection=[{'tmdb_id':2000+i,'reason':'earlier','created_at':NOW.isoformat()} for i in range(config['maximum_per_hour'])]
   user={'user_id':OWNER,'last_recommendation_at':NOW.isoformat()}
   with patch.dict('os.environ',{},clear=True):
-   self.assertEqual(recommend_user(backend,user,NOW,config,manual=True),15)
-   self.assertEqual(recommend_user(backend,user,NOW,config,manual=True),15)
+   self.assertEqual(recommend_user(backend,user,NOW,config,manual=True),30)
+   self.assertEqual(recommend_user(backend,user,NOW,config,manual=True),0)
   self.assertEqual(len({r['tmdb_id'] for r in backend.collection}),130)
   self.assertEqual(backend.patched,[])
   self.assertTrue(all(r['metadata']['recommendationMode']=='manual' for r in backend.collection[100:]))

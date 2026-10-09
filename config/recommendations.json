@@ -34,5 +34,8 @@
   "discovery_workers": 4,
   "detail_workers": 4,
   "page_window": 20,
-  "history_enrichment_per_run": 80
+  "history_enrichment_per_run": 80,
+  "manual_batch_target": 30,
+  "search_rounds": 3,
+  "detail_candidate_limit": 240
 }

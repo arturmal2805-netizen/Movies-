@@ -1,4 +1,4 @@
-import {categoryRules} from './category-rules.js?v=history-taste27';
+import {categoryRules} from './category-rules.js?v=target-refill28';
 export const categoryOptions = [
  ['all','✦','Все фильмы'],
  ['horror','☠','Horror'],
@@ -35,11 +35,12 @@ export function filmCategories(film) {
 export function isEligibleForDiscovery(film){
  const policy=categoryRules.selection;
  if(!Number.isInteger(film.year)||film.year<policy.minimum_year)return false;
- const ids=new Set(film.genreIds||[]),labels={'Документальный':99,'Документальное':99,'Documentary':99,'Анимация':16,'Мультфильм':16,'Animation':16,'Аниме':16,'Anime':16,'Мелодрама':10749,'Романтика':10749,'Romance':10749,'Драма':18,'Drama':18,'Боевик':28,'Action':28};
+ const ids=new Set(film.genreIds||[]),labels={'Семейный':10751,'Family':10751,'Документальный':99,'Документальное':99,'Documentary':99,'Анимация':16,'Мультфильм':16,'Animation':16,'Аниме':16,'Anime':16,'Мелодрама':10749,'Романтика':10749,'Romance':10749,'Драма':18,'Drama':18,'Боевик':28,'Action':28};
  if(labels[film.genre])ids.add(labels[film.genre]);
  if(policy.always_excluded_genres.some(id=>ids.has(id)))return false;
  const countries=(film.productionCountries||film.production_countries||[]).map(c=>String(typeof c==='string'?c:c?.iso_3166_1).toUpperCase());
  if(countries.some(c=>policy.excluded_countries.includes(c))||policy.excluded_languages.includes(String(film.originalLanguage||film.original_language||'').toLowerCase()))return false;
  const target=filmCategories(film).some(id=>id==='horror'||id==='dystopian');
+ if(policy.require_target&&!target)return false;
  return !policy.excluded_genres.some(id=>ids.has(id))||policy.allow_target_mixed_genres&&target;
 }

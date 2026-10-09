@@ -58,9 +58,11 @@ def analyze(rows):
 def read_supabase(user_id):
  uuid.UUID(user_id);key=os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
  if not key:raise ValueError('SUPABASE_SERVICE_ROLE_KEY is missing; add it in environment secrets')
+ key=''.join(key.split());headers={'apikey':key}
+ if not key.startswith('sb_secret_'):headers['Authorization']='Bearer '+key
  url=os.environ.get('SUPABASE_URL','https://tecntqujshynuttfdxhx.supabase.co').rstrip('/');rows=[]
  for offset in range(0,100000,500):
-  request=urllib.request.Request(url+'/rest/v1/ratings?user_id=eq.'+user_id+'&select=*&order=tmdb_id&limit=500&offset='+str(offset),headers={'apikey':key,'Authorization':'Bearer '+key})
+  request=urllib.request.Request(url+'/rest/v1/ratings?user_id=eq.'+user_id+'&select=*&order=tmdb_id&limit=500&offset='+str(offset),headers=headers)
   page=json.load(urllib.request.urlopen(request,timeout=30));rows.extend(page)
   if len(page)<500:return rows
  raise ValueError('Unexpectedly large export; check user scope')

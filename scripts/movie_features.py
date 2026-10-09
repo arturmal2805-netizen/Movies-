@@ -107,16 +107,19 @@ def feature_metadata(detail):
          'moods':classify(detail),'featureVersion':2}
 
 
-def eligible_for_discovery(movie):
+def eligible_for_discovery(movie,require_target=None):
  policy=RULES['selection']
  try:year=int(movie.get('year') or str(movie.get('release_date',''))[:4])
  except (TypeError,ValueError):return False
  if year<policy['minimum_year']:return False
- ids=set(genres(movie));label={'Документальный':99,'Документальное':99,'Documentary':99,'Анимация':16,'Мультфильм':16,'Animation':16,'Аниме':16,'Anime':16,'Мелодрама':10749,'Романтика':10749,'Romance':10749,'Драма':18,'Drama':18,'Боевик':28,'Action':28}.get(movie.get('genre'))
+ ids=set(genres(movie));label={'Семейный':10751,'Family':10751,'Документальный':99,'Документальное':99,'Documentary':99,'Анимация':16,'Мультфильм':16,'Animation':16,'Аниме':16,'Anime':16,'Мелодрама':10749,'Романтика':10749,'Romance':10749,'Драма':18,'Drama':18,'Боевик':28,'Action':28}.get(movie.get('genre'))
  if label:ids.add(label)
  if ids.intersection(policy['always_excluded_genres']):return False
  countries=movie.get('productionCountries') or movie.get('production_countries') or []
  countries={str(c if isinstance(c,str) else c.get('iso_3166_1','')).upper() for c in countries if isinstance(c,(dict,str))}
  if countries.intersection(policy['excluded_countries']) or str(movie.get('originalLanguage') or movie.get('original_language') or '').lower() in policy['excluded_languages']:return False
+ # A search result can lack thematic keywords. Conditional genre/target checks wait for details.
+ if require_target is False:return True
  target=bool(set(classify(movie)).intersection(('horror','dystopian'))) or movie.get('_discovery_category')=='dystopian'
+ if (policy.get('require_target',False) if require_target is None else require_target) and not target:return False
  return not ids.intersection(policy['excluded_genres']) or policy['allow_target_mixed_genres'] and target

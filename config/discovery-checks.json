@@ -113,14 +113,14 @@
     "expected": false
   },
   {
-    "name": "unclassified science fiction retained",
+    "name": "unclassified science fiction excluded",
     "movie": {
       "year": 2024,
       "genreIds": [
         878
       ]
     },
-    "expected": true
+    "expected": false
   },
   {
     "name": "unknown year excluded",
@@ -189,5 +189,26 @@
       "originalLanguage": "ko"
     },
     "expected": true
+  },
+  {
+    "name": "family horror excluded",
+    "movie": {
+      "year": 2024,
+      "genreIds": [
+        27,
+        10751
+      ]
+    },
+    "expected": false
+  },
+  {
+    "name": "adventure without focus excluded",
+    "movie": {
+      "year": 2024,
+      "genreIds": [
+        12
+      ]
+    },
+    "expected": false
   }
 ]

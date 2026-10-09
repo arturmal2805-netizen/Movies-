@@ -15,7 +15,7 @@ class HorrorPreferenceTests(unittest.TestCase):
 
  def test_explicit_horror_preference_beats_general_popularity(self):
   horror=dict(movie(901),genres=[{'id':27}],genre_ids=[27])
-  drama=dict(movie(902),genres=[{'id':18}],genre_ids=[18],vote_count=100000,vote_average=9,popularity=10000)
+  drama=dict(movie(902),genres=[{'id':18}],genre_ids=[18],keywords=[],vote_count=100000,vote_average=9,popularity=10000)
   ranked=rank_candidates([drama,horror],[],[],now=NOW)
   self.assertEqual(ranked[0][1]['id'],901);self.assertIn('Приоритет хоррорам',ranked[0][2])
 
@@ -31,5 +31,5 @@ class HorrorPreferenceTests(unittest.TestCase):
   backend=Mock();backend.movie.return_value={'results':[]}
   tmdb_candidates(backend,[99,35,27],{'minimum_votes':100,'pages':3,'_now':NOW})
   queries=[parse_qs(urlsplit(c.args[0]).query) for c in backend.movie.call_args_list]
-  self.assertTrue(all(q['without_genres']==['99,16'] for q in queries));self.assertEqual(queries[0]['with_genres'],['27'])
-  self.assertTrue(any(q.get('with_genres')==['27'] and q['sort_by']==['vote_average.desc'] for q in queries));self.assertFalse(any(q.get('with_genres')==['99,16'] for q in queries))
+  self.assertTrue(all(q['without_genres']==['99,16,10751'] for q in queries));self.assertEqual(queries[0]['with_genres'],['27'])
+  self.assertTrue(any(q.get('with_genres')==['27'] and q['sort_by']==['vote_average.desc'] for q in queries));self.assertFalse(any(q.get('with_genres')==['99,16,10751'] for q in queries))

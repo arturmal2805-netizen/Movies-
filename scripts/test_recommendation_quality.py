@@ -32,12 +32,12 @@ class QualityTests(unittest.TestCase):
   tmdb_candidates(backend,[35,28,18,878],{'minimum_votes':100,'pages':2,'_now':NOW})
   for call in backend.movie.call_args_list:
    p=parse_qs(urlsplit(call.args[0]).query)
-   self.assertEqual(p['primary_release_date.gte'],['2000-01-01']);self.assertEqual(p['without_genres'],['99,16'])
+   self.assertEqual(p['primary_release_date.gte'],['2000-01-01']);self.assertEqual(p['without_genres'],['99,16,10751'])
    if 'with_genres' in p:self.assertIn(p['with_genres'][0],['27','878'])
  def test_pipeline_rechecks_canonical_genres_and_saves_small_valid_batch(self):
   backend=FakeBackend()
   candidates=[dict(movie(901),genre_ids=[27]),dict(movie(902),genre_ids=[27]),dict(movie(903),genre_ids=[27]),dict(movie(904),genre_ids=[18],_discovery_category='dystopian')]
-  canonical={901:dict(movie(901),genres=[{'id':27},{'id':18}],genre_ids=[27,18]),902:dict(movie(902),release_date='1999-01-01',genres=[{'id':27}],genre_ids=[27]),903:dict(movie(903),genres=[{'id':27},{'id':99}],genre_ids=[27,99]),904:dict(movie(904),genres=[{'id':18}],genre_ids=[18])}
+  canonical={901:dict(movie(901),genres=[{'id':27},{'id':18}],genre_ids=[27,18]),902:dict(movie(902),release_date='1999-01-01',genres=[{'id':27}],genre_ids=[27]),903:dict(movie(903),genres=[{'id':27},{'id':99}],genre_ids=[27,99]),904:dict(movie(904),keywords=[],genres=[{'id':18}],genre_ids=[18])}
   backend.movie=lambda path:canonical[int(path.split('/')[1].split('?')[0])]
   with patch('recommend.discover',return_value=(candidates,[])):
    self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,load_config(),manual=True),1)
@@ -55,8 +55,8 @@ class QualityTests(unittest.TestCase):
   self.assertEqual(backend.collection,[])
  def test_theme_preference_breaks_same_genre_tie(self):
   ratings=[{'tmdb_id':800,'impression':'like','metadata':{'genreIds':[27],'keywords':['body horror']}}]
-  body=dict(movie(901),genre_ids=[27],keywords={'keywords':[{'id':1,'name':'body horror'}]})
-  ghost=dict(movie(902),genre_ids=[27],keywords={'keywords':[{'id':2,'name':'ghost'}]})
+  body=dict(movie(901),genres=[{'id':27}],genre_ids=[27],keywords={'keywords':[{'id':1,'name':'body horror'}]})
+  ghost=dict(movie(902),genres=[{'id':27}],genre_ids=[27],keywords={'keywords':[{'id':2,'name':'ghost'}]})
   self.assertEqual(rank_candidates([ghost,body],ratings,[],now=NOW)[0][1]['id'],901)
  def test_negative_impression_is_not_reversed_by_high_technical_scores(self):
   self.assertLess(rating_signal({'impression':'dislike','plot':10,'cinematography':10}),0)

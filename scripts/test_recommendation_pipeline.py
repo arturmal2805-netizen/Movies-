@@ -10,7 +10,7 @@ NOW = datetime.datetime.now(datetime.timezone.utc)
 
 def movie(mid):
     return {'id': mid, 'title': 'Test film', 'genre_ids': [878], 'genres': [{'id': 878}],
-            'poster_path': '/poster.jpg', 'runtime': 100, 'release_date': '2020-01-01',
+            'keywords': ['dystopia'], 'poster_path': '/poster.jpg', 'runtime': 100, 'release_date': '2020-01-01',
             'vote_count': 200, 'vote_average': 7, 'popularity': 10}
 
 
