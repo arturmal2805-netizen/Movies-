@@ -10,6 +10,8 @@ on:
       - 'config/recommendations.json'
       - 'scripts/recommend.py'
       - 'scripts/recommendation_sources.py'
+      - 'scripts/movie_features.py'
+      - 'config/category-rules.json'
       - 'scripts/simkl_source.py'
       - 'scripts/test_recommend*.py'
 permissions:

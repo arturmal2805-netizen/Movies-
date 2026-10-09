@@ -21,3 +21,12 @@ test('animation is not automatically anime and uncategorized films remain availa
  assert.deepEqual(filmCategories({genreIds:[16],productionCountries:['JP']}),['anime']);
  assert.deepEqual(filmCategories({genreIds:[12,35]}),['comedy','adventure']);
 });
+
+// Both runtimes must agree on the same annotated regression examples.
+import {readFileSync} from 'node:fs';
+import {categoryRules} from './category-rules.js';
+const checks=JSON.parse(readFileSync(new URL('./config/category-checks.json',import.meta.url)));
+test('generated browser rules match the server source of truth',()=>{
+ assert.deepEqual(categoryRules,JSON.parse(readFileSync(new URL('./config/category-rules.json',import.meta.url))));
+});
+for(const check of checks)test(`category benchmark: ${check.name}`,()=>assert.deepEqual(filmCategories(check.movie),check.expected));

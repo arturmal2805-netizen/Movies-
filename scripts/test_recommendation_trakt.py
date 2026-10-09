@@ -24,7 +24,7 @@ class TraktTests(unittest.TestCase):
    self.assertNotIn('Authorization',call.args[1])
  def test_failed_list_and_one_bad_detail_keep_other_candidates(self):
   backend=self.backend();backend.request.side_effect=[RuntimeError(),[{'ids':{'tmdb':501}},{'ids':{'tmdb':502}}]]
-  backend.movie.side_effect=[RuntimeError(),{'id':502,'genres':[]}]
+  backend.movie.side_effect=lambda path:(_ for _ in ()).throw(RuntimeError()) if path.startswith('movie/501?') else {'id':502,'genres':[]}
   with patch.dict(os.environ,{'TRAKT_CLIENT_ID':'fake'}):movies=trakt_candidates(backend,[],{'candidate_limit':4})
   self.assertEqual([m['id'] for m in movies],[502])
  def test_missing_key_does_not_query_trakt(self):

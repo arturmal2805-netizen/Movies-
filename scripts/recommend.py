@@ -1,39 +1,51 @@
 """Private recommendations stay in Supabase, never in the public Pages snapshot."""
-import os,json,datetime,urllib.request,urllib.parse,math,time,base64
+import os,json,datetime,urllib.request,urllib.parse,math,time,base64,threading,copy
+from concurrent.futures import Future,ThreadPoolExecutor
 from pathlib import Path
-from recommendation_sources import discover,hourly_limit
+from recommendation_sources import discover,hourly_limit,detail_path
+from movie_features import profile,match_score,genres,keywords,director,classify,normalize,feature_metadata
 from import_catalog import IDS
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 
-def taste(ratings):
- weights={}
- for row in ratings:
-  sign={'like':1,'neutral':0,'dislike':-1,'watched':0}.get(row.get('impression'),0)
-  values=[row.get(k) for k in ('plot','cinematography') if isinstance(row.get(k),(int,float))]
-  if values:sign+=sum(values)/len(values)/5.5-1
-  for genre in row.get('metadata',{}).get('genreIds',[]):weights[genre]=weights.get(genre,0)+sign
- return weights
+def taste(ratings):return {value:weight for (kind,value),weight in profile(ratings).items() if kind=='genre'}
 
-def rank_candidates(candidates,ratings,collection,minimum_votes=100):
+def valid_candidate(movie,minimum_votes,today):
+ if not isinstance(movie,dict) or type(movie.get('id')) is not int or movie['id']<=0:return False
+ if movie.get('adult') or not movie.get('poster_path'):return False
+ try:
+  released=datetime.date.fromisoformat(movie.get('release_date',''))
+  count=float(movie.get('vote_count',0));rating=float(movie.get('vote_average',0));popularity=float(movie.get('popularity',0))
+  return released<=today and count>=minimum_votes and 0<=rating<=10 and all(math.isfinite(v) for v in (count,rating,popularity))
+ except (ValueError,TypeError):return False
+
+def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None):
  excluded={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values())
- weights=taste(ratings)
- ranked=[]
- seen=set()
+ tastes=profile(ratings);ranked=[];seen=set();today=(now.date() if now else datetime.datetime.now(datetime.timezone.utc).date())
  for movie in candidates:
-  if movie.get('id') in seen:continue
-  seen.add(movie.get('id'))
-  if movie.get('id') in excluded or movie.get('adult') or not movie.get('poster_path'):continue
-  if not movie.get('release_date') or movie['release_date']>datetime.date.today().isoformat():continue
-  if float(movie.get('vote_count',0))<minimum_votes:continue
-  genres=movie.get('genre_ids',[])
-  match=sum(weights.get(g,0) for g in genres)
-  # Taste dominates; quality and popularity only break similar matches.
-  value=match*10+float(movie.get('vote_average',0))*.3+math.log1p(max(0,float(movie.get('popularity',0))))*.1
-  favorite=sorted((g for g in genres if weights.get(g,0)>0),key=lambda g:weights[g],reverse=True)
+  if not valid_candidate(movie,minimum_votes,today) or movie['id'] in seen or movie['id'] in excluded:continue
+  seen.add(movie['id']);count=float(movie['vote_count'])
+  # Shrink low-vote perfect scores; taste is bounded so common genres cannot drown out specific themes.
+  quality=(float(movie['vote_average'])*count+6.5*500)/(count+500)
+  value=match_score(movie,tastes)*5+quality*.4+min(8,math.log1p(max(0,float(movie.get('popularity',0)))))*.1
+  favorite=sorted((g for g in genres(movie) if tastes.get(('genre',g),0)>0),key=lambda g:tastes[('genre',g)],reverse=True)
+  themes=sorted((normalize(k if isinstance(k,str) else k.get('name')) for k in keywords(movie) if tastes.get(('keyword',normalize(k if isinstance(k,str) else k.get('name'))),0)>0),key=lambda name:tastes[('keyword',name)],reverse=True)
   reason='Совпадает с вашими оценками: '+', '.join(GENRES.get(g,'Жанр') for g in favorite[:2])+'.' if favorite else 'Для знакомства с новым жанром; учтены оценки и популярность TMDB.'
+  if themes:reason+=' Близкие темы: '+', '.join(themes[:2])+'.'
   if not ratings:reason='Стартовая рекомендация по оценкам TMDB. После ваших оценок подбор станет персональным.'
   ranked.append((value,movie,reason))
  return sorted(ranked,key=lambda entry:(-entry[0],entry[1]['id']))
+
+def diverse_candidates(ranked):
+ # Gentle batch diversity: do not fill the whole hour with the same main genre.
+ remaining=list(ranked);used={};result=[]
+ while remaining and len(result)<100:
+  def priority(entry):
+   ids=genres(entry[1]);penalty=sum(used.get(g,0) for g in ids)/max(1,len(ids))*.12
+   return entry[0]-penalty,-entry[1]['id']
+  index=max(range(len(remaining)),key=lambda i:priority(remaining[i]));entry=remaining.pop(index);result.append(entry)
+  for genre in genres(entry[1]):used[genre]=used.get(genre,0)+1
+ return result+remaining
+
 
 class RequestFailure(RuntimeError):
  """Safe diagnostics only: never include URLs, headers, body, or credentials."""
@@ -48,6 +60,7 @@ class Backend:
   # API tokens contain no whitespace; clipboard wrapping must not break HTTP headers.
   self.key=''.join(os.environ['SUPABASE_SERVICE_ROLE_KEY'].split())
   self.tmdb=''.join(os.environ['TMDB_ACCESS_TOKEN'].split())
+  self._movie_cache={};self._cache_lock=threading.Lock()
   try:
    parsed=urllib.parse.urlsplit(self.url)
    valid=parsed.scheme=='https' and bool(parsed.hostname) and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment and parsed.path in ('','/') and not any(c.isspace() for c in self.url)
@@ -92,13 +105,27 @@ class Backend:
   if not self.key.startswith('sb_secret_'):headers['Authorization']='Bearer '+self.key
   if prefer:headers['Prefer']=prefer
   return self.request(self.url+'/rest/v1/'+path,headers,method,body)
- def movie(self,path):return self.request('https://api.themoviedb.org/3/'+path,{'Authorization':'Bearer '+self.tmdb})
+ def movie(self,path):
+  # Per-run, thread-safe single-flight cache. Failed lookups remain retryable; never cache DB writes.
+  with self._cache_lock:
+   future=self._movie_cache.get(path);owner=future is None
+   if owner:future=Future();self._movie_cache[path]=future
+  if owner:
+   try:future.set_result(self.request('https://api.themoviedb.org/3/'+path,{'Authorization':'Bearer '+self.tmdb}))
+   except Exception as error:
+    future.set_exception(error)
+    with self._cache_lock:self._movie_cache.pop(path,None)
+  return copy.deepcopy(future.result())
 
 def load_config():
  config=json.loads((Path(__file__).resolve().parents[1]/'config/recommendations.json').read_text())
  for key in ('base_per_hour','extra_per_source','maximum_per_hour','minimum_votes'):
   if type(config[key]) is not int or config[key]<0:raise ValueError('Invalid recommendation limit')
  if not 1<=config['maximum_per_hour']<=100:raise ValueError('Hourly maximum must be 1..100')
+ if type(config.get('history_enrichment_per_run',12)) is not int or not 0<=config.get('history_enrichment_per_run',12)<=12:raise ValueError('Unbounded history enrichment')
+ for key in ('discovery_workers','detail_workers'):
+  if type(config.get(key,4)) is not int or not 1<=config.get(key,4)<=4:raise ValueError('Worker count must be 1..4')
+ if type(config.get('page_window',20)) is not int or not 2<=config.get('page_window',20)<=20:raise ValueError('Page window must be 2..20')
  ids=[s['id'] for s in config['sources']]
  if len(ids)!=len(set(ids)):raise ValueError('Source IDs must be unique')
  for source in config['sources']:
@@ -123,6 +150,37 @@ def parsed_time(value):
   return stamp if stamp.tzinfo else stamp.replace(tzinfo=datetime.timezone.utc)
  except (ValueError,TypeError,AttributeError):return None
 
+def enrich_history(b,uid,ratings,collection,config):
+ # Small resumable migration: enrich rated films first, without altering ratings, saved flags or timestamps.
+ pending={}
+ for table,rows in [('ratings',ratings),('collection',collection)]:
+  for row in rows:
+   metadata=row.get('metadata')
+   if not isinstance(metadata,dict) or not metadata.get('title') or metadata.get('featureVersion')==2:continue
+   mid=row.get('tmdb_id')
+   if type(mid) is int and mid>0:pending.setdefault(mid,[]).append((table,row))
+ selected=list(pending)[:config.get('history_enrichment_per_run',12)]
+ def fetch(mid):
+  try:
+   detail=b.movie(detail_path(mid))
+   return detail if isinstance(detail,dict) and detail.get('id')==mid else None
+  except Exception:return None
+ completed=0
+ with ThreadPoolExecutor(max_workers=config.get('detail_workers',4)) as executor:
+  details=list(executor.map(fetch,selected))
+ for mid,detail in zip(selected,details):
+  if detail is None:continue
+  extra=feature_metadata(detail)
+  for table,row in pending[mid]:
+   metadata=dict(row['metadata'],**extra)
+   if row['metadata'].get('director') and not metadata['director']:metadata['director']=row['metadata']['director']
+   try:
+    b.db(table+'?user_id=eq.'+uid+'&tmdb_id=eq.'+str(mid),'PATCH',{'metadata':metadata})
+    row['metadata']=metadata;completed+=1
+   except Exception:continue
+ if selected:print('History metadata refreshed:',completed,'records; other collection fields retained.')
+
+
 def recommend_user(b,user,now,config):
  slot=schedule_slot(now)
  previous=parsed_time(user.get('last_recommendation_at'))
@@ -130,10 +188,19 @@ def recommend_user(b,user,now,config):
   print('Private batch skipped: this scheduled hour has already completed.')
   return 0
  uid=user['user_id'];ratings=read_rows(b,'ratings?user_id=eq.'+uid+'&select=*&order=tmdb_id');collection=read_rows(b,'collection?user_id=eq.'+uid+'&select=*&order=tmdb_id')
+ enrich_history(b,uid,ratings,collection,config)
  weights=taste(ratings);preferred=sorted((g for g,v in weights.items() if v>0),key=lambda g:weights[g],reverse=True)[:3]
- candidates,statuses=discover(b,preferred,config)
+ tastes=profile(ratings);keyword_ids={}
+ for row in ratings:
+  metadata=row.get('metadata') or {}
+  for name,kid in zip(metadata.get('keywords') or [],metadata.get('keywordIds') or []):
+   weight=tastes.get(('keyword',normalize(name)),0)
+   if type(kid) is int and kid>0 and weight>0:keyword_ids[kid]=weight
+ search_config=dict(config,_now=now,_excluded_ids={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values()),_preferred_keywords=sorted(keyword_ids,key=keyword_ids.get,reverse=True)[:2])
+ candidates,statuses=discover(b,preferred,search_config)
  print('Discovery:',json.dumps(statuses))
- ranked=rank_candidates(candidates,ratings,collection,config['minimum_votes'])
+ ranked=rank_candidates(candidates,ratings,collection,config['minimum_votes'],now)
+ print('Candidate pool:',len(candidates),'eligible:',len(ranked))
  stamps=[parsed_time(row.get('created_at')) for row in collection if row.get('reason')]
  stamps=[stamp for stamp in stamps if stamp and stamp<=now]
  recent=sum(1 for stamp in stamps if (now-stamp).total_seconds()<3600)
@@ -144,19 +211,28 @@ def recommend_user(b,user,now,config):
  if not budget:
   print('Private batch skipped: scheduled-hour budget or rolling 60-minute maximum reached.')
   return 0
+ def hydrate(entry):
+  movie=entry[1]
+  try:
+   detail=b.movie(detail_path(movie['id']))
+   if not valid_candidate(detail,config['minimum_votes'],now.date()) or detail['id']!=movie['id'] or not detail.get('title') or type(detail.get('runtime')) not in (int,float) or detail['runtime']<=0:return None
+   return dict(detail,genre_ids=genres(detail),discovery_sources=movie.get('discovery_sources',[]))
+  except Exception:return None
+ # Enrich a shortlist in parallel, then rerank with themes, subgenres and directors.
+ # A bounded shortlist avoids spending API quotas on every discovered film.
+ shortlist=ranked[:min(180,max(budget*3,budget+8))]
+ with ThreadPoolExecutor(max_workers=config.get('detail_workers',4)) as executor:details=[d for d in executor.map(hydrate,shortlist) if d]
+ if shortlist and not details:raise RequestFailure('Candidate metadata unavailable; retry next run')
+ final=diverse_candidates(rank_candidates(details,ratings,collection,config['minimum_votes'],now))
+ print('Enriched candidates:',len(details),'target:',budget)
  added=0
- for _,movie,reason in ranked:
+ for _,detail,reason in final:
   if added>=budget:break
-  try:detail=b.movie(f"movie/{movie['id']}?language=ru-RU&append_to_response=keywords")
-  except Exception:continue
-  if detail.get('id')!=movie['id']:continue
-  if not detail.get('runtime') or not detail.get('poster_path') or detail.get('adult') or not detail.get('release_date') or detail['release_date']>now.date().isoformat():continue
-  fid=10000000+detail['id'];genre_ids=[g['id'] for g in detail.get('genres',[])]
-  metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':'','moods':[],'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity',0),'tmdbUpdatedAt':now.isoformat()}}
+  movie=detail
+  fid=10000000+detail['id'];genre_ids=genres(detail)
+  metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':director(detail),'moods':classify(detail),'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity',0),'tmdbUpdatedAt':now.isoformat()}}
   metadata['discoverySources']=movie.get('discovery_sources',[])
-  metadata['keywords']=[k['name'] for k in detail.get('keywords',{}).get('keywords',[]) if isinstance(k,dict) and isinstance(k.get('name'),str)]
-  metadata['originalLanguage']=detail.get('original_language','')
-  metadata['productionCountries']=[c['iso_3166_1'] for c in detail.get('production_countries',[]) if isinstance(c,dict) and isinstance(c.get('iso_3166_1'),str)]
+  metadata.update(feature_metadata(detail))
   if os.environ.get('OMDB_API_KEY') and detail.get('imdb_id'):
    try:
     result=b.request('https://www.omdbapi.com/?'+urllib.parse.urlencode({'apikey':os.environ['OMDB_API_KEY'],'i':detail['imdb_id']}),{})

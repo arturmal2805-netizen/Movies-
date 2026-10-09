@@ -44,7 +44,7 @@ class SimklTests(unittest.TestCase):
     def test_failed_lookup_retains_other_candidates_and_limits_requests(self):
         backend = Mock()
         backend.request.return_value = [{'ids': {'tmdb': mid}} for mid in range(1, 100)]
-        backend.movie.side_effect = [TimeoutError(), {'id': 2, 'genres': []}]
+        backend.movie.side_effect = lambda path: (_ for _ in ()).throw(TimeoutError()) if path.startswith('movie/1?') else {'id': 2, 'genres': []}
         self.assertEqual([r['id'] for r in simkl_candidates(backend, [], {'candidate_limit': 2})], [2])
         self.assertEqual(backend.movie.call_count, 2)
 

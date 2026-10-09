@@ -1,58 +1,72 @@
 """Discovery adapters return canonical TMDB IDs; metadata providers do not count."""
 import os
+import datetime
+from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
 from simkl_source import FEED_URL, HEADERS, entries
+from movie_features import genres
+
+def detail_path(mid):return f'movie/{mid}?language=ru-RU&append_to_response=keywords,credits'
+
+def excluded(config,mid):return mid in config.get('_excluded_ids',set())
 
 
-def simkl_candidates(backend, preferred, config):
-    """Official public feed needs no credentials; never use SIMKL IDs as TMDB IDs."""
-    rows = entries(backend.request(FEED_URL, HEADERS))
-    limit = config.get('candidate_limit', 40)
-    ids, candidates = set(), []
-    # Bound lookups even when records are malformed or cannot be matched.
-    for row in rows[:limit]:
-        if row.get('type', 'movie') not in ('movie', 'movies'):
-            continue
-        external = row.get('ids', {})
-        if not isinstance(external, dict):
-            continue
-        mid = external.get('tmdb')
-        if isinstance(mid, str) and mid.isascii() and mid.isdigit():
-            mid = int(mid)
+def resolve_ids(backend,ids,config):
+    def resolve(mid):
         try:
-            if type(mid) is not int or mid <= 0:
-                imdb = external.get('imdb', '')
-                if not isinstance(imdb, str) or not imdb.startswith('tt') or not imdb[2:].isascii() or not imdb[2:].isdigit():
-                    continue
-                found = backend.movie('find/' + imdb + '?external_source=imdb_id').get('movie_results', [])
-                if len(found) != 1:
-                    continue
-                mid = found[0].get('id')
-            if type(mid) is not int or mid <= 0 or mid in ids:
-                continue
-            ids.add(mid)
-            detail = backend.movie(f'movie/{mid}?language=ru-RU')
-            if not isinstance(detail, dict) or detail.get('id') != mid:
-                continue
-            candidates.append(dict(detail, genre_ids=[g['id'] for g in detail.get('genres', [])]))
-        except Exception:
-            continue
-    if rows and not candidates:
-        raise RuntimeError('SIMKL candidates could not be resolved')
+            detail=backend.movie(detail_path(mid))
+            if isinstance(detail,dict) and detail.get('id')==mid:return dict(detail,genre_ids=genres(detail))
+        except Exception:pass
+        return None
+    with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
+        return [m for m in executor.map(resolve,ids) if m]
+
+
+def simkl_candidates(backend,preferred,config):
+    """Official public feed needs no credentials; never use SIMKL IDs as TMDB IDs."""
+    rows=entries(backend.request(FEED_URL,HEADERS));ids=[]
+    for row in rows[:config.get('candidate_limit',40)]:
+        if row.get('type','movie') not in ('movie','movies'):continue
+        external=row.get('ids',{})
+        if not isinstance(external,dict):continue
+        mid=external.get('tmdb')
+        if isinstance(mid,str) and mid.isascii() and mid.isdigit():mid=int(mid)
+        try:
+            if type(mid) is not int or mid<=0:
+                imdb=external.get('imdb','')
+                if not isinstance(imdb,str) or not imdb.startswith('tt') or not imdb[2:].isascii() or not imdb[2:].isdigit():continue
+                found=backend.movie('find/'+imdb+'?external_source=imdb_id').get('movie_results',[])
+                if len(found)!=1:continue
+                mid=found[0].get('id')
+            if type(mid) is int and mid>0 and mid not in ids and not excluded(config,mid):ids.append(mid)
+        except Exception:continue
+    candidates=resolve_ids(backend,ids,config)
+    if ids and not candidates:raise RuntimeError('SIMKL candidates could not be resolved')
     return candidates
 
 
 def tmdb_candidates(backend, preferred, config):
-    query = {'language': 'ru-RU', 'include_adult': 'false',
-             'sort_by': 'popularity.desc', 'vote_count.gte': config['minimum_votes']}
-    candidates = []
-    for genres in ['', '|'.join(map(str, preferred))] if preferred else ['']:
-        for page in range(1, config.get('pages', 2) + 1):
-            params = dict(query, page=page)
-            if genres:
-                params['with_genres'] = genres
-            candidates.extend(backend.movie('discover/movie?' + urllib.parse.urlencode(params)).get('results', []))
-    return candidates
+    now=config.get('_now') or datetime.datetime.now(datetime.timezone.utc)
+    query={'language':'ru-RU','include_adult':'false','include_video':'false',
+           'primary_release_date.lte':now.date().isoformat(),'vote_count.gte':config['minimum_votes']}
+    strategies=[{'sort_by':'popularity.desc'},{'sort_by':'vote_average.desc'}]
+    strategies.extend({'sort_by':'popularity.desc','with_genres':genre} for genre in preferred[:3])
+    strategies.extend({'sort_by':'popularity.desc','with_keywords':keyword} for keyword in config.get('_preferred_keywords',[])[:2])
+    count=config.get('pages',2);window=max(count,min(20,config.get('page_window',20)))
+    slot=int((now.timestamp()-17*60)//3600)
+    # Keep page 1 for fresh hits; rotate deeper pages so an exhausted first page is not the whole catalog.
+    pages=[1]+[2+(slot*(count-1)+i)%(window-1) for i in range(count-1)]
+    paths=['discover/movie?'+urllib.parse.urlencode(dict(query,**strategy,page=page)) for strategy in strategies for page in pages][:24]
+    def fetch(path):
+        try:
+            data=backend.movie(path)
+            return data['results'] if isinstance(data,dict) and isinstance(data.get('results'),list) else None
+        except Exception:return None
+    with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
+        results=list(executor.map(fetch,paths))
+    if all(result is None for result in results):raise RuntimeError('TMDB discovery unavailable')
+    return [m for result in results if isinstance(result,list) for m in result
+            if isinstance(m,dict) and not excluded(config,m.get('id'))]
 
 
 def tmdb_id_feed(backend, preferred, config):
@@ -74,12 +88,8 @@ def tmdb_id_feed(backend, preferred, config):
     ids = result.get('tmdb_ids', [])
     if not isinstance(ids, list):
         raise ValueError('Invalid feed')
-    candidates = []
-    for mid in list(dict.fromkeys(i for i in ids if type(i) is int and i > 0))[:config.get('candidate_limit', 40)]:
-        detail = backend.movie(f'movie/{mid}?language=ru-RU')
-        detail['genre_ids'] = [g['id'] for g in detail.get('genres', [])]
-        candidates.append(detail)
-    return candidates
+    canonical=[i for i in dict.fromkeys(i for i in ids if type(i) is int and i>0) if not excluded(config,i)][:config.get('candidate_limit',40)]
+    return resolve_ids(backend,canonical,config)
 
 
 def trakt_candidates(backend, preferred, config):
@@ -107,23 +117,12 @@ def trakt_candidates(backend, preferred, config):
             if not isinstance(movie, dict) or not isinstance(movie.get('ids'), dict):
                 continue
             mid = movie['ids'].get('tmdb')
-            if type(mid) is int and mid > 0 and mid not in ids:
+            if type(mid) is int and mid > 0 and mid not in ids and not excluded(config,mid):
                 ids.append(mid)
     if not successful:
         raise RuntimeError('Trakt discovery unavailable')
-    # Each list supplies at most half the budget; duplicates are resolved once.
-    candidates = []
-    for mid in ids[:limit]:
-        try:
-            detail = backend.movie(f'movie/{mid}?language=ru-RU')
-            if not isinstance(detail, dict) or detail.get('id') != mid:
-                continue
-            detail = dict(detail, genre_ids=[g['id'] for g in detail.get('genres', [])])
-            candidates.append(detail)
-        except Exception:
-            continue
-    if ids and not candidates:
-        raise RuntimeError('Trakt candidates could not be resolved')
+    candidates=resolve_ids(backend,ids[:limit],config)
+    if ids and not candidates:raise RuntimeError('Trakt candidates could not be resolved')
     return candidates
 
 
@@ -137,15 +136,15 @@ def discover(backend, preferred, config):
             continue
         name = source['id']
         try:
-            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes']))
-            valid = [m for m in candidates if type(m.get('id')) is int and m['id'] > 0]
+            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _preferred_keywords=config.get('_preferred_keywords',[]), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
+            valid = [m for m in candidates if isinstance(m,dict) and type(m.get('id')) is int and m['id'] > 0 and not excluded(config,m['id'])]
             for movie in valid:
                 mid = movie['id']
                 if mid not in pool:
                     pool[mid] = dict(movie, discovery_sources=[])
                 if name not in pool[mid]['discovery_sources']:
                     pool[mid]['discovery_sources'].append(name)
-            statuses.append({'source': name, 'status': 'ok', 'candidates': len(valid)})
+            statuses.append({'source': name, 'status': 'ok', 'candidates': len({m['id'] for m in valid})})
         except Exception:
             # No provider URLs, responses, or tokens in logs.
             statuses.append({'source': name, 'status': 'failed', 'candidates': 0})

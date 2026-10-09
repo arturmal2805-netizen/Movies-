@@ -1,0 +1,428 @@
+[
+  {
+    "name": "Alien",
+    "movie": {
+      "tmdbId": 348
+    },
+    "expected": [
+      "creature-horror"
+    ]
+  },
+  {
+    "name": "The Thing",
+    "movie": {
+      "tmdbId": 1091
+    },
+    "expected": [
+      "creature-horror",
+      "body-horror"
+    ]
+  },
+  {
+    "name": "Midsommar",
+    "movie": {
+      "tmdbId": 530385
+    },
+    "expected": [
+      "psychological-horror",
+      "folklore-horror"
+    ]
+  },
+  {
+    "name": "The Witch",
+    "movie": {
+      "tmdbId": 310131
+    },
+    "expected": [
+      "psychological-horror",
+      "folklore-horror"
+    ]
+  },
+  {
+    "name": "Mad Max Fury Road",
+    "movie": {
+      "tmdbId": 76341
+    },
+    "expected": [
+      "dystopian"
+    ]
+  },
+  {
+    "name": "Blade Runner",
+    "movie": {
+      "tmdbId": 78
+    },
+    "expected": [
+      "dystopian"
+    ]
+  },
+  {
+    "name": "The Fly",
+    "movie": {
+      "tmdbId": 9426
+    },
+    "expected": [
+      "body-horror"
+    ]
+  },
+  {
+    "name": "Terminator is sci-fi, not creature horror",
+    "movie": {
+      "tmdbId": 106,
+      "genreIds": [
+        28,
+        878,
+        53
+      ]
+    },
+    "expected": []
+  },
+  {
+    "name": "Monster keyword with horror",
+    "movie": {
+      "genreIds": [
+        27
+      ],
+      "keywords": [
+        "monster"
+      ]
+    },
+    "expected": [
+      "creature-horror"
+    ]
+  },
+  {
+    "name": "Werewolf horror",
+    "movie": {
+      "genreIds": [
+        27
+      ],
+      "keywords": [
+        "werewolf"
+      ]
+    },
+    "expected": [
+      "creature-horror"
+    ]
+  },
+  {
+    "name": "Zombie horror",
+    "movie": {
+      "genreIds": [
+        27
+      ],
+      "keywords": [
+        "zombie"
+      ]
+    },
+    "expected": [
+      "creature-horror"
+    ]
+  },
+  {
+    "name": "Monster comedy",
+    "movie": {
+      "genreIds": [
+        35
+      ],
+      "keywords": [
+        "monster"
+      ]
+    },
+    "expected": [
+      "comedy"
+    ]
+  },
+  {
+    "name": "Body transformation horror",
+    "movie": {
+      "genreIds": [
+        27
+      ],
+      "keywords": [
+        {
+          "name": "body transformation"
+        }
+      ]
+    },
+    "expected": [
+      "body-horror"
+    ]
+  },
+  {
+    "name": "Transformation sci-fi",
+    "movie": {
+      "genreIds": [
+        878
+      ],
+      "keywords": [
+        "body transformation"
+      ]
+    },
+    "expected": []
+  },
+  {
+    "name": "Body horror exact label",
+    "movie": {
+      "genreIds": [
+        27
+      ],
+      "keywords": [
+        "body-horror"
+      ]
+    },
+    "expected": [
+      "body-horror"
+    ]
+  },
+  {
+    "name": "Dystopia keyword",
+    "movie": {
+      "genreIds": [
+        878
+      ],
+      "keywords": [
+        "dystopia"
+      ]
+    },
+    "expected": [
+      "dystopian"
+    ]
+  },
+  {
+    "name": "Totalitarian dystopia",
+    "movie": {
+      "genreIds": [
+        18
+      ],
+      "keywords": [
+        "totalitarian regime"
+      ]
+    },
+    "expected": [
+      "dystopian"
+    ]
+  },
+  {
+    "name": "Generic sci-fi",
+    "movie": {
+      "genreIds": [
+        878
+      ],
+      "keywords": [
+        "space travel"
+      ]
+    },
+    "expected": []
+  },
+  {
+    "name": "Psychological horror label",
+    "movie": {
+      "genreIds": [
+        27
+      ],
+      "keywords": [
+        "psychological horror"
+      ]
+    },
+    "expected": [
+      "psychological-horror"
+    ]
+  },
+  {
+    "name": "Ordinary psychological thriller",
+    "movie": {
+      "genreIds": [
+        53
+      ],
+      "keywords": [
+        "psychological thriller"
+      ]
+    },
+    "expected": []
+  },
+  {
+    "name": "Folklore pagan cult",
+    "movie": {
+      "genreIds": [
+        27
+      ],
+      "keywords": [
+        "pagan cult"
+      ]
+    },
+    "expected": [
+      "folklore-horror"
+    ]
+  },
+  {
+    "name": "Fantasy pagan cult",
+    "movie": {
+      "genreIds": [
+        14
+      ],
+      "keywords": [
+        "pagan cult"
+      ]
+    },
+    "expected": []
+  },
+  {
+    "name": "Japanese animation",
+    "movie": {
+      "genreIds": [
+        16
+      ],
+      "originalLanguage": "ja"
+    },
+    "expected": [
+      "anime"
+    ]
+  },
+  {
+    "name": "Western animation",
+    "movie": {
+      "genreIds": [
+        16
+      ],
+      "originalLanguage": "en"
+    },
+    "expected": []
+  },
+  {
+    "name": "JP coproduction in English",
+    "movie": {
+      "genreIds": [
+        16
+      ],
+      "originalLanguage": "en",
+      "productionCountries": [
+        "JP",
+        "US"
+      ]
+    },
+    "expected": []
+  },
+  {
+    "name": "Documentary about anime",
+    "movie": {
+      "genreIds": [
+        99
+      ],
+      "keywords": [
+        "anime"
+      ]
+    },
+    "expected": []
+  },
+  {
+    "name": "Anime keyword on animation",
+    "movie": {
+      "genreIds": [
+        16
+      ],
+      "keywords": [
+        "anime"
+      ]
+    },
+    "expected": [
+      "anime"
+    ]
+  },
+  {
+    "name": "Comedy adventure",
+    "movie": {
+      "genreIds": [
+        35,
+        12
+      ]
+    },
+    "expected": [
+      "comedy",
+      "adventure"
+    ]
+  },
+  {
+    "name": "Uncategorized drama",
+    "movie": {
+      "genreIds": [
+        18
+      ]
+    },
+    "expected": []
+  },
+  {
+    "name": "Null keywords",
+    "movie": {
+      "genreIds": [
+        27
+      ],
+      "keywords": null
+    },
+    "expected": []
+  },
+  {
+    "name": "Figurative monster",
+    "movie": {
+      "genreIds": [
+        27
+      ],
+      "description": "Чудовищный поступок превращает жизнь семьи в кошмар."
+    },
+    "expected": []
+  },
+  {
+    "name": "Explicit Russian body horror",
+    "movie": {
+      "genreIds": [
+        27
+      ],
+      "description": "Телесный хоррор о преображении человека."
+    },
+    "expected": [
+      "body-horror"
+    ]
+  },
+  {
+    "name": "Negated body horror label",
+    "movie": {
+      "genreIds": [
+        27
+      ],
+      "description": "Это не body horror."
+    },
+    "expected": []
+  },
+  {
+    "name": "Not a body horror",
+    "movie": {
+      "genreIds": [
+        27
+      ],
+      "description": "Not a body horror."
+    },
+    "expected": []
+  },
+  {
+    "name": "Incidental keyword substring",
+    "movie": {
+      "genreIds": [
+        27
+      ],
+      "keywords": [
+        "monster truck"
+      ]
+    },
+    "expected": []
+  },
+  {
+    "name": "Japanese live action",
+    "movie": {
+      "genreIds": [
+        18
+      ],
+      "originalLanguage": "ja"
+    },
+    "expected": []
+  }
+]
