@@ -11,3 +11,13 @@ test('source reports stale success and disconnected providers',()=>{assert.equal
 import {normalizeRating,ratingWeight,isArchived} from './ratings.js';
 test('old ratings migrate without losing favorites or watched films',()=>{assert.deepEqual(normalizeRating('like'),{impression:'like'});assert.equal(isArchived('watched'),true);assert.equal(isArchived('like'),false);assert.equal(normalizeRating({cinematography:99,plot:'8'}),null);});
 test('two scales and impression affect recommendation weight',()=>{assert.ok(ratingWeight({cinematography:9,plot:9,impression:'like'})>ratingWeight('like'));assert.ok(ratingWeight({cinematography:2,plot:2,impression:'dislike'})<ratingWeight('dislike'));assert.equal(ratingWeight({impression:'neutral'}),0);assert.equal(isArchived({impression:'neutral',ratedAt:'2026-10-09'}),true);});
+
+test('Trakt connects only after server recommendations confirm its contribution',()=>{
+ const now=Date.parse('2026-10-09T12:00:00Z');
+ const row={reason:'recommendation',created_at:'2026-10-09T11:30:00Z',metadata:{discoverySources:['tmdb','trakt']}};
+ assert.equal(sourceState('trakt',null,now,[]).status,'scheduled');
+ assert.equal(sourceState('trakt',null,now,[row]).status,'ok');
+ assert.equal(sourceState('trakt',null,now,[{...row,reason:null}]).status,'scheduled');
+ assert.equal(sourceState('trakt',null,now,[{...row,created_at:'2026-10-10T00:00:00Z'}]).status,'scheduled');
+ assert.equal(sourceState('trakt',null,now,[{...row,created_at:'2026-10-09T08:00:00Z'}]).status,'stale');
+});
