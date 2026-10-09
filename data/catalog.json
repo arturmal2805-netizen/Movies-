@@ -1,30 +1,103 @@
 {
   "schemaVersion": 1,
-  "checkedAt": "2026-10-09T08:50:51.258070+00:00",
+  "checkedAt": "2026-10-09T09:17:02.331562+00:00",
   "films": {
-    "1": {},
-    "2": {},
-    "3": {},
-    "4": {},
-    "5": {},
-    "6": {},
-    "7": {},
-    "8": {},
-    "9": {},
-    "10": {},
-    "11": {},
-    "12": {}
+    "1": {
+      "poster": "https://image.tmdb.org/t/p/w500/yQvGrMoipbRoddT0ZR8tPoR7NfX.jpg",
+      "popularity": 66.1815,
+      "tmdbUpdatedAt": "2026-10-09T09:17:02.331562+00:00",
+      "tmdbId": 157336,
+      "imdbId": "tt0816692"
+    },
+    "2": {
+      "poster": "https://image.tmdb.org/t/p/w500/eWdyYQreja6JGCzqHWXpWHDrrPo.jpg",
+      "popularity": 27.1681,
+      "tmdbUpdatedAt": "2026-10-09T09:17:02.331562+00:00",
+      "tmdbId": 120467,
+      "imdbId": "tt2278388"
+    },
+    "3": {
+      "poster": "https://image.tmdb.org/t/p/w500/6izwz7rsy95ARzTR3poZ8H6c5pp.jpg",
+      "popularity": 60.2719,
+      "tmdbUpdatedAt": "2026-10-09T09:17:02.331562+00:00",
+      "tmdbId": 693134,
+      "imdbId": "tt15239678"
+    },
+    "4": {
+      "poster": "https://image.tmdb.org/t/p/w500/uDO8zWDhfWwoFdKS4fzkUJt0Rf0.jpg",
+      "popularity": 29.5806,
+      "tmdbUpdatedAt": "2026-10-09T09:17:02.331562+00:00",
+      "tmdbId": 313369,
+      "imdbId": "tt3783958"
+    },
+    "5": {
+      "poster": "https://image.tmdb.org/t/p/w500/pThyQovXQrw2m0s9x82twj48Jq4.jpg",
+      "popularity": 26.7553,
+      "tmdbUpdatedAt": "2026-10-09T09:17:02.331562+00:00",
+      "tmdbId": 546554,
+      "imdbId": "tt8946378"
+    },
+    "6": {
+      "poster": "https://image.tmdb.org/t/p/w500/hm58Jw4Lw8OIeECIq5qyPYhAeRJ.jpg",
+      "popularity": 23.87,
+      "tmdbUpdatedAt": "2026-10-09T09:17:02.331562+00:00",
+      "tmdbId": 508442,
+      "imdbId": "tt2948372"
+    },
+    "7": {
+      "poster": "https://image.tmdb.org/t/p/w500/pEzNVQfdzYDzVK0XqxERIw2x2se.jpg",
+      "popularity": 25.6217,
+      "tmdbUpdatedAt": "2026-10-09T09:17:02.331562+00:00",
+      "tmdbId": 329865,
+      "imdbId": "tt2543164"
+    },
+    "8": {
+      "poster": "https://image.tmdb.org/t/p/w500/nSxDa3M9aMvGVLoItzWTepQ5h5d.jpg",
+      "popularity": 21.8796,
+      "tmdbUpdatedAt": "2026-10-09T09:17:02.331562+00:00",
+      "tmdbId": 194,
+      "imdbId": "tt0211915"
+    },
+    "9": {
+      "poster": "https://image.tmdb.org/t/p/w500/ulcAi4dKpAjHwYGS08vNyx9H6I9.jpg",
+      "popularity": 52.6457,
+      "tmdbUpdatedAt": "2026-10-09T09:17:02.331562+00:00",
+      "tmdbId": 76341,
+      "imdbId": "tt1392190"
+    },
+    "10": {
+      "poster": "https://image.tmdb.org/t/p/w500/AuJ1ZlfqwuAr9H5Qr1U9KILylse.jpg",
+      "popularity": 6.9631,
+      "tmdbUpdatedAt": "2026-10-09T09:17:02.331562+00:00",
+      "tmdbId": 370755,
+      "imdbId": "tt5247022"
+    },
+    "11": {
+      "poster": "https://image.tmdb.org/t/p/w500/vN5B5WgYscRGcQpVhHl6p9DDTP0.jpg",
+      "popularity": 34.9111,
+      "tmdbUpdatedAt": "2026-10-09T09:17:02.331562+00:00",
+      "tmdbId": 105,
+      "imdbId": "tt0088763"
+    },
+    "12": {
+      "poster": "https://image.tmdb.org/t/p/w500/kf1Jb1c2JAOqjuzA3H4oDM263uB.jpg",
+      "popularity": 16.7703,
+      "tmdbUpdatedAt": "2026-10-09T09:17:02.331562+00:00",
+      "tmdbId": 76,
+      "imdbId": "tt0112471"
+    }
   },
   "sources": {
     "tmdb": {
-      "status": "not_connected",
-      "lastAttempt": "2026-10-09T08:50:51.258070+00:00",
-      "imported": 0,
-      "failed": 0
+      "status": "ok",
+      "lastAttempt": "2026-10-09T09:17:02.331562+00:00",
+      "imported": 12,
+      "failed": 0,
+      "lastSuccess": "2026-10-09T09:17:02.331562+00:00"
     },
     "imdb": {
       "status": "not_connected",
-      "lastAttempt": "2026-10-09T08:50:51.258070+00:00",
+      "lastAttempt": "2026-10-09T09:17:02.331562+00:00",
       "imported": 0,
       "failed": 0
     }
