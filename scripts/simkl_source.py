@@ -1,6 +1,7 @@
 """SIMKL public trending feed and optional Client ID verification."""
 import urllib.parse
 import urllib.error
+import re
 
 FEED_URL = 'https://data.simkl.in/discover/trending/movies/today_100.json'
 HEADERS = {'User-Agent': 'Nightshift/1.0', 'Accept': 'application/json'}
@@ -35,6 +36,8 @@ def auth_diagnostic(error):
         try:
             body = error.read(8192).decode('utf-8', errors='replace').lower()
             result['reasonHints'] = [hint for hint in ('token', 'oauth', 'bearer', 'client_id', 'invalid', 'expired', 'missing', 'required', 'app-name', 'app-version', 'verified', 'revoked', 'auth v2') if hint in body]
+            result['tokenRequired'] = bool(re.search(r'token.{0,35}(?:required|missing)|(?:required|missing).{0,35}token', body))
+            result['clientIdRequired'] = bool(re.search(r'client_id.{0,35}(?:required|missing)|(?:required|missing).{0,35}client_id', body))
         except Exception:
             pass
     return result
@@ -45,7 +48,8 @@ def api_requirements(spec):
     paths = spec.get('paths', {})
     get = paths.get('/ratings', {}).get('get', {})
     if not get:
-        raise ValueError('SIMKL ratings documentation missing')
+        get = next((v['get'] for k, v in paths.items() if 'ratings' in k and isinstance(v, dict) and 'get' in v), {})
+    if not get: return {'ratingsOperationFound': False, 'documentKeys': list(spec)[:15]}
     return {'security': get.get('security', spec.get('security', [])),
             'parameters': [{'name': p.get('name'), 'in': p.get('in'), 'required': p.get('required', False), 'description': p.get('description', '')[:800]} for p in get.get('parameters', [])],
             'description': get.get('description', '')[:2500],

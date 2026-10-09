@@ -148,8 +148,10 @@ def refresh(snapshot, request=get_json, environ=None, now=None):
     if state.get('credentialHttpStatus') == 401 and not state.get('apiRequirements'):
         try:
             state['apiRequirements'] = api_requirements(request('https://api.simkl.org/openapi.json', HEADERS))
-        except Exception:
-            pass
+            state['apiDocumentationStatus'] = 'loaded'
+        except Exception as error:
+            state['apiDocumentationStatus'] = 'unavailable'
+            if isinstance(error, urllib.error.HTTPError): state['apiDocumentationHttpStatus'] = error.code
     states['simkl'] = state
     return snapshot
 
