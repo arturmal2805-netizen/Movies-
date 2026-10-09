@@ -1,9 +1,9 @@
-import {installMobileFeed} from './mobile-feed.js?v=target-refill28';
-import {categoryOptions,filmCategories,isEligibleForDiscovery} from './categories.js?v=target-refill28';
-import {buildTasteProfile,tasteScore} from './taste.js?v=target-refill28';
+import {installMobileFeed} from './mobile-feed.js?v=private-export29';
+import {categoryOptions,filmCategories,isEligibleForDiscovery} from './categories.js?v=private-export29';
+import {buildTasteProfile,tasteScore} from './taste.js?v=private-export29';
 import {ManualRecommendations} from './manual-recommendations.js';
 import {kyivTime,recentRecommendations,nextRecommendationRun} from './time.js';
-import {ServerStore} from './server.js?v=target-refill28';
+import {ServerStore} from './server.js?v=private-export29';
 import {normalizeRating,isArchived,worstRating,bestRating,neutralRating,ratingLabel} from './ratings.js?v=swipe-touch24';
 import {cardRule,sourceDefinitions,sourceState,hasCompleteMetadata} from './sources.js';
 export const films = [
@@ -144,7 +144,17 @@ function renderHourlyStatus(){
  status.title=`Следующий плановый подбор: ${kyivTime(next)} · Киев. Персональный подбор за последние 60 минут. Синхронизация: ${kyivTime(collectionSyncedAt)} · Киев.${latest?' Последнее добавление: '+kyivTime(latest)+' · Киев.':''}`;
 }
 setInterval(renderHourlyStatus,30*1000);
-function renderAccount(){renderHourlyStatus();const logged=Boolean(server.session);$('account-open').textContent=logged?'✓ Аккаунт':'Войти';$('account-status').textContent=!server.configured?'Сервер ещё не настроен. Оценки доступны после подключения Supabase.':logged?'Оценки и коллекция синхронизируются с сервером.':'Войдите по коду из письма. На этом устройстве вход сохранится после закрытия браузера.';$('auth-form').hidden=logged||!server.configured;$('account-logout').hidden=!logged;$('import-local').hidden=!logged||(!Object.keys(legacyRatings).length&&!legacySaved.length);}
+function renderAccount(){renderHourlyStatus();const logged=Boolean(server.session);$('account-open').textContent=logged?'✓ Аккаунт':'Войти';$('account-status').textContent=!server.configured?'Сервер ещё не настроен. Оценки доступны после подключения Supabase.':logged?'Оценки и коллекция синхронизируются с сервером.':'Войдите по коду из письма. На этом устройстве вход сохранится после закрытия браузера.';$('auth-form').hidden=logged||!server.configured;$('account-logout').hidden=!logged;$('export-ratings').hidden=!logged;$('import-local').hidden=!logged||(!Object.keys(legacyRatings).length&&!legacySaved.length);}
+$('export-ratings').onclick=async()=>{
+ const button=$('export-ratings');button.disabled=true;
+ try{
+  const rows=await server.exportRatings();
+  const url=URL.createObjectURL(new Blob([JSON.stringify(rows,null,2)],{type:'application/json;charset=utf-8'}));
+  const link=document.createElement('a');link.href=url;link.download='nightshift-ratings-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  toast('Скачано оценок: '+rows.length);
+ }catch(error){toast(error.message);}finally{button.disabled=false;}
+};
 function openAccount(){renderAccount();if(!$('account-dialog').open)$('account-dialog').showModal();}
 $('account-code').addEventListener('keydown',e=>{if(e.key==='Enter'&&!$('verify-code').disabled)$('verify-code').click();});
 window.addEventListener('storage',async e=>{if(e.key!=='nightshift.session')return;if(!e.newValue){server.session=null;recommendationRows=[];collectionSyncedAt=null;reactions={};saved=[];films.splice(12);render();renderAccount();if($('sources-dialog').open)renderSources();}else try{if(await server.restore())await syncAccount();}catch{}});

@@ -1,4 +1,4 @@
-import {categoryRules} from './category-rules.js?v=target-refill28';
+import {categoryRules} from './category-rules.js?v=private-export29';
 export const categoryOptions = [
  ['all','✦','Все фильмы'],
  ['horror','☠','Horror'],

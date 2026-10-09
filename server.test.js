@@ -44,3 +44,18 @@ test('all ratings are paginated beyond 525 and 1000 rows without truncation',asy
  store.api=async path=>{calls++;const params=new URL('http://test'+path).searchParams;assert.equal(params.get('order'),'tmdb_id');const offset=Number(params.get('offset'));return rows.slice(offset,offset+Number(params.get('limit')));};
  assert.equal((await store.readAll('ratings')).length,1250);assert.equal(calls,3);
 });
+test('private rating export reads every page with the authenticated user filter',async()=>{
+ const store=new ServerStore();store.session=session();const rows=Array.from({length:525},(_,tmdb_id)=>({tmdb_id,user_id:'test-user',impression:'like'}));let calls=0;
+ store.api=async path=>{calls++;const params=new URL('http://test'+path).searchParams;assert.equal(params.get('user_id'),'eq.test-user');return rows.slice(Number(params.get('offset')),Number(params.get('offset'))+500);};
+ assert.equal((await store.exportRatings()).length,525);assert.equal(calls,2);
+});
+test('export rejects another user data or logout during pagination',async()=>{
+ for(const logout of [false,true]){
+  const store=new ServerStore();store.session=session();store.api=async()=>{if(logout)store.session=null;return [{user_id:logout?'test-user':'another-user'}];};
+  await assert.rejects(store.exportRatings(),/Экспорт остановлен/);
+ }
+});
+test('export without login makes no network request',async()=>{
+ const store=new ServerStore();store.api=async()=>{throw new Error('unexpected request');};
+ await assert.rejects(store.exportRatings(),/Войдите/);
+});

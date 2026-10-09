@@ -1,4 +1,4 @@
-import {filmCategories} from './categories.js?v=target-refill28';
+import {filmCategories} from './categories.js?v=private-export29';
 import {normalizeRating} from './ratings.js';
 const generic=new Set(['based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','woman director']);
 const normalize=value=>String(value||'').toLocaleLowerCase('ru').replace(/[-_]/g,' ').replace(/\s+/g,' ').trim();
