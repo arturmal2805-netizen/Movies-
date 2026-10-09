@@ -1,135 +1,135 @@
 {
   "schemaVersion": 1,
-  "checkedAt": "2026-10-09T17:12:14.193511+00:00",
+  "checkedAt": "2026-10-09T17:14:00.766026+00:00",
   "films": {
     "1": {
       "poster": "https://image.tmdb.org/t/p/w500/yQvGrMoipbRoddT0ZR8tPoR7NfX.jpg",
       "popularity": 66.1815,
-      "tmdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00",
+      "tmdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00",
       "tmdbId": 157336,
       "imdbId": "tt0816692",
       "imdb": 8.7,
-      "imdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00"
+      "imdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00"
     },
     "2": {
       "poster": "https://image.tmdb.org/t/p/w500/eWdyYQreja6JGCzqHWXpWHDrrPo.jpg",
       "popularity": 27.1681,
-      "tmdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00",
+      "tmdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00",
       "tmdbId": 120467,
       "imdbId": "tt2278388",
       "imdb": 8.1,
-      "imdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00"
+      "imdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00"
     },
     "3": {
       "poster": "https://image.tmdb.org/t/p/w500/6izwz7rsy95ARzTR3poZ8H6c5pp.jpg",
       "popularity": 60.2719,
-      "tmdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00",
+      "tmdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00",
       "tmdbId": 693134,
       "imdbId": "tt15239678",
       "imdb": 8.4,
-      "imdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00"
+      "imdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00"
     },
     "4": {
       "poster": "https://image.tmdb.org/t/p/w500/uDO8zWDhfWwoFdKS4fzkUJt0Rf0.jpg",
       "popularity": 29.5806,
-      "tmdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00",
+      "tmdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00",
       "tmdbId": 313369,
       "imdbId": "tt3783958",
       "imdb": 8.0,
-      "imdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00"
+      "imdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00"
     },
     "5": {
       "poster": "https://image.tmdb.org/t/p/w500/pThyQovXQrw2m0s9x82twj48Jq4.jpg",
       "popularity": 26.7553,
-      "tmdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00",
+      "tmdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00",
       "tmdbId": 546554,
       "imdbId": "tt8946378",
       "imdb": 7.9,
-      "imdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00"
+      "imdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00"
     },
     "6": {
       "poster": "https://image.tmdb.org/t/p/w500/hm58Jw4Lw8OIeECIq5qyPYhAeRJ.jpg",
       "popularity": 23.87,
-      "tmdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00",
+      "tmdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00",
       "tmdbId": 508442,
       "imdbId": "tt2948372",
       "imdb": 8.0,
-      "imdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00"
+      "imdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00"
     },
     "7": {
       "poster": "https://image.tmdb.org/t/p/w500/pEzNVQfdzYDzVK0XqxERIw2x2se.jpg",
       "popularity": 25.6217,
-      "tmdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00",
+      "tmdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00",
       "tmdbId": 329865,
       "imdbId": "tt2543164",
       "imdb": 7.9,
-      "imdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00"
+      "imdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00"
     },
     "8": {
       "poster": "https://image.tmdb.org/t/p/w500/nSxDa3M9aMvGVLoItzWTepQ5h5d.jpg",
       "popularity": 21.8796,
-      "tmdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00",
+      "tmdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00",
       "tmdbId": 194,
       "imdbId": "tt0211915",
       "imdb": 8.2,
-      "imdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00"
+      "imdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00"
     },
     "9": {
       "poster": "https://image.tmdb.org/t/p/w500/ulcAi4dKpAjHwYGS08vNyx9H6I9.jpg",
       "popularity": 52.6457,
-      "tmdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00",
+      "tmdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00",
       "tmdbId": 76341,
       "imdbId": "tt1392190",
       "imdb": 8.1,
-      "imdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00"
+      "imdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00"
     },
     "10": {
       "poster": "https://image.tmdb.org/t/p/w500/AuJ1ZlfqwuAr9H5Qr1U9KILylse.jpg",
       "popularity": 6.9631,
-      "tmdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00",
+      "tmdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00",
       "tmdbId": 370755,
       "imdbId": "tt5247022",
       "imdb": 7.3,
-      "imdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00"
+      "imdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00"
     },
     "11": {
       "poster": "https://image.tmdb.org/t/p/w500/vN5B5WgYscRGcQpVhHl6p9DDTP0.jpg",
       "popularity": 34.9111,
-      "tmdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00",
+      "tmdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00",
       "tmdbId": 105,
       "imdbId": "tt0088763",
       "imdb": 8.5,
-      "imdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00"
+      "imdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00"
     },
     "12": {
       "poster": "https://image.tmdb.org/t/p/w500/kf1Jb1c2JAOqjuzA3H4oDM263uB.jpg",
       "popularity": 16.7703,
-      "tmdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00",
+      "tmdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00",
       "tmdbId": 76,
       "imdbId": "tt0112471",
       "imdb": 8.1,
-      "imdbUpdatedAt": "2026-10-09T17:12:14.193511+00:00"
+      "imdbUpdatedAt": "2026-10-09T17:14:00.766026+00:00"
     }
   },
   "sources": {
     "tmdb": {
       "status": "ok",
-      "lastAttempt": "2026-10-09T17:12:14.193511+00:00",
+      "lastAttempt": "2026-10-09T17:14:00.766026+00:00",
       "imported": 12,
       "failed": 0,
-      "lastSuccess": "2026-10-09T17:12:14.193511+00:00"
+      "lastSuccess": "2026-10-09T17:14:00.766026+00:00"
     },
     "imdb": {
       "status": "ok",
-      "lastAttempt": "2026-10-09T17:12:14.193511+00:00",
+      "lastAttempt": "2026-10-09T17:14:00.766026+00:00",
       "imported": 12,
       "failed": 0,
-      "lastSuccess": "2026-10-09T17:12:14.193511+00:00"
+      "lastSuccess": "2026-10-09T17:14:00.766026+00:00"
     },
     "trakt": {
       "status": "ok",
-      "lastAttempt": "2026-10-09T17:12:14.193511+00:00",
-      "lastSuccess": "2026-10-09T17:12:14.193511+00:00",
+      "lastAttempt": "2026-10-09T17:14:00.766026+00:00",
+      "lastSuccess": "2026-10-09T17:14:00.766026+00:00",
       "baselineDiagnostic": {
         "httpStatus": 403,
         "category": "access_forbidden",
@@ -139,78 +139,49 @@
     },
     "simkl": {
       "status": "ok",
-      "lastAttempt": "2026-10-09T17:12:14.193511+00:00",
-      "lastSuccess": "2026-10-09T17:12:14.193511+00:00",
+      "lastAttempt": "2026-10-09T17:14:00.766026+00:00",
+      "lastSuccess": "2026-10-09T17:14:00.766026+00:00",
       "available": 100,
-      "credentialStatus": "error",
-      "credentialHttpStatus": 401,
-      "credentialDiagnostic": {
-        "httpStatus": 401,
-        "category": "authentication_rejected",
-        "reasonHints": [
-          "token",
-          "client_id",
-          "required"
-        ],
-        "tokenRequired": true,
-        "clientIdRequired": true
-      },
       "apiRequirements": {
+        "endpoint": "/movies/{id}",
         "security": [
           {
-            "clientId": [],
-            "bearerAuth": []
-          },
-          {
-            "simklApiKey": [],
-            "bearerAuth": []
+            "simklApiKey": []
           }
         ],
         "parameters": [
           {
-            "name": "type",
+            "name": "id",
             "in": "path",
             "required": true,
-            "description": "Media-type slice. Use `all` to fetch every type in one response — this is the canonical \"I don't care which type\" form. The path segment is required because OpenAPI 3.1 does not permit optional path parameters."
+            "description": "**Simkl ID** for the item. Simkl IDs are stable, unambiguous, and the response is Cloudflare-cached by Simkl ID, so repeat lookups are very fast.\n\n**If you only have an external ID** (IMDb, TMDB, TVDB, MAL, AniDB, etc.), resolve it to a Simkl ID first via [`GET /redirect`](/api-reference/redirect) — it returns the Simkl ID in the `Location` header without a JSON payload, and the follow-up detail call is Cloudflare-cached."
           },
           {
-            "name": "user_watchlist",
+            "name": "client_id",
             "in": "query",
             "required": true,
-            "description": ""
+            "description": "Your **`client_id`** from your [Simkl developer settings](https://simkl.com/settings/developer/). Required on every request."
           },
           {
-            "name": "fields",
+            "name": "app-name",
             "in": "query",
-            "required": false,
-            "description": "- A comma-separated list of additional fields to include in the response.\n - `simkl` – returns the Simkl rating and votes.\n - `ext` – includes external ratings such as IMDB or MAL if available.\n - `rank` – returns the rank within the Simkl service for that media type (movie, tv, anime).\n - `release_status` – includes the release status of the item.\n - `year` – includes the year of release.\n - Example: `fields=rank,droprate,simkl,ext,year`"
+            "required": true,
+            "description": "Short, lowercase identifier for your app (e.g. `plex-scrobbler`, `kodi-bridge`). Helps Simkl identify which apps are using the API."
           },
           {
-            "name": null,
-            "in": null,
-            "required": false,
-            "description": ""
+            "name": "app-version",
+            "in": "query",
+            "required": true,
+            "description": "Your app's current version (e.g. `1.0`, `2.4.1`). Helps Simkl debug issues you report."
           },
           {
-            "name": null,
-            "in": null,
-            "required": false,
-            "description": ""
-          },
-          {
-            "name": null,
-            "in": null,
-            "required": false,
-            "description": ""
-          },
-          {
-            "name": null,
-            "in": null,
-            "required": false,
-            "description": ""
+            "name": "User-Agent",
+            "in": "header",
+            "required": true,
+            "description": "Descriptive identifier for your app, ideally `name/version`. Examples: `PlexMediaServer/1.43.1.10540`, `kodi-simkl/0.9.2`, `MyApp/2.4.1 (https://myapp.com)`."
           }
         ],
-        "description": "<Note>\n**This endpoint returns Simkl's *community* ratings** (the public average + droprate + vote counts) for every item in the user's watchlist — not the user's own 1-10 scores. If you want **the user's own ratings**, every [`GET /sync/all-items`](/api-reference/simkl/get-all-items) response already carries `user_rating` (1-10 or `null`) per item — filter that client-side. For server-side filtering by score (e.g. \"give me only items I rated 9 or 10\"), see [`GET /sync/ratings/:type/:rating`](/api-reference/simkl/get-user-ratings).\n</Note>\n\nBulk Simkl-rating lookup for items across the user's watchlist. Useful for ranking the user's library against community ratings (e.g. \"what's the highest-community-rated movie in my Plan-to-Watch?\").\n\nReturns an array of `{id, simkl: {rating, votes, droprate}}` for every item in the requested watchlist statuses. Pair with [`GET /movies/{id}`](/api-reference/simkl/get-movie) / [`GET /tv/{id}`](/api-reference/simkl/get-tv-show) / [`GET /anime/{id}`](/api-reference/simkl/get-anime) (Cloudflare-cached) when you need the full record for any individual item.\n\n#### Path\n\n| Segment | Values | Notes |\n|---|---|---|\n| `type` | `movies`, `tv`, `anime`, `all` | Required. Use `/ratings/all` to get every type in one response. |\n\n#### Query\n\n| Param | Required | Notes |\n|---|---|---|\n| `user_watchlist` | yes | Comma-separated list of watchlist statuses to include. Any of `watching`, `plantowatch`, `hold`, `completed`, `dropped`. Use `1` (or any non-empty value) as a shorthand for \"all statuses\". Without this param the request silently falls through to a different code path and returns `200 null` — always supply it. |\n| `fields` | no | Comma-separated extra blocks to include alongside the default `simkl` block. See the *Fields values* table below. |\n\n#### Fields values\n\n| `fields` value | Adds |\n|---|---|\n| `simkl` *(default)* | `simkl: {rating, votes, droprate}` per item. |\n| `ext` | `imdb: {rating, votes}` and/or `mal: {rating, votes, rank}` (only the providers Simkl has on file for the title). |\n| `rank` | `rank` integer — Simkl's catalog rank for the item. |\n| `release_status` | Human-readable release status (e.g. `Ended`, `Continuing`). |\n| `year` | `release_year` integer. |\n| `link` | Canonical Simkl URL for the item. |\n\nCombine multiple with commas: `fields=simkl,ext,year,rank`. Unknown values (including `reactions` and `has_trailer`, which are valid on the hidden single-item rating endpoint but **not** here) are silently ignore",
+        "description": "Full detail record for one movie — title, overview, year, runtime, country, language, certification, genres, director, ratings, posters, fanart, external IDs, alternate titles, release-date list per region, budget, revenue, trailers, similar-movie recommendations. The default response is already complete; no flags needed.\n\nResponses are **Cloudflare-cached by Simkl ID**, so repeat lookups of popular titles are near-free. Parallel requests against this endpoint are explicitly allowed (see [Rate limits → Parallel requests](/resources/rate-limits#parallel-requests-when-allowed)).\n\n**Cache invalidation is automatic.** When Simkl updates the underlying record (admin edits, automated metadata refresh, image swap, related-titles change, etc.), the corresponding Cloudflare cache entry is purged server-side. The next call to this endpoint returns the fresh data — there's no TTL to wait out and no client-side cache-busting needed. Your own app-level cache, if any, still has to be invalidated by your client.\n\nUse a Simkl ID for the lookup. If you only have an external ID, resolve it via [`GET /redirect`](/api-reference/redirect) first.\n\n<Tip>\n**Which IDs can I send/expect?** All accepted input identifiers and the keys you'll see echoed back in responses are listed at [**Standard media objects → Supported ID keys**](/conventions/standard-media-objects#supported-id-keys). Send every ID you have on writes — Simkl picks the first that resolves and ignores the rest. Reminder: `slug` is **response-only** (never send it on a request).\n</Tip>",
         "securitySchemes": {
           "simklApiKey": {
             "type": "apiKey",
@@ -232,7 +203,8 @@
           }
         }
       },
-      "apiDocumentationStatus": "loaded"
+      "apiDocumentationStatus": "loaded",
+      "credentialStatus": "ok"
     }
   }
 }
