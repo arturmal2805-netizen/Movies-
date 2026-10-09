@@ -14,7 +14,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: movie-catalog
+  group: movie-recommendations
   cancel-in-progress: false
 jobs:
   recommendations:

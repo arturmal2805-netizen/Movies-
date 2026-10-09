@@ -17,6 +17,7 @@ def movie(mid):
 class FakeBackend:
     def __init__(self):
         self.collection = []
+        self.now = NOW
         self.ratings = [{'tmdb_id': 900, 'impression': 'like', 'plot': 9,
                          'cinematography': 8, 'metadata': {'genreIds': [878]}}]
         self.patched = []
@@ -33,7 +34,7 @@ class FakeBackend:
                 raise RuntimeError('Simulated write failure')
             if any(r['tmdb_id'] == body['tmdb_id'] for r in self.collection):
                 return []
-            row = dict(body, created_at=NOW.isoformat())
+            row = dict(body, created_at=self.now.isoformat())
             self.collection.append(row)
             return [row]
         if method == 'PATCH':
@@ -81,6 +82,27 @@ class PipelineTests(unittest.TestCase):
         user = dict(self.user, last_recommendation_at=NOW.isoformat())
         with patch.object(self.backend, 'movie', side_effect=AssertionError('Must not query')):
             self.assertEqual(recommend_user(self.backend, user, NOW, self.config), 0)
+
+    def test_next_scheduled_hour_runs_even_when_previous_batch_is_less_than_60_minutes_old(self):
+        now = datetime.datetime(2026,10,9,15,17,tzinfo=datetime.timezone.utc)
+        backend=FakeBackend();backend.now=now
+        previous=now-datetime.timedelta(minutes=21)
+        user=dict(self.user,last_recommendation_at=previous.isoformat())
+        backend.collection=[{'tmdb_id':2000,'reason':'older batch','created_at':previous.isoformat()}]
+        candidates=[dict(movie(901+i),discovery_sources=['tmdb']) for i in range(3)]
+        with patch('recommend.discover',return_value=(candidates,[])):
+            self.assertEqual(recommend_user(backend,user,now,self.config),3)
+        self.assertEqual(len(backend.collection),4)
+
+    def test_rolling_maximum_is_preserved_across_two_scheduled_hours(self):
+        now=datetime.datetime(2026,10,9,15,17,tzinfo=datetime.timezone.utc)
+        backend=FakeBackend();backend.now=now
+        previous=now-datetime.timedelta(minutes=21)
+        backend.collection=[{'tmdb_id':2000+i,'reason':'older batch','created_at':previous.isoformat()} for i in range(49)]
+        candidates=[dict(movie(901+i),discovery_sources=['tmdb']) for i in range(3)]
+        with patch('recommend.discover',return_value=(candidates,[])):
+            self.assertEqual(recommend_user(backend,self.user,now,self.config),1)
+        self.assertEqual(len(backend.collection),50)
 
     def test_sources_deduplicate_and_isolate_failed_provider(self):
         config = copy.deepcopy(self.config)

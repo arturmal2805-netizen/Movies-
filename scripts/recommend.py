@@ -113,18 +113,37 @@ def read_rows(b,path):
   if len(page)<500:return rows
   offset+=500
 
+def schedule_slot(value):
+ # Same hourly boundary as GitHub cron 17 * * * *; independent of run delays and Kyiv DST.
+ return int((value.timestamp()-17*60)//3600)
+
+def parsed_time(value):
+ try:
+  stamp=datetime.datetime.fromisoformat(value.replace('Z','+00:00'))
+  return stamp if stamp.tzinfo else stamp.replace(tzinfo=datetime.timezone.utc)
+ except (ValueError,TypeError,AttributeError):return None
+
 def recommend_user(b,user,now,config):
- if user.get('last_recommendation_at') and (now-datetime.datetime.fromisoformat(user['last_recommendation_at'].replace('Z','+00:00'))).total_seconds()<3600:return 0
+ slot=schedule_slot(now)
+ previous=parsed_time(user.get('last_recommendation_at'))
+ if previous and schedule_slot(previous)>=slot:
+  print('Private batch skipped: this scheduled hour has already completed.')
+  return 0
  uid=user['user_id'];ratings=read_rows(b,'ratings?user_id=eq.'+uid+'&select=*&order=tmdb_id');collection=read_rows(b,'collection?user_id=eq.'+uid+'&select=*&order=tmdb_id')
  weights=taste(ratings);preferred=sorted((g for g,v in weights.items() if v>0),key=lambda g:weights[g],reverse=True)[:3]
  candidates,statuses=discover(b,preferred,config)
  print('Discovery:',json.dumps(statuses))
  ranked=rank_candidates(candidates,ratings,collection,config['minimum_votes'])
- recent=sum(1 for row in collection if row.get('reason') and row.get('created_at') and (now-datetime.datetime.fromisoformat(row['created_at'].replace('Z','+00:00'))).total_seconds()<3600)
- # Base is a target budget, never a minimum required to save candidates.
- # Even one eligible film is saved when the remaining hourly budget allows it.
- budget=max(0,hourly_limit(config,ranked)-recent)
- if not budget:return 0
+ stamps=[parsed_time(row.get('created_at')) for row in collection if row.get('reason')]
+ stamps=[stamp for stamp in stamps if stamp and stamp<=now]
+ recent=sum(1 for stamp in stamps if (now-stamp).total_seconds()<3600)
+ in_slot=sum(1 for stamp in stamps if schedule_slot(stamp)==slot)
+ # A target batch belongs to its scheduled hour; the hard maximum remains a rolling 60-minute cap.
+ # Base is not a minimum: even one eligible film is saved within the remaining budget.
+ budget=min(max(0,hourly_limit(config,ranked)-in_slot),max(0,config['maximum_per_hour']-recent))
+ if not budget:
+  print('Private batch skipped: scheduled-hour budget or rolling 60-minute maximum reached.')
+  return 0
  added=0
  for _,movie,reason in ranked:
   if added>=budget:break
