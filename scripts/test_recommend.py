@@ -1,7 +1,7 @@
 import unittest
 from recommend import rank_candidates,taste
 class RecommendationTests(unittest.TestCase):
- def movie(self,id,genre=878):return {'id':id,'genre_ids':[genre],'poster_path':'/p.jpg','adult':False,'release_date':'2020-01-01','vote_average':7,'popularity':10}
+ def movie(self,id,genre=878):return {'id':id,'genre_ids':[genre],'poster_path':'/p.jpg','adult':False,'release_date':'2020-01-01','vote_count':200,'vote_average':7,'popularity':10}
  def test_excludes_rated_collected_seeded_and_duplicates(self):
   ratings=[{'tmdb_id':100,'impression':'dislike'}]
   result=rank_candidates([self.movie(100),self.movie(101),self.movie(157336),self.movie(102)],ratings,[{'tmdb_id':101}])

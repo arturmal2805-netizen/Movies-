@@ -1,0 +1,11 @@
+{
+  "base_per_hour": 3,
+  "extra_per_source": 2,
+  "maximum_per_hour": 9,
+  "minimum_votes": 100,
+  "sources": [
+    {"id": "tmdb", "adapter": "tmdb_discover", "enabled": true, "pages": 2},
+    {"id": "future_feed", "adapter": "tmdb_id_feed", "enabled": false,
+     "url_env": "MOVIE_FEED_URL", "token_env": "MOVIE_FEED_TOKEN", "candidate_limit": 40}
+  ]
+}
