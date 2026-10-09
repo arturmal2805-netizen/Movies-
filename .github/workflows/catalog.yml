@@ -7,6 +7,8 @@ on:
       - 'index.html'
       - '*.js'
       - 'style.css'
+      - 'scripts/import_catalog.py'
+      - 'scripts/test_import_catalog.py'
       - '.github/workflows/catalog.yml'
   schedule:
     - cron: '17 * * * *'
@@ -28,9 +30,12 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+      - name: Test catalog and provider checks
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Refresh metadata without exposing credentials
         env:
           TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
+          TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
           OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
         run: python3 scripts/import_catalog.py
       - name: Commit catalog snapshot

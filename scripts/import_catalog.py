@@ -1,5 +1,5 @@
 """Refresh verified metadata; retain the last successful values on provider errors."""
-import json, os, datetime, urllib.request, urllib.parse
+import json, os, datetime, urllib.request, urllib.parse, urllib.error
 from pathlib import Path
 TARGET = Path(__file__).resolve().parents[1] / 'data/catalog.json'
 # Stable TMDB identities for the curated catalog; never match by title alone.
@@ -51,6 +51,22 @@ def refresh(snapshot, request=get_json, environ=None, now=None):
         state.update(status='not_connected' if not credential else 'ok' if successes[provider]==len(IDS) else 'degraded' if successes[provider] else 'error',lastAttempt=now,imported=successes[provider],failed=failures[provider])
         if successes[provider]: state['lastSuccess']=now
         states[provider]=state
+    # Public provider health contains no user data or credentials.
+    trakt_key = ''.join(environ.get('TRAKT_CLIENT_ID', '').split())
+    previous = states.get('trakt', {})
+    state = dict(previous, status='not_connected' if not trakt_key else 'error', lastAttempt=now)
+    if trakt_key:
+        try:
+            result = request('https://api.trakt.tv/movies/trending?limit=1',
+                             {'trakt-api-version':'2','trakt-api-key':trakt_key,'Content-Type':'application/json'})
+            if not isinstance(result, list): raise ValueError('Invalid Trakt response')
+            state.update(status='ok', lastSuccess=now)
+            state.pop('httpStatus', None)
+        except urllib.error.HTTPError as error:
+            state['httpStatus'] = error.code
+        except Exception:
+            state.pop('httpStatus', None)
+    states['trakt'] = state
     return snapshot
 
 if __name__ == '__main__':

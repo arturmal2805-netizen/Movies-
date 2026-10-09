@@ -11,7 +11,7 @@ export function hasCompleteMetadata(f){return Boolean(f.poster&&Number.isFinite(
 export function sourceState(id,snapshot,now=Date.now(),collection=[]){
  const base=sourceDefinitions.find(s=>s.id===id);
  if(id==='local')return {...base,status:'local'};
- if(id==='trakt'){
+ if(id==='trakt'&&!snapshot?.sources?.trakt){
   const times=collection.filter(row=>row.reason&&Array.isArray(row.metadata?.discoverySources)&&row.metadata.discoverySources.includes('trakt')).map(row=>Date.parse(row.created_at)).filter(time=>Number.isFinite(time)&&time<=now);
   if(!times.length)return {...base};
   const latest=Math.max(...times),stale=now-latest>3*60*60*1000;
@@ -21,5 +21,5 @@ export function sourceState(id,snapshot,now=Date.now(),collection=[]){
  if(!entry)return {...base};
  const stamp=Date.parse(entry.lastSuccess||'');
  const stale=!Number.isFinite(stamp)||now-stamp>3*60*60*1000;
- return {...base,...entry,status:entry.status==='ok'&&stale?'stale':entry.status};
+ return {...base,...entry,...(id==='trakt'?{note:entry.status==='ok'?'Trakt API успешно ответил на проверочный запрос. Подтверждение не зависит от добавления новых фильмов.':entry.status==='not_connected'?'В задании проверки не найден TRAKT_CLIENT_ID.':entry.httpStatus?'Trakt API отклонил проверку: HTTP '+entry.httpStatus+'. Проверьте Client ID и доступ приложения.':'Проверка Trakt API не удалась. Последние сохранённые данные не удалены.'}:{}),status:entry.status==='ok'&&stale?'stale':entry.status};
 }

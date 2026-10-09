@@ -21,3 +21,10 @@ test('Trakt connects only after server recommendations confirm its contribution'
  assert.equal(sourceState('trakt',null,now,[{...row,created_at:'2026-10-10T00:00:00Z'}]).status,'scheduled');
  assert.equal(sourceState('trakt',null,now,[{...row,created_at:'2026-10-09T08:00:00Z'}]).status,'stale');
 });
+
+test('Trakt health response confirms connection even with an empty collection',()=>{
+ const now=Date.parse('2026-10-09T12:00:00Z');
+ assert.equal(sourceState('trakt',{sources:{trakt:{status:'ok',lastSuccess:'2026-10-09T11:55:00Z'}}},now,[]).status,'ok');
+ const state=sourceState('trakt',{sources:{trakt:{status:'error',httpStatus:401,lastSuccess:'2026-10-09T11:55:00Z'}}},now,[]);
+ assert.equal(state.status,'error');assert.ok(state.note.includes('HTTP 401'));
+});
