@@ -2,7 +2,7 @@ import {categoryOptions,filmCategories} from './categories.js';
 import {buildTasteProfile,tasteScore} from './taste.js';
 import {ManualRecommendations} from './manual-recommendations.js';
 import {kyivTime,recentRecommendations,nextRecommendationRun} from './time.js';
-import {ServerStore} from './server.js';
+import {ServerStore} from './server.js?v=manual-run19';
 import {normalizeRating,isArchived} from './ratings.js';
 import {cardRule,sourceDefinitions,sourceState,hasCompleteMetadata} from './sources.js';
 export const films = [
