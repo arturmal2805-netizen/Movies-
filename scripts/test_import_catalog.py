@@ -1,5 +1,5 @@
 import unittest
-from import_catalog import refresh, IDS
+from import_catalog import refresh, IDS, trakt_failure
 class ImportTests(unittest.TestCase):
  def test_missing_keys_report_disconnected(self):
   value=refresh({'films':{},'sources':{}},environ={},now='2026-10-09T10:00:00Z')
@@ -40,4 +40,22 @@ class ImportTests(unittest.TestCase):
   value=refresh({'films':{},'sources':{}},request=lambda *_:{'error':'private-error'},environ={'TRAKT_CLIENT_ID':'fake-client'})
   self.assertEqual(value['sources']['trakt']['status'],'error')
   self.assertNotIn('lastSuccess',value['sources']['trakt'])
+
+ def test_cloudflare_block_is_classified_without_leaking_response(self):
+  import urllib.error,io
+  error=urllib.error.HTTPError('https://api.trakt.tv/private',403,'private-key',{'Content-Type':'text/html','cf-mitigated':'challenge'},io.BytesIO(b'<html>Cloudflare private-key</html>'))
+  result=trakt_failure(error)
+  self.assertEqual(result['category'],'edge_security_block')
+  self.assertEqual(result['responseType'],'html')
+  self.assertNotIn('private-key',str(result))
+ def test_identified_app_can_recover_from_user_agent_block(self):
+  import urllib.error,io
+  def response(url,headers):
+   if headers.get('User-Agent')=='Nightshift/1.0':return []
+   raise urllib.error.HTTPError(url,403,'Forbidden',{'Content-Type':'text/html'},io.BytesIO(b'<html>Cloudflare</html>'))
+  value=refresh({'films':{},'sources':{}},request=response,environ={'TRAKT_CLIENT_ID':'fake-client'})
+  state=value['sources']['trakt']
+  self.assertEqual(state['status'],'ok')
+  self.assertEqual(state['baselineDiagnostic']['category'],'edge_security_block')
+  self.assertNotIn('httpStatus',state)
 if __name__=='__main__':unittest.main()

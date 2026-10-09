@@ -49,7 +49,7 @@ def trakt_candidates(backend, preferred, config):
     if not key or not all(c.isascii() and (c.isalnum() or c in '_-') for c in key):
         raise ValueError('Trakt Client ID missing or invalid')
     headers = {'trakt-api-version': '2', 'trakt-api-key': key,
-               'Content-Type': 'application/json'}
+               'Content-Type': 'application/json', 'User-Agent':'Nightshift/1.0'}
     limit = config.get('candidate_limit', 40)
     ids, successful = [], False
     for endpoint in ('trending', 'popular'):

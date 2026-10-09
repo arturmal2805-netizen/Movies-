@@ -9,6 +9,32 @@ def get_json(url, headers=None):
     with urllib.request.urlopen(urllib.request.Request(url, headers=headers or {}), timeout=25) as response:
         return json.load(response)
 
+def trakt_failure(error):
+    """Classify a bounded response; never persist its body, headers, URL or keys."""
+    if not isinstance(error, urllib.error.HTTPError):
+        return {'category':'network_or_response'}
+    result = {'httpStatus':error.code, 'category':'http_error'}
+    try:
+        body = error.read(8192).decode('utf-8', errors='replace').lower()
+        headers = error.headers or {}
+        html = 'text/html' in headers.get('Content-Type','').lower() or '<html' in body or '<!doctype html' in body
+        result['responseType'] = 'html' if html else 'json' if 'application/json' in headers.get('Content-Type','').lower() else 'text'
+        if headers.get('cf-mitigated','').lower() == 'challenge' or html and any(marker in body for marker in ('cloudflare','just a moment','attention required','you have been blocked')):
+            result['category'] = 'edge_security_block'
+        elif any(marker in body for marker in ('invalid api key','invalid_api_key','invalid client','invalid_client')):
+            result['category'] = 'invalid_client_id'
+        elif any(marker in body for marker in ('vip required','requires vip','subscription required','api use policy','application is not approved','app is not approved','application has been disabled')):
+            result['category'] = 'application_access_restricted'
+        elif error.code == 401:
+            result['category'] = 'authentication_rejected'
+        elif error.code == 403:
+            result['category'] = 'access_forbidden'
+        elif error.code == 429:
+            result['category'] = 'rate_limited'
+    except Exception:
+        pass
+    return result
+
 def refresh(snapshot, request=get_json, environ=None, now=None):
     environ = os.environ if environ is None else environ
     now = now or datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -55,17 +81,25 @@ def refresh(snapshot, request=get_json, environ=None, now=None):
     trakt_key = ''.join(environ.get('TRAKT_CLIENT_ID', '').split())
     previous = states.get('trakt', {})
     state = dict(previous, status='not_connected' if not trakt_key else 'error', lastAttempt=now)
+    for field in ('httpStatus','diagnostic','baselineDiagnostic'):
+        state.pop(field, None)
     if trakt_key:
-        try:
-            result = request('https://api.trakt.tv/movies/trending?limit=1',
-                             {'trakt-api-version':'2','trakt-api-key':trakt_key,'Content-Type':'application/json'})
-            if not isinstance(result, list): raise ValueError('Invalid Trakt response')
-            state.update(status='ok', lastSuccess=now)
-            state.pop('httpStatus', None)
-        except urllib.error.HTTPError as error:
-            state['httpStatus'] = error.code
-        except Exception:
-            state.pop('httpStatus', None)
+        # First preserve evidence from the original request, then test explicit app identification.
+        for agent in (None, 'Nightshift/1.0'):
+            try:
+                headers = {'trakt-api-version':'2','trakt-api-key':trakt_key,'Content-Type':'application/json'}
+                if agent: headers['User-Agent'] = agent
+                result = request('https://api.trakt.tv/movies/trending?limit=1', headers)
+                if not isinstance(result, list): raise ValueError('Invalid Trakt response')
+                state.update(status='ok', lastSuccess=now)
+                state.pop('httpStatus', None)
+                state.pop('diagnostic', None)
+                break
+            except Exception as error:
+                diagnostic = trakt_failure(error)
+                state['diagnostic'] = diagnostic
+                if diagnostic.get('httpStatus'): state['httpStatus'] = diagnostic['httpStatus']
+                if agent is None: state['baselineDiagnostic'] = diagnostic
     states['trakt'] = state
     return snapshot
 
