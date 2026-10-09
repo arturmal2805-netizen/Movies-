@@ -65,7 +65,7 @@ class Backend:
   if url.startswith(self.url+'/rest/v1/'):
    table=url.split('/rest/v1/',1)[1].split('?',1)[0]
    label='Supabase '+(table if table in ('profiles','ratings','collection') else 'database')+' '+method
-  else:label='TMDB' if url.startswith('https://api.themoviedb.org/') else 'OMDb' if url.startswith('https://www.omdbapi.com/') else 'Discovery feed'
+  else:label='TMDB' if url.startswith('https://api.themoviedb.org/') else 'OMDb' if url.startswith('https://www.omdbapi.com/') else 'Trakt' if url.startswith('https://api.trakt.tv/') else 'Discovery feed'
   req=urllib.request.Request(url,headers=headers,method=method,data=json.dumps(body).encode() if body is not None else None)
   for attempt in range(3):
    try:

@@ -32,6 +32,7 @@ jobs:
       - name: Add private personalized films
         env:
           TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
+          TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
           OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
           SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://tecntqujshynuttfdxhx.supabase.co' }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

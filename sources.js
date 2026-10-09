@@ -2,6 +2,7 @@ export const cardRule = 'У карточки должны быть постер,
 export const sourceDefinitions = [
  {id:'local',name:'Локальный каталог',purpose:'Исходная подборка из 12 фильмов',status:'local',note:'Встроен в сайт. Это не внешний импорт.'},
  {id:'tmdb',name:'TMDB',purpose:'Постеры и popularity score',status:'not_connected',note:'Автоматический импорт подготовлен. Нужен TMDB_ACCESS_TOKEN в GitHub Actions.'},
+ {id:'trakt',name:'Trakt',purpose:'Тренды и популярные фильмы для персонального подбора',status:'scheduled',note:'Подключён к почасовому заданию GitHub Actions. Результат каждого обращения виден в логе Discovery; при сбое продолжается подбор через TMDB.'},
  {id:'imdb',name:'IMDb через OMDb',purpose:'Рейтинг IMDb',status:'not_connected',note:'Сейчас оценки записаны вручную. Для обновлений нужен OMDB_API_KEY в GitHub Actions.'},
  {id:'netflix',name:'Netflix',purpose:'Каталог стриминга',status:'not_connected',note:'Прямой импорт не подключён. Наличие фильма на Netflix не проверяется.'},
  {id:'shudder',name:'Shudder',purpose:'Каталог стриминга',status:'not_connected',note:'Прямой импорт не подключён. Наличие фильма на Shudder не проверяется.'}

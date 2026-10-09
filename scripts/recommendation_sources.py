@@ -43,7 +43,52 @@ def tmdb_id_feed(backend, preferred, config):
     return candidates
 
 
-ADAPTERS = {'tmdb_discover': tmdb_candidates, 'tmdb_id_feed': tmdb_id_feed}
+def trakt_candidates(backend, preferred, config):
+    """Public trending/popular lists need Client ID only; all IDs resolve via TMDB."""
+    key = ''.join(os.environ.get('TRAKT_CLIENT_ID', '').split())
+    if not key or not all(c.isascii() and (c.isalnum() or c in '_-') for c in key):
+        raise ValueError('Trakt Client ID missing or invalid')
+    headers = {'trakt-api-version': '2', 'trakt-api-key': key,
+               'Content-Type': 'application/json'}
+    limit = config.get('candidate_limit', 40)
+    ids, successful = [], False
+    for endpoint in ('trending', 'popular'):
+        try:
+            result = backend.request('https://api.trakt.tv/movies/' + endpoint +
+                                     '?page=1&limit=' + str(min(100, max(1, (limit + 1) // 2))), headers)
+            if not isinstance(result, list):
+                raise ValueError('Invalid Trakt list')
+            successful = True
+        except Exception:
+            continue
+        for entry in result:
+            if not isinstance(entry, dict):
+                continue
+            movie = entry.get('movie', entry)
+            if not isinstance(movie, dict) or not isinstance(movie.get('ids'), dict):
+                continue
+            mid = movie['ids'].get('tmdb')
+            if type(mid) is int and mid > 0 and mid not in ids:
+                ids.append(mid)
+    if not successful:
+        raise RuntimeError('Trakt discovery unavailable')
+    # Each list supplies at most half the budget; duplicates are resolved once.
+    candidates = []
+    for mid in ids[:limit]:
+        try:
+            detail = backend.movie(f'movie/{mid}?language=ru-RU')
+            if not isinstance(detail, dict) or detail.get('id') != mid:
+                continue
+            detail = dict(detail, genre_ids=[g['id'] for g in detail.get('genres', [])])
+            candidates.append(detail)
+        except Exception:
+            continue
+    if ids and not candidates:
+        raise RuntimeError('Trakt candidates could not be resolved')
+    return candidates
+
+
+ADAPTERS = {'tmdb_discover': tmdb_candidates, 'tmdb_id_feed': tmdb_id_feed, 'trakt': trakt_candidates}
 
 
 def discover(backend, preferred, config):
