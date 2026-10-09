@@ -43,6 +43,7 @@ class SimklTests(unittest.TestCase):
         calls = []
         def request(url, headers):
             calls.append(url)
+            if url != FEED_URL: self.assertEqual(headers['simkl-api-key'], 'abcdef')
             return [] if url == FEED_URL else {'id': 123, 'simkl': {'rating': 8}}
         result = refresh({}, request=request, environ={'SIMKL_CLIENT_ID': ' abc\ndef '})
         state = result['sources']['simkl']
