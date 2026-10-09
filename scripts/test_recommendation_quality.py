@@ -23,16 +23,16 @@ class QualityTests(unittest.TestCase):
   ratings=[{'impression':'like','plot':10,'cinematography':10,'metadata':body}]+[{'impression':'dislike','plot':1,'cinematography':1,'metadata':ghost} for _ in range(8)]
   taste=profile(ratings)
   self.assertGreater(match_score(body,taste),0);self.assertGreater(match_score(body,taste),match_score(ghost,taste))
- def test_neutral_does_not_dilute_and_neighbors_are_bounded(self):
+ def test_neutral_does_not_dilute_and_all_history_is_used(self):
   movie={'genreIds':[27],'keywords':['body horror']};liked={'metadata':movie,'impression':'like'}
   self.assertEqual(match_score(movie,profile([liked])),match_score(movie,profile([liked]+[dict(liked,impression='neutral')]*100)))
-  self.assertEqual(len(profile([liked]*100).anchors),60)
+  self.assertEqual(len(profile([liked]*100).anchors),100)
  def test_search_requests_only_modern_films_and_excludes_documentaries(self):
   backend=Mock();backend.movie.return_value={'results':[]}
   tmdb_candidates(backend,[35,28,18,878],{'minimum_votes':100,'pages':2,'_now':NOW})
   for call in backend.movie.call_args_list:
    p=parse_qs(urlsplit(call.args[0]).query)
-   self.assertEqual(p['primary_release_date.gte'],['2000-01-01']);self.assertEqual(p['without_genres'],['99'])
+   self.assertEqual(p['primary_release_date.gte'],['2000-01-01']);self.assertEqual(p['without_genres'],['99,16'])
    if 'with_genres' in p:self.assertIn(p['with_genres'][0],['27','878'])
  def test_pipeline_rechecks_canonical_genres_and_saves_small_valid_batch(self):
   backend=FakeBackend()
@@ -131,16 +131,16 @@ class QualityTests(unittest.TestCase):
   from recommend import enrich_history
   backend=Mock();backend.movie.side_effect=lambda path:dict(movie(int(path.split('/')[1].split('?')[0])),keywords={'keywords':[{'id':12,'name':'body horror'}]})
   rows=[{'tmdb_id':1000+i,'saved':True,'created_at':'2020-01-01','metadata':{'id':10001000+i,'tmdbId':1000+i,'title':'Old film','director':'Manual Director'}} for i in range(15)]
-  enrich_history(backend,'test',[],rows,load_config())
+  enrich_history(backend,'test',[],rows,dict(load_config(),history_enrichment_per_run=12))
   self.assertEqual(backend.movie.call_count,12);self.assertEqual(backend.db.call_count,12)
   for call in backend.db.call_args_list:self.assertEqual(set(call.args[2]),{'metadata'})
   self.assertEqual(rows[0]['saved'],True);self.assertEqual(rows[0]['created_at'],'2020-01-01')
   self.assertEqual(rows[0]['metadata']['director'],'Manual Director');self.assertEqual(rows[0]['metadata']['featureVersion'],2)
-  backend.reset_mock();enrich_history(backend,'test',[],rows,load_config())
+  backend.reset_mock();enrich_history(backend,'test',[],rows,dict(load_config(),history_enrichment_per_run=12))
   self.assertEqual(backend.movie.call_count,3)
  def test_history_enrichment_failure_keeps_original_metadata(self):
   from recommend import enrich_history
   backend=Mock();backend.movie.side_effect=RuntimeError()
   rows=[{'tmdb_id':1000,'metadata':{'title':'Old film'}}]
-  enrich_history(backend,'test',[],rows,load_config())
+  enrich_history(backend,'test',[],rows,dict(load_config(),history_enrichment_per_run=12))
   self.assertEqual(rows[0]['metadata'],{'title':'Old film'});backend.db.assert_not_called()

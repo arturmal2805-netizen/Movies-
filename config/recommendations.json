@@ -34,5 +34,5 @@
   "discovery_workers": 4,
   "detail_workers": 4,
   "page_window": 20,
-  "history_enrichment_per_run": 12
+  "history_enrichment_per_run": 80
 }

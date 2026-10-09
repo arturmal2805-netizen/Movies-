@@ -38,3 +38,9 @@ test('manual recommendation dispatch uses account authentication without trustin
 test('uninstalled manual RPC gives a concrete setup error',async()=>{
  const s=new ServerStore({url:'https://example.com',publishableKey:'public'},async()=>new Response(JSON.stringify({code:'PGRST202',message:'function missing'}),{status:404}));s.session=session();await assert.rejects(s.startRecommendations(),/Ручной подбор ещё не подключён/);
 });
+
+test('all ratings are paginated beyond 525 and 1000 rows without truncation',async()=>{
+ const rows=Array.from({length:1250},(_,tmdb_id)=>({tmdb_id}));const store=new ServerStore();let calls=0;
+ store.api=async path=>{calls++;const params=new URL('http://test'+path).searchParams;assert.equal(params.get('order'),'tmdb_id');const offset=Number(params.get('offset'));return rows.slice(offset,offset+Number(params.get('limit')));};
+ assert.equal((await store.readAll('ratings')).length,1250);assert.equal(calls,3);
+});

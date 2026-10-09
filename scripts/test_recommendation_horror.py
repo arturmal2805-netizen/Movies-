@@ -31,5 +31,5 @@ class HorrorPreferenceTests(unittest.TestCase):
   backend=Mock();backend.movie.return_value={'results':[]}
   tmdb_candidates(backend,[99,35,27],{'minimum_votes':100,'pages':3,'_now':NOW})
   queries=[parse_qs(urlsplit(c.args[0]).query) for c in backend.movie.call_args_list]
-  self.assertTrue(all(q['without_genres']==['99'] for q in queries));self.assertEqual(queries[0]['with_genres'],['27'])
-  self.assertTrue(any(q.get('with_genres')==['27'] and q['sort_by']==['vote_average.desc'] for q in queries));self.assertFalse(any(q.get('with_genres')==['99'] for q in queries))
+  self.assertTrue(all(q['without_genres']==['99,16'] for q in queries));self.assertEqual(queries[0]['with_genres'],['27'])
+  self.assertTrue(any(q.get('with_genres')==['27'] and q['sort_by']==['vote_average.desc'] for q in queries));self.assertFalse(any(q.get('with_genres')==['99,16'] for q in queries))

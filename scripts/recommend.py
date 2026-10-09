@@ -3,7 +3,7 @@ import os,json,datetime,urllib.request,urllib.parse,math,time,base64,threading,c
 from concurrent.futures import Future,ThreadPoolExecutor
 from pathlib import Path
 from recommendation_sources import discover,hourly_limit,detail_path
-from movie_features import profile,match_score,genres,keywords,director,classify,normalize,feature_metadata,eligible_for_discovery
+from movie_features import profile,match_score,genres,keywords,director,classify,normalize,feature_metadata,eligible_for_discovery,rating_signal
 from import_catalog import IDS
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 
@@ -20,19 +20,22 @@ def valid_candidate(movie,minimum_votes,today):
 
 def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None):
  excluded={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values())
- tastes=profile(ratings);ranked=[];seen=set();today=(now.date() if now else datetime.datetime.now(datetime.timezone.utc).date())
+ tastes=profile(ratings);informative=sum(bool(rating_signal(row)) for row in ratings);ranked=[];seen=set();today=(now.date() if now else datetime.datetime.now(datetime.timezone.utc).date())
  for movie in candidates:
   if not valid_candidate(movie,minimum_votes,today) or movie['id'] in seen or movie['id'] in excluded:continue
   seen.add(movie['id']);count=float(movie['vote_count'])
   # Shrink low-vote perfect scores; taste is bounded so common genres cannot drown out specific themes.
   quality=(float(movie['vote_average'])*count+6.5*500)/(count+500)
-  value=match_score(movie,tastes)*5+quality*.4+min(8,math.log1p(max(0,float(movie.get('popularity',0)))))*.1
+  personal=match_score(movie,tastes)
+  if informative>=20 and personal<-.8:continue
+  value=personal*5+quality*.4+min(8,math.log1p(max(0,float(movie.get('popularity',0)))))*.1
   categories=classify(movie)
   if 'horror' in categories or 'dystopian' in categories or movie.get('_discovery_category')=='dystopian':value+=5
   favorite=sorted((g for g in genres(movie) if tastes.get(('genre',g),0)>0),key=lambda g:tastes[('genre',g)],reverse=True)
   themes=sorted((normalize(k if isinstance(k,str) else k.get('name')) for k in keywords(movie) if tastes.get(('keyword',normalize(k if isinstance(k,str) else k.get('name'))),0)>0),key=lambda name:tastes[('keyword',name)],reverse=True)
   reason='Совпадает с вашими оценками: '+', '.join(GENRES.get(g,'Жанр') for g in favorite[:2])+'.' if favorite else 'Для знакомства с новым жанром; учтены оценки и популярность TMDB.'
-  if themes:reason+=' Близкие темы: '+', '.join(themes[:2])+'.'
+  if themes:reason='По вашим оценкам подходят темы: '+', '.join(themes[:2])+'.'
+  elif personal<=0 and ratings:reason='Слабое совпадение с оценками; кандидат для изучения вкуса.'
   if not ratings:reason='Стартовая рекомендация по оценкам TMDB. После ваших оценок подбор станет персональным.'
   if 'horror' in categories:reason='Приоритет хоррорам. '+reason
   elif 'dystopian' in categories:reason='Приоритет антиутопиям. '+reason
@@ -126,7 +129,7 @@ def load_config():
  for key in ('base_per_hour','extra_per_source','maximum_per_hour','minimum_votes'):
   if type(config[key]) is not int or config[key]<0:raise ValueError('Invalid recommendation limit')
  if not 1<=config['maximum_per_hour']<=100:raise ValueError('Hourly maximum must be 1..100')
- if type(config.get('history_enrichment_per_run',12)) is not int or not 0<=config.get('history_enrichment_per_run',12)<=12:raise ValueError('Unbounded history enrichment')
+ if type(config.get('history_enrichment_per_run',12)) is not int or not 0<=config.get('history_enrichment_per_run',12)<=100:raise ValueError('Unbounded history enrichment')
  for key in ('discovery_workers','detail_workers'):
   if type(config.get(key,4)) is not int or not 1<=config.get(key,4)<=4:raise ValueError('Worker count must be 1..4')
  if type(config.get('page_window',20)) is not int or not 2<=config.get('page_window',20)<=20:raise ValueError('Page window must be 2..20')
@@ -160,7 +163,7 @@ def enrich_history(b,uid,ratings,collection,config):
  for table,rows in [('ratings',ratings),('collection',collection)]:
   for row in rows:
    metadata=row.get('metadata')
-   if not isinstance(metadata,dict) or not metadata.get('title') or metadata.get('featureVersion')==2:continue
+   if not isinstance(metadata,dict) or not metadata.get('title') or metadata.get('featureVersion')==2 and all(key in metadata for key in ('keywords','productionCountries','originalLanguage')):continue
    mid=row.get('tmdb_id')
    if type(mid) is int and mid>0:pending.setdefault(mid,[]).append((table,row))
  selected=list(pending)[:config.get('history_enrichment_per_run',12)]
@@ -200,7 +203,9 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
   for name,kid in zip(metadata.get('keywords') or [],metadata.get('keywordIds') or []):
    weight=tastes.get(('keyword',normalize(name)),0)
    if type(kid) is int and kid>0 and weight>0:keyword_ids[kid]=weight
- search_config=dict(config,_now=now,_page_seed=(int(request_id.replace('-','')[-8:],16) if request_id else len(collection)) if manual else 0,_excluded_ids={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values()),_preferred_keywords=sorted(keyword_ids,key=keyword_ids.get,reverse=True)[:2])
+ seeds=sorted((r for r in ratings if rating_signal(r)>.4),key=lambda r:(-rating_signal(r),-parsed_time(r.get('updated_at')).timestamp() if parsed_time(r.get('updated_at')) else 0),reverse=False)
+ preferred_movies=list(dict.fromkeys(r['tmdb_id'] for r in seeds if type(r.get('tmdb_id')) is int))[:6]
+ search_config=dict(config,_preferred_movie_ids=preferred_movies,_now=now,_page_seed=(int(request_id.replace('-','')[-8:],16) if request_id else len(collection)) if manual else 0,_excluded_ids={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values()),_preferred_keywords=sorted(keyword_ids,key=keyword_ids.get,reverse=True)[:2])
  candidates,statuses=discover(b,preferred,search_config)
  print('Discovery:',json.dumps(statuses))
  ranked=rank_candidates(candidates,ratings,collection,config['minimum_votes'],now)

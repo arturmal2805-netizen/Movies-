@@ -52,20 +52,30 @@ def rating_signal(row):
  sign={'like':1,'dislike':-1,'neutral':0,'watched':0}.get(row.get('impression'),0)
  values=[row.get(k) for k in ('plot','cinematography') if type(row.get(k)) in (int,float) and 1<=row[k]<=10]
  adjustment=(sum(values)/len(values)-5.5)/4.5 if values else 0
+ if row.get('impression')=='neutral' and values and all(value==5 for value in values):return 0
  return sign*.8+adjustment*.2
 
 class TasteProfile(dict):
- def __init__(self,*args,anchors=()):super().__init__(*args);self.anchors=anchors
+ def __init__(self,*args,anchors=()):
+  super().__init__(*args);self.anchors=anchors;self.neighbor_index=defaultdict(list)
+  for i,(_,vector,_) in enumerate(anchors):
+   for key in vector:
+    if specific_feature(key):self.neighbor_index[key].append(i)
 
 def profile(ratings):
- sums=defaultdict(float);counts=defaultdict(int);anchors=[]
+ sums=defaultdict(float);counts=defaultdict(int);shares=defaultdict(float);anchors=[]
  for row in ratings:
   signal=rating_signal(row)
   if not signal:continue
   vector=features(row.get('metadata') or {})
   anchors.append((signal,vector,row.get('updated_at') or row.get('ratedAt') or ''))
-  for key,share in vector.items():sums[key]+=signal*share;counts[key]+=1
- return TasteProfile({key:value/(counts[key]+2) for key,value in sums.items()},anchors=[(signal,vector,sum(share*importance(key) for key,share in vector.items())) for signal,vector,_ in sorted(anchors,key=lambda a:a[2],reverse=True)[:60]])
+  for key,share in vector.items():sums[key]+=signal*share;shares[key]+=share;counts[key]+=1
+ baseline=sum(a[0] for a in anchors)/len(anchors) if anchors else 0
+ # Contrast with the user's own baseline: mass rejection must not erase every horror preference.
+ weights={key:.25*sums[key]/(counts[key]+2)+.75*(sums[key]-baseline*shares[key])/(counts[key]+4) for key in sums}
+ return TasteProfile(weights,anchors=[(signal,vector,sum(share*importance(key) for key,share in vector.items())) for signal,vector,_ in anchors])
+
+def specific_feature(key):return key[0] in ('keyword','director') or key[0]=='category' and key[1]!='horror'
 
 IMPORTANCE={'genre':1,'category':5,'keyword':4,'director':2}
 def importance(key):return .5 if key==('category','horror') else IMPORTANCE[key[0]]
@@ -77,13 +87,16 @@ def nearby_score(vector,anchors):
   shared=sum(min(vector[key],share)*importance(key) for key,share in anchor.items() if key in vector)
   total=candidate_total+anchor_total-shared
   similarity=shared/total if total else 0
-  if similarity>=.12:matches.append((similarity,signal))
+  specific=any(key in vector and specific_feature(key) for key in anchor)
+  if similarity>=.12 and specific:matches.append((similarity,signal))
  matches=sorted(matches,key=lambda pair:pair[0],reverse=True)[:6]
  return sum(sim*signal for sim,signal in matches)/(1.5+sum(sim for sim,_ in matches))
 
 def match_score(movie,taste):
  vector=features(movie)
- return sum(taste.get(key,0)*share*importance(key) for key,share in vector.items())+nearby_score(vector,getattr(taste,'anchors',()))*2
+ index=getattr(taste,'neighbor_index',None);anchors=getattr(taste,'anchors',())
+ if index is not None:anchors=[anchors[i] for i in sorted({i for key in vector for i in index.get(key,())})]
+ return sum(taste.get(key,0)*share*importance(key) for key,share in vector.items())+nearby_score(vector,anchors)*2
 
 
 def feature_metadata(detail):
@@ -99,8 +112,11 @@ def eligible_for_discovery(movie):
  try:year=int(movie.get('year') or str(movie.get('release_date',''))[:4])
  except (TypeError,ValueError):return False
  if year<policy['minimum_year']:return False
- ids=set(genres(movie));label={'Документальный':99,'Документальное':99,'Documentary':99,'Мелодрама':10749,'Романтика':10749,'Romance':10749,'Драма':18,'Drama':18,'Боевик':28,'Action':28}.get(movie.get('genre'))
+ ids=set(genres(movie));label={'Документальный':99,'Документальное':99,'Documentary':99,'Анимация':16,'Мультфильм':16,'Animation':16,'Аниме':16,'Anime':16,'Мелодрама':10749,'Романтика':10749,'Romance':10749,'Драма':18,'Drama':18,'Боевик':28,'Action':28}.get(movie.get('genre'))
  if label:ids.add(label)
  if ids.intersection(policy['always_excluded_genres']):return False
+ countries=movie.get('productionCountries') or movie.get('production_countries') or []
+ countries={str(c if isinstance(c,str) else c.get('iso_3166_1','')).upper() for c in countries if isinstance(c,(dict,str))}
+ if countries.intersection(policy['excluded_countries']) or str(movie.get('originalLanguage') or movie.get('original_language') or '').lower() in policy['excluded_languages']:return False
  target=bool(set(classify(movie)).intersection(('horror','dystopian'))) or movie.get('_discovery_category')=='dystopian'
  return not ids.intersection(policy['excluded_genres']) or policy['allow_target_mixed_genres'] and target

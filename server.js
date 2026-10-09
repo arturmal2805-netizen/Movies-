@@ -48,7 +48,8 @@ export class ServerStore {
    this.remember({...this.session,user});await this.ensureProfile();return true;
   }catch(error){this.clearSession();throw error;}
  }
- async load(){return await Promise.all([this.api('/rest/v1/ratings?select=*'),this.api('/rest/v1/collection?select=*&order=created_at.desc')]);}
+ async readAll(table){const rows=[];for(let offset=0;;offset+=500){const page=await this.api('/rest/v1/'+table+'?select=*&order=tmdb_id&limit=500&offset='+offset);if(!Array.isArray(page))throw new Error('Не удалось прочитать все оценки.');rows.push(...page);if(page.length<500)return rows;}}
+ async load(){return await Promise.all([this.readAll('ratings'),this.readAll('collection')]);}
  async saveRating(f,r){if(!this.session)throw new Error('Войдите, чтобы сохранить оценку на сервере.');return this.api('/rest/v1/ratings?on_conflict=user_id,tmdb_id',{method:'POST',body:{user_id:this.session.user.id,tmdb_id:f.tmdbId,cinematography:r.cinematography??null,plot:r.plot??null,impression:r.impression,metadata:f,updated_at:r.ratedAt||new Date().toISOString()},headers:{Prefer:'resolution=merge-duplicates,return=representation'}});}
  async deleteRating(f){await this.api('/rest/v1/ratings?tmdb_id=eq.'+f.tmdbId,{method:'DELETE'});}
  async clearRatings(){await this.api('/rest/v1/ratings?user_id=eq.'+this.session.user.id,{method:'DELETE'});}

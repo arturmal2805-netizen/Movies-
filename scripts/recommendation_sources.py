@@ -48,7 +48,7 @@ def simkl_candidates(backend,preferred,config):
 def tmdb_candidates(backend, preferred, config):
     now=config.get('_now') or datetime.datetime.now(datetime.timezone.utc)
     query={'language':'ru-RU','include_adult':'false','include_video':'false',
-           'primary_release_date.lte':now.date().isoformat(),'primary_release_date.gte':str(RULES['selection']['minimum_year'])+'-01-01','vote_count.gte':config['minimum_votes'],'without_genres':99}
+           'primary_release_date.lte':now.date().isoformat(),'primary_release_date.gte':str(RULES['selection']['minimum_year'])+'-01-01','vote_count.gte':config['minimum_votes'],'without_genres':','.join(map(str,RULES['selection']['always_excluded_genres']))}
     strategies=[{'sort_by':'popularity.desc','with_genres':27},{'sort_by':'vote_average.desc','with_genres':27},
                 {'sort_by':'popularity.desc','with_keywords':4565}]
     strategies.extend({'sort_by':'popularity.desc','with_genres':genre} for genre in preferred[:3] if genre in (53,878))
@@ -58,6 +58,7 @@ def tmdb_candidates(backend, preferred, config):
     # Keep page 1 for fresh hits; rotate deeper pages so an exhausted first page is not the whole catalog.
     pages=[1]+[2+(slot*(count-1)+i)%(window-1) for i in range(count-1)]
     paths=['discover/movie?'+urllib.parse.urlencode(dict(query,**strategy,page=page)) for strategy in strategies for page in pages][:24]
+    paths.extend('movie/'+str(mid)+'/recommendations?language=ru-RU&page=1' for mid in config.get('_preferred_movie_ids',[])[:6] if type(mid) is int and mid>0)
     def fetch(path):
         try:
             data=backend.movie(path)

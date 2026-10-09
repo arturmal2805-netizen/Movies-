@@ -140,5 +140,54 @@
       "genre": "Документальное"
     },
     "expected": false
+  },
+  {
+    "name": "animated horror excluded",
+    "movie": {
+      "year": 2020,
+      "genreIds": [
+        27,
+        16
+      ]
+    },
+    "expected": false
+  },
+  {
+    "name": "Chinese production excluded",
+    "movie": {
+      "year": 2020,
+      "genreIds": [
+        27
+      ],
+      "productionCountries": [
+        "CN"
+      ]
+    },
+    "expected": false
+  },
+  {
+    "name": "Cantonese horror excluded",
+    "movie": {
+      "year": 2020,
+      "genreIds": [
+        27
+      ],
+      "originalLanguage": "cn"
+    },
+    "expected": false
+  },
+  {
+    "name": "Korean horror remains eligible",
+    "movie": {
+      "year": 2020,
+      "genreIds": [
+        27
+      ],
+      "productionCountries": [
+        "KR"
+      ],
+      "originalLanguage": "ko"
+    },
+    "expected": true
   }
 ]
