@@ -1,5 +1,5 @@
 """Private recommendations stay in Supabase, never in the public Pages snapshot."""
-import os,json,datetime,urllib.request,urllib.parse,math,time
+import os,json,datetime,urllib.request,urllib.parse,math,time,base64
 from pathlib import Path
 from recommendation_sources import discover,hourly_limit
 from import_catalog import IDS
@@ -35,25 +35,52 @@ def rank_candidates(candidates,ratings,collection,minimum_votes=100):
   ranked.append((value,movie,reason))
  return sorted(ranked,key=lambda entry:(-entry[0],entry[1]['id']))
 
+class RequestFailure(RuntimeError):
+ """Safe diagnostics only: never include URLs, headers, body, or credentials."""
+ pass
+
+def error_summary(error):
+ return str(error) if isinstance(error,RequestFailure) else type(error).__name__
+
 class Backend:
  def __init__(self):
-  self.url=os.environ['SUPABASE_URL'].rstrip('/')
-  self.key=os.environ['SUPABASE_SERVICE_ROLE_KEY']
-  self.tmdb=os.environ['TMDB_ACCESS_TOKEN']
+  self.url=os.environ['SUPABASE_URL'].strip().rstrip('/')
+  self.key=os.environ['SUPABASE_SERVICE_ROLE_KEY'].strip()
+  self.tmdb=os.environ['TMDB_ACCESS_TOKEN'].strip()
+  if not self.url.startswith('https://'):raise RequestFailure('SUPABASE_URL must be an HTTPS project URL')
+  if self.key.startswith('sb_publishable_'):raise RequestFailure('Server key is a public publishable key; use service_role or sb_secret key')
+  if self.key.count('.')==2:
+   try:role=json.loads(base64.urlsafe_b64decode(self.key.split('.')[1]+'==='))['role']
+   except Exception:raise RequestFailure('Server JWT key has invalid format') from None
+   if role!='service_role':raise RequestFailure('Server JWT key must have service_role role; anon key is insufficient')
+
  def request(self,url,headers,method='GET',body=None):
+  if url.startswith(self.url+'/rest/v1/'):
+   table=url.split('/rest/v1/',1)[1].split('?',1)[0]
+   label='Supabase '+(table if table in ('profiles','ratings','collection') else 'database')+' '+method
+  else:label='TMDB' if url.startswith('https://api.themoviedb.org/') else 'OMDb' if url.startswith('https://www.omdbapi.com/') else 'Discovery feed'
   req=urllib.request.Request(url,headers=headers,method=method,data=json.dumps(body).encode() if body is not None else None)
   for attempt in range(3):
    try:
     with urllib.request.urlopen(req,timeout=20) as response:
      raw=response.read();return json.loads(raw) if raw else None
    except urllib.error.HTTPError as error:
-    if method!='GET' or error.code not in (429,500,502,503,504) or attempt==2:raise
+    if method!='GET' or error.code not in (429,500,502,503,504) or attempt==2:
+     hint=' Verify the server key belongs to this Supabase project.' if label.startswith('Supabase') and error.code in (401,403) else ''
+     code=''
+     try:
+      value=json.loads(error.read()).get('code')
+      if value in ('42501','42P01','PGRST205','PGRST301','PGRST302','invalid_api_key'):code=' code='+value
+     except Exception:pass
+     raise RequestFailure(label+': HTTP '+str(error.code)+code+hint) from None
    except (urllib.error.URLError,TimeoutError):
-    if method!='GET' or attempt==2:raise
+    if method!='GET' or attempt==2:raise RequestFailure(label+': network unavailable or timeout') from None
    time.sleep(2**attempt)
 
  def db(self,path,method='GET',body=None,prefer=None):
-  headers={'apikey':self.key,'Authorization':'Bearer '+self.key,'Content-Type':'application/json'}
+  headers={'apikey':self.key,'Content-Type':'application/json'}
+  # New secret keys are API keys, not JWTs. The Supabase gateway sets the server role.
+  if not self.key.startswith('sb_secret_'):headers['Authorization']='Bearer '+self.key
   if prefer:headers['Prefer']=prefer
   return self.request(self.url+'/rest/v1/'+path,headers,method,body)
  def movie(self,path):return self.request('https://api.themoviedb.org/3/'+path,{'Authorization':'Bearer '+self.tmdb})
@@ -113,6 +140,7 @@ def run():
  missing=[k for k in needed if not os.environ.get(k)]
  if missing:
   print('Missing configuration names:',', '.join(missing));raise RuntimeError('Configuration incomplete')
+ print('Loading recommendation configuration and connecting to Supabase profiles')
  config=load_config();b=Backend();now=datetime.datetime.now(datetime.timezone.utc)
  users=[];offset=0
  while True:
@@ -123,11 +151,11 @@ def run():
  failures=0
  for user in users:
   try:recommend_user(b,user,now,config)
-  except Exception:
-   failures+=1;print('Private batch failed; existing collection retained. Retry on next run.')
+  except Exception as error:
+   failures+=1;print('Private batch failed:',error_summary(error),'; existing collection retained. Retry on next run.')
  print('Profiles processed:',len(users),'failed:',failures)
  if failures:raise RuntimeError('Some private batches failed')
 if __name__=='__main__':
  try:run()
- except Exception:
-  print('Recommendation update failed; previous private collection retained. Check server configuration and provider access.');raise SystemExit(1)
+ except Exception as error:
+  print('Recommendation update failed:',error_summary(error),'; previous private collection retained.');raise SystemExit(1)

@@ -11,7 +11,7 @@ GitHub Actions → **Nightshift — подбор фильмов каждый ч�
 В GitHub репозитории откройте **Settings → Secrets and variables → Actions**:
 
 - Адрес вашего Supabase уже указан в workflow. При смене проекта его можно переопределить во вкладке **Variables**, создав `SUPABASE_URL`.
-- Во вкладке **Secrets → New repository secret**: имя `SUPABASE_SERVICE_ROLE_KEY`. Значение берётся в Supabase **Project Settings → API Keys → Legacy API Keys → service_role**. Это приватный серверный ключ, не публичный `sb_publishable_…`. Не присылайте его в чат и не записывайте в файлы репозитория.
+- Во вкладке **Secrets → New repository secret**: имя `SUPABASE_SERVICE_ROLE_KEY`. Значение берётся в Supabase **Project Settings → API Keys → Legacy API Keys → service_role**. Также поддерживается новый серверный Secret key `sb_secret_…` (имя GitHub Secret остаётся `SUPABASE_SERVICE_ROLE_KEY`). Это приватный серверный ключ, не публичный `sb_publishable_…`. Не присылайте его в чат и не записывайте в файлы репозитория.
 - Существующие Secrets `TMDB_ACCESS_TOKEN` и `OMDB_API_KEY` оставьте.
 
 Войдите на сайте и перенесите старые оценки: задание читает `profiles`, `ratings`, `collection` из Supabase. Пользователь без оценок получает честно подписанную стартовую подборку. После успешного запуска новые строки появятся в Supabase **Table Editor → collection**, а на сайте — при следующей синхронизации (раз в 5 минут) или обновлении страницы. Причина рекомендации хранится вместе с карточкой.
