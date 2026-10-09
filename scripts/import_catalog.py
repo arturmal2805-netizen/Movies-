@@ -105,6 +105,24 @@ def refresh(snapshot, request=get_json, environ=None, now=None):
                 state['diagnostic'] = diagnostic
                 if diagnostic.get('httpStatus'): state['httpStatus'] = diagnostic['httpStatus']
                 if agent is None: state['baselineDiagnostic'] = diagnostic
+    if trakt_key and state['status'] != 'ok':
+        checks = {}
+        for name, endpoint, credential in [('popular','popular',trakt_key),('withoutKey','trending',None)]:
+            try:
+                headers = {'trakt-api-version':'2','User-Agent':'Nightshift/1.0','Content-Type':'application/json'}
+                if credential: headers['trakt-api-key'] = credential
+                value = request('https://api.trakt.tv/movies/'+endpoint+'?limit=1', headers)
+                if not isinstance(value, list): raise ValueError('Invalid response')
+                checks[name] = {'status':'ok'}
+                if credential:
+                    state.update(status='ok', lastSuccess=now, verifiedEndpoint=endpoint)
+                    state.pop('httpStatus',None)
+                    state.pop('diagnostic',None)
+            except Exception as error:
+                checks[name] = trakt_failure(error)
+        state['diagnosticChecks'] = checks
+    else:
+        state.pop('diagnosticChecks', None)
     states['trakt'] = state
     return snapshot
 

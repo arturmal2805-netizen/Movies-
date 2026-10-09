@@ -69,4 +69,14 @@ class ImportTests(unittest.TestCase):
   self.assertTrue(state['originRequired'])
   self.assertIn('origin',state['baselineDiagnostic']['reasonHints'])
   self.assertNotIn('private-key',str(state))
+
+ def test_popular_endpoint_can_confirm_api_when_trending_is_forbidden(self):
+  import urllib.error,io
+  def response(url,headers):
+   if '/popular?' in url:return []
+   raise urllib.error.HTTPError(url,403,'Forbidden',{},io.BytesIO(b'Forbidden'))
+  state=refresh({'films':{},'sources':{}},request=response,environ={'TRAKT_CLIENT_ID':'fake-client'})['sources']['trakt']
+  self.assertEqual(state['status'],'ok')
+  self.assertEqual(state['verifiedEndpoint'],'popular')
+  self.assertNotIn('httpStatus',state)
 if __name__=='__main__':unittest.main()
