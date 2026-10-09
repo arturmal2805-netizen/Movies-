@@ -25,7 +25,7 @@ class FakeBackend:
 
     def movie(self, path):
         if path.startswith('discover'):
-            return {'results': [movie(i) for i in range(901, 911)] + [movie(900)]}
+            return {'results': [movie(i) for i in range(901, 931)] + [movie(900)]}
         return movie(int(path.split('/')[1].split('?')[0]))
 
     def db(self, path, method='GET', body=None, prefer=None):
@@ -60,9 +60,9 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(row['metadata']['tmdbId'], row['tmdb_id'])
 
     def test_fewer_than_base_candidates_are_saved_instead_of_discarded(self):
-        for count in (1, 3, 9):
+        for count in (1, 3, 9, 14):
             backend = FakeBackend()
-            config = dict(self.config, base_per_hour=10)
+            config = dict(self.config, base_per_hour=15)
             candidates = [dict(movie(901+i), discovery_sources=['tmdb']) for i in range(count)]
             with patch('recommend.discover', return_value=(candidates, [{'source':'tmdb','status':'ok','candidates':count}])):
                 self.assertEqual(recommend_user(backend, self.user, NOW, config), count)
@@ -98,11 +98,11 @@ class PipelineTests(unittest.TestCase):
         now=datetime.datetime(2026,10,9,15,17,tzinfo=datetime.timezone.utc)
         backend=FakeBackend();backend.now=now
         previous=now-datetime.timedelta(minutes=21)
-        backend.collection=[{'tmdb_id':2000+i,'reason':'older batch','created_at':previous.isoformat()} for i in range(49)]
+        backend.collection=[{'tmdb_id':2000+i,'reason':'older batch','created_at':previous.isoformat()} for i in range(self.config['maximum_per_hour']-1)]
         candidates=[dict(movie(901+i),discovery_sources=['tmdb']) for i in range(3)]
         with patch('recommend.discover',return_value=(candidates,[])):
             self.assertEqual(recommend_user(backend,self.user,now,self.config),1)
-        self.assertEqual(len(backend.collection),50)
+        self.assertEqual(len(backend.collection),self.config['maximum_per_hour'])
 
     def test_sources_deduplicate_and_isolate_failed_provider(self):
         config = copy.deepcopy(self.config)
@@ -117,7 +117,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(statuses[-1]['status'], 'failed')
         ranked = [(0, m, '') for m in pool]
         self.assertEqual(hourly_limit(config, ranked), config["base_per_hour"] + config["extra_per_source"])
-        self.assertEqual(hourly_limit(config, [(0, {'discovery_sources': list(range(30))}, '')]), config['maximum_per_hour'])
+        self.assertEqual(hourly_limit(config, [(0, {'discovery_sources': list(range(100))}, '')]), config['maximum_per_hour'])
 
     def test_all_providers_failed_is_failure_without_success_timestamp(self):
         with patch.object(self.backend, 'movie', side_effect=RuntimeError('Unavailable')):

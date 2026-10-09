@@ -1,7 +1,7 @@
 {
-  "base_per_hour": 10,
+  "base_per_hour": 15,
   "extra_per_source": 2,
-  "maximum_per_hour": 50,
+  "maximum_per_hour": 100,
   "minimum_votes": 100,
   "sources": [
     {"id": "tmdb", "adapter": "tmdb_discover", "enabled": true, "pages": 2},
