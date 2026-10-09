@@ -5,7 +5,7 @@ export class ServerStore {
   if(!this.configured)throw new Error('Сервер пока не подключён.');
   if(auth){if(!this.session)throw new Error('Войдите, чтобы сохранить оценку на сервере.');if(this.session.expires_at*1000<Date.now()+60000)await this.refresh();}
   const response=await this.request(this.config.url.replace(/\/$/,'')+path,{method,headers:{apikey:this.config.publishableKey,...(auth?{Authorization:'Bearer '+this.session.access_token}:{}),'Content-Type':'application/json',...headers},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(15000)});
-  if(!response.ok)throw new Error(response.status===401?'Войдите снова: сессия истекла.':response.status===429?'Слишком много запросов. Попробуйте позже.':'Сервер не подтвердил операцию. Попробуйте ещё раз.');
+  if(!response.ok){let code;try{code=(await response.json()).code;}catch{}throw new Error(code==='PGRST205'?'Таблицы сервера ещё не созданы: выполните schema.sql в Supabase.':response.status===401?'Проверьте подключение и войдите снова.':response.status===429?'Слишком много запросов. Попробуйте позже.':'Сервер не подтвердил операцию. Попробуйте ещё раз.');}
   const text=await response.text();return text?JSON.parse(text):null;
  }
  remember(session){this.session={...session,expires_at:session.expires_at||Math.floor(Date.now()/1000)+session.expires_in};sessionStorage.setItem('nightshift.session',JSON.stringify(this.session));}
