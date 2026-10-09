@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {swipeDirection} from './mobile-feed.js';
+test('short intentional and slow swipes advance, taps and tiny drift stay put',()=>{assert.equal(swipeDirection(30,700),1);assert.equal(swipeDirection(-30,700),-1);assert.equal(swipeDirection(15,45),1);assert.equal(swipeDirection(10,10),0);assert.equal(swipeDirection(15,700),0);assert.equal(swipeDirection(400,250),1);});
