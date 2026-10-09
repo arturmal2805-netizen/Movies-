@@ -55,7 +55,7 @@ jobs:
       - name: Prepare static website
         run: |
           mkdir -p /tmp/nightshift-site/data
-          cp mobile-feed.js index.html style.css app.js categories.js category-rules.js taste.js manual-recommendations.js sources.js ratings.js time.js server.js server-config.js .nojekyll /tmp/nightshift-site/
+          cp mobile-feed.js index.html style.css app.js categories.js category-rules.js taste.js taste-model.js manual-recommendations.js sources.js ratings.js time.js server.js server-config.js .nojekyll /tmp/nightshift-site/
           cp data/catalog.json /tmp/nightshift-site/data/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

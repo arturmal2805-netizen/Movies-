@@ -3,7 +3,7 @@ import os,json,datetime,urllib.request,urllib.parse,math,time,base64,threading,c
 from concurrent.futures import Future,ThreadPoolExecutor
 from pathlib import Path
 from recommendation_sources import discover,hourly_limit,detail_path
-from movie_features import profile,match_score,genres,keywords,director,classify,normalize,feature_metadata,eligible_for_discovery,rating_signal,features,specific_feature
+from movie_features import profile,match_score,rejection_score,genres,keywords,director,classify,normalize,feature_metadata,eligible_for_discovery,rating_signal,features,specific_feature
 from import_catalog import IDS
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 
@@ -35,16 +35,17 @@ def valid_candidate(movie,minimum_votes,today,require_target=None):
   return released<=today and count>=minimum_votes and 0<=rating<=10 and all(math.isfinite(v) for v in (count,rating,popularity))
  except (ValueError,TypeError):return False
 
-def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None,preliminary=False):
+def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None,preliminary=False,tastes=None):
  excluded={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values())
- tastes=profile(ratings);informative=sum(bool(rating_signal(row)) for row in ratings);ranked=[];seen=set();today=(now.date() if now else datetime.datetime.now(datetime.timezone.utc).date())
+ if tastes is None:tastes=profile(ratings)
+ informative=sum(bool(rating_signal(row)) for row in ratings);ranked=[];seen=set();today=(now.date() if now else datetime.datetime.now(datetime.timezone.utc).date())
  for movie in candidates:
   if not valid_candidate(movie,minimum_votes,today,require_target=False if preliminary else None) or movie['id'] in seen or movie['id'] in excluded:continue
   seen.add(movie['id']);count=float(movie['vote_count'])
   # Shrink low-vote perfect scores; taste is bounded so common genres cannot drown out specific themes.
   quality=(float(movie['vote_average'])*count+6.5*500)/(count+500)
   personal=match_score(movie,tastes)
-  if not preliminary and informative>=20 and personal<-.8:continue
+  if not preliminary and informative>=20 and rejection_score(movie,tastes)<-.8:continue
   value=personal*5+quality*(.03 if tastes.predictive else .4)+min(8,math.log1p(max(0,float(movie.get('popularity',0)))))*(.01 if tastes.predictive else .1)
   categories=classify(movie)
   if 'horror' in categories or 'dystopian' in categories or movie.get('_discovery_category')=='dystopian':value+=5
@@ -150,7 +151,7 @@ def load_config():
  for key in ('discovery_workers','detail_workers'):
   if type(config.get(key,4)) is not int or not 1<=config.get(key,4)<=4:raise ValueError('Worker count must be 1..4')
  if type(config.get('page_window',20)) is not int or not 2<=config.get('page_window',20)<=20:raise ValueError('Page window must be 2..20')
- for key,default,upper in [('manual_batch_target',30,100),('search_rounds',3,5),('detail_candidate_limit',240,400)]:
+ for key,default,upper in [('manual_batch_target',30,100),('search_rounds',3,5),('detail_candidate_limit',240,400),('manual_quality_pool',160,400)]:
   if type(config.get(key,default)) is not int or not 1<=config.get(key,default)<=upper:raise ValueError('Unbounded '+key)
  ids=[s['id'] for s in config['sources']]
  if len(ids)!=len(set(ids)):raise ValueError('Source IDs must be unique')
@@ -176,7 +177,7 @@ def parsed_time(value):
   return stamp if stamp.tzinfo else stamp.replace(tzinfo=datetime.timezone.utc)
  except (ValueError,TypeError,AttributeError):return None
 
-def liked_movie_seeds(ratings):
+def liked_movie_seeds(ratings,limit=6):
  # Six near-identical favorites produce near-identical recommendation lists.
  # Keep explicit positive anchors, but cover their different themes and directors.
  rows={r['tmdb_id']:r for r in ratings if type(r.get('tmdb_id')) is int and r['tmdb_id']>0 and rating_signal(r)>.4 and eligible_for_discovery(r.get('metadata') or {})}
@@ -186,7 +187,7 @@ def liked_movie_seeds(ratings):
   coverage=sum(share/(1+used.get(key,0)) for key,share in vector.items() if specific_feature(key))
   stamp=parsed_time(row.get('updated_at'))
   return rating_signal(row)*2+coverage*.25,stamp.timestamp() if stamp else 0,-row['tmdb_id']
- while rows and len(selected)<6:
+ while rows and len(selected)<min(12,limit):
   row=max(rows.values(),key=priority);mid=row['tmdb_id'];selected.append(mid);rows.pop(mid)
   for key in features(row.get('metadata') or {}):used[key]=used.get(key,0)+1
  return selected
@@ -230,13 +231,14 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
   return 0
  uid=user['user_id'];ratings=read_rows(b,'ratings?user_id=eq.'+uid+'&select=*&order=tmdb_id');collection=read_rows(b,'collection?user_id=eq.'+uid+'&select=*&order=tmdb_id')
  enrich_history(b,uid,ratings,collection,config)
- weights=taste(ratings);preferred=sorted((g for g,v in weights.items() if v>0 and g in (27,53,878)),key=lambda g:weights[g],reverse=True)[:3]
  tastes=profile(ratings)
- preferred_movies=liked_movie_seeds(ratings)
+ weights={value:weight for (kind,value),weight in tastes.items() if kind=='genre'}
+ preferred=sorted((g for g,v in weights.items() if v>0 and g in (27,53,878)),key=lambda g:weights[g],reverse=True)[:3]
+ preferred_movies=liked_movie_seeds(ratings,limit=12 if manual and tastes.predictive else 6)
  search_config=dict(config,_preferred_movie_ids=preferred_movies,_now=now,_page_seed=(int(request_id.replace('-','')[-8:],16) if request_id else len(collection)) if manual else 0,_excluded_ids={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values()),_preferred_keywords=preferred_keyword_seeds(ratings,tastes))
  candidates,statuses=discover(b,preferred,search_config)
  print('Discovery:',json.dumps(statuses))
- ranked=rank_candidates(candidates,ratings,collection,config['minimum_votes'],now,preliminary=True)
+ ranked=rank_candidates(candidates,ratings,collection,config['minimum_votes'],now,preliminary=True,tastes=tastes)
  print('Candidate pool:',len(candidates),'eligible:',len(ranked))
  stamps=[parsed_time(row.get('created_at')) for row in collection if row.get('reason') and (row.get('metadata') or {}).get('recommendationMode')!='manual']
  stamps=[stamp for stamp in stamps if stamp and stamp<=now]
@@ -260,6 +262,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
  # Exhaust the current pool before rotating pages; never fill a batch with rejected movies.
  attempted=set();details={};fetched_any=False;final=[]
  detail_limit=config.get('detail_candidate_limit',240)
+ quality_pool=min(detail_limit,config.get('manual_quality_pool',160)) if manual and tastes.predictive else 0
  rounds=config.get('search_rounds',3)
  pool={entry[1]['id']:entry[1] for entry in ranked}
  for search_round in range(rounds):
@@ -276,18 +279,18 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
     break
    for candidate in extra:pool.setdefault(candidate['id'],candidate)
    print('Refill discovery:',json.dumps(statuses))
-  pending=rank_candidates(list(pool.values()),ratings,collection,config['minimum_votes'],now,preliminary=True)
+  pending=rank_candidates(list(pool.values()),ratings,collection,config['minimum_votes'],now,preliminary=True,tastes=tastes)
   pending=[entry for entry in pending if entry[1]['id'] not in attempted]
-  while pending and len(attempted)<detail_limit and len(final)<budget:
+  while pending and len(attempted)<detail_limit and (len(final)<budget or len(attempted)<quality_pool or manual and pending[0][0]>min(entry[0] for entry in final[:budget])):
    chunk=pending[:min(60,max(20,(budget-len(final))*2),detail_limit-len(attempted))]
    pending=pending[len(chunk):]
    attempted.update(entry[1]['id'] for entry in chunk)
    with ThreadPoolExecutor(max_workers=config.get('detail_workers',4)) as executor:hydrated=list(executor.map(hydrate,chunk))
    fetched_any=fetched_any or any(fetched for _,fetched in hydrated)
    details.update((detail['id'],detail) for detail,_ in hydrated if detail)
-   final=diverse_candidates(rank_candidates(list(details.values()),ratings,collection,config['minimum_votes'],now))
+   final=diverse_candidates(rank_candidates(list(details.values()),ratings,collection,config['minimum_votes'],now,tastes=tastes))
   print('Search pass:',search_round+1,'unique pool:',len(pool),'details attempted:',len(attempted),'canonical eligible:',len(details),'personalized eligible:',len(final),'target:',budget)
-  if len(final)>=budget or len(attempted)>=detail_limit:break
+  if len(final)>=budget and len(attempted)>=quality_pool or len(attempted)>=detail_limit:break
  if attempted and not fetched_any:raise RequestFailure('Candidate metadata unavailable; retry next run')
  if len(final)<budget:print('Batch below target:',len(final),'of',budget,'after bounded search; excluded films are not used as filler.')
  added=0
@@ -298,6 +301,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
   metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':director(detail),'moods':classify(detail),'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity',0),'tmdbUpdatedAt':now.isoformat()}}
   metadata['discoverySources']=movie.get('discovery_sources',[])
   metadata.update(feature_metadata(detail))
+  metadata.update(recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
   metadata['recommendationMode']='manual' if manual else 'scheduled'
   if request_id:metadata['recommendationRequestId']=request_id
   if os.environ.get('OMDB_API_KEY') and detail.get('imdb_id'):

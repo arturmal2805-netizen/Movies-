@@ -12,8 +12,8 @@ class PredictiveTasteTests(unittest.TestCase):
   rows=history();model=profile(rows)
   self.assertTrue(model.predictive)
   self.assertGreater(match_score(rows[0]['metadata'],model),match_score(rows[-1]['metadata'],model))
-  expected=math.log((10+1)/(10+2))-math.log((0+1)/(90+2))
-  self.assertAlmostEqual(model[('keyword','alien lifeform')],expected)
+  self.assertGreater(model[('keyword','alien lifeform')],0)
+  self.assertLess(model[('keyword','haunted house')],0)
   # Common horror is almost uninformative; it cannot dominate the specific theme.
   self.assertLess(abs(model[('genre',27)]),.1)
 
@@ -23,7 +23,7 @@ class PredictiveTasteTests(unittest.TestCase):
   self.assertAlmostEqual(match_score(candidate,profile(rows)),match_score(candidate,profile(rows+neutral)))
 
  def test_no_unlearned_feature_is_treated_as_dislike(self):
-  self.assertEqual(match_score({'keywords':['unobserved theme']},profile(history())),0)
+  model=profile(history());self.assertAlmostEqual(match_score({'keywords':['unobserved theme']},model),model.bias)
 
  def test_sparse_or_one_class_history_keeps_the_conservative_fallback(self):
   self.assertFalse(profile(history()[:10]).predictive)
@@ -41,5 +41,23 @@ class PredictiveTasteTests(unittest.TestCase):
   rows[-1]['metadata']['keywords']=['rare rejected tag'];rows[-1]['metadata']['keywordIds']=[303]
   rows[0]['metadata']['keywords']=['singleton liked tag'];rows[0]['metadata']['keywordIds']=[404]
   model=profile(rows)
-  self.assertGreater(model[('keyword','rare rejected tag')],0)
+  self.assertNotIn(('keyword','rare rejected tag'),model)
+  self.assertNotIn(('keyword','singleton liked tag'),model)
   self.assertEqual(preferred_keyword_seeds(rows,model),[101])
+
+ def test_repeated_negative_only_tag_never_receives_a_positive_bonus(self):
+  rows=history()
+  for row in rows[-3:]:row['metadata']['keywords']=['rejected topic']
+  self.assertLess(profile(rows)[('keyword','rejected topic')],0)
+
+ def test_optimistic_frequency_score_cannot_override_rejection_gate(self):
+  from movie_features import rejection_score
+  from recommend import rank_candidates
+  from test_recommendation_pipeline import movie,NOW
+  rows=history()
+  for i,row in enumerate(rows[10:34]):row['metadata']['keywords']=['haunted house',f'rare label {i}']
+  candidate=dict(movie(901),genres=[{'id':27}],genre_ids=[27],original_language='es',keywords=['haunted house']+[f'rare label {i}' for i in range(24)])
+  model=profile(rows)
+  self.assertGreater(match_score(candidate,model),0)
+  self.assertLess(rejection_score(candidate,model),-.8)
+  self.assertEqual(rank_candidates([candidate],rows,[],now=NOW,tastes=model),[])

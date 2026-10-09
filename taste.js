@@ -1,5 +1,6 @@
-import {filmCategories} from './categories.js?v=balanced-taste30';
+import {filmCategories} from './categories.js?v=linear-taste31';
 import {normalizeRating} from './ratings.js';
+import {fitMargin,marginFeatures,tasteModelVersion} from './taste-model.js?v=linear-taste31';
 const generic=new Set(['based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','woman director']);
 const normalize=value=>String(value||'').toLocaleLowerCase('ru').replace(/[-_]/g,' ').replace(/\s+/g,' ').trim();
 export function tasteFeatures(film){
@@ -18,18 +19,23 @@ export function tasteSignal(value){
  if(r.impression==='neutral'&&scales.length&&scales.every(v=>v===5))return 0;
  return (({like:1,dislike:-1})[r.impression]||0)*.8+adjustment*.2;
 }
+const cachedProfiles=new WeakMap();
 export function buildTasteProfile(films,reactions){
+ const signature=JSON.stringify(films.filter(f=>reactions[f.id]).map(f=>[f.id,normalizeRating(reactions[f.id]),f.genreIds,f.genre,f.keywords,f.director,f.originalLanguage,f.original_language,f.year,f.release_date,f.tmdbId,f.description||f.overview]));
+ const cached=cachedProfiles.get(reactions);if(cached?.signature===signature)return cached.profile;
  const sums=new Map(),counts=new Map(),shares=new Map(),anchors=[];
  for(const film of films){if(!reactions[film.id])continue;const signal=tasteSignal(reactions[film.id]);if(!signal)continue;anchors.push([signal,new Map(tasteFeatures(film).map(([key,share,kind])=>[key,{share,kind}])),Date.parse(reactions[film.id].ratedAt)||0]);
   for(const [key,share] of tasteFeatures(film)){sums.set(key,(sums.get(key)||0)+signal*share);counts.set(key,(counts.get(key)||0)+1);shares.set(key,(shares.get(key)||0)+share);}
  }
  const baseline=anchors.length?anchors.reduce((sum,[signal])=>sum+signal,0)/anchors.length:0;
  const profile=new Map([...sums].map(([key,value])=>[key,.25*value/(counts.get(key)+2)+.75*(value-baseline*shares.get(key))/(counts.get(key)+4)]));profile.anchors=anchors.map(([signal,vector,at])=>[signal,vector,at,[...vector].reduce((sum,[key,{share,kind}])=>sum+share*featureWeight(key,kind),0)]);profile.neighborIndex=new Map();for(let i=0;i<profile.anchors.length;i++)for(const [key,{kind}] of profile.anchors[i][1])if(kind==='keyword'||kind==='director'||kind==='category'&&key!=='category:horror'){if(!profile.neighborIndex.has(key))profile.neighborIndex.set(key,[]);profile.neighborIndex.get(key).push(i);}profile.contrastWeights=new Map(profile);
- const positive=new Map(),negative=new Map();let positiveCount=0,negativeCount=0;
- for(const film of films){const label=normalizeRating(reactions[film.id])?.impression;if(label!=='like'&&label!=='dislike')continue;const counts=label==='like'?positive:negative;if(label==='like')positiveCount++;else negativeCount++;for(const [key,share] of predictiveFeatures(film))counts.set(key,(counts.get(key)||0)+share);}
+ const positive=new Map(),negative=new Map(),examples=[];let positiveCount=0,negativeCount=0;
+ for(const film of films){const label=normalizeRating(reactions[film.id])?.impression;if(label!=='like'&&label!=='dislike')continue;const counts=label==='like'?positive:negative;if(label==='like')positiveCount++;else negativeCount++;const vector=predictiveFeatures(film);examples.push([marginFeatures(vector),label==='like']);for(const [key,share] of vector)counts.set(key,(counts.get(key)||0)+share);}
  profile.predictive=positiveCount>=3&&negativeCount>=3&&positiveCount+negativeCount>=20;
- if(profile.predictive){profile.clear();for(const key of new Set([...positive.keys(),...negative.keys()]))profile.set(key,Math.log(((positive.get(key)||0)+1)/(positiveCount+2))-Math.log(((negative.get(key)||0)+1)/(negativeCount+2)));}
- return profile;
+ if(profile.predictive){profile.balancedWeights=new Map([...new Set([...positive.keys(),...negative.keys()])].map(key=>[key,Math.log(((positive.get(key)||0)+1)/(positiveCount+2))-Math.log(((negative.get(key)||0)+1)/(negativeCount+2))]));const trained=fitMargin(examples);profile.clear();for(const [key,value] of trained.weights)profile.set(key,value);profile.bias=trained.bias;}
+ profile.modelVersion=profile.predictive?tasteModelVersion:'contrast-fallback';
+
+ cachedProfiles.set(reactions,{signature,profile});return profile;
 }
 const importance={genre:1,category:5,keyword:4,director:2,language:.75,period:.75};
 const featureWeight=(key,kind)=>key==='category:horror'?.5:importance[kind];
@@ -56,6 +62,11 @@ function predictiveFeatures(film){
 }
 export function tasteScore(film,profile){
  const target=filmCategories(film).some(c=>c==='horror'||c==='dystopian');
- if(profile.predictive){const vector=predictiveFeatures(film);return (target?1:0)+3*vector.reduce((value,[key,share,kind])=>value+(profile.get(key)||0)*share*featureWeight(key,kind),0)/Math.max(1,vector.reduce((sum,[key,share,kind])=>sum+share*featureWeight(key,kind),0));}
+ if(profile.predictive){const vector=predictiveFeatures(film),frequency=3*vector.reduce((sum,[key,share,kind])=>sum+(profile.balancedWeights.get(key)||0)*share*featureWeight(key,kind),0)/Math.max(1,vector.reduce((sum,[key,share,kind])=>sum+share*featureWeight(key,kind),0));return (target?1:0)+.25*tasteAcceptanceScore(film,profile)+.75*frequency;}
  const vector=tasteFeatures(film);return (target?1:0)+vector.reduce((value,[key,share,kind])=>value+(profile.get(key)||0)*share*featureWeight(key,kind),0)+nearbyScore(vector,profile.neighborIndex?[...new Set(vector.flatMap(([key])=>profile.neighborIndex.get(key)||[]))].sort((a,b)=>a-b).map(i=>profile.anchors[i]):profile.anchors||[])*2;
+}
+
+export function tasteAcceptanceScore(film,profile){
+ if(profile.predictive)return profile.bias+marginFeatures(predictiveFeatures(film)).reduce((sum,[key,share])=>sum+(profile.get(key)||0)*share,0);
+ return tasteScore(film,profile)-(filmCategories(film).some(c=>c==='horror'||c==='dystopian')?1:0);
 }

@@ -69,3 +69,30 @@ class RefillTests(unittest.TestCase):
   with patch('recommend.discover',return_value=([],[])) as search:
    recommend_user(backend,{'user_id':'test'},NOW,load_config(),manual=True)
   self.assertEqual(search.call_args_list[0].args[2]['_preferred_movie_ids'],[600001])
+
+ def test_manual_quality_pool_finds_better_films_after_first_thirty(self):
+  from movie_features import profile
+  backend=FakeBackend()
+  backend.ratings=[{'tmdb_id':100000+i,'impression':'like' if i<10 else 'dislike','metadata':{'year':2020,'genreIds':[27],'keywords':['body horror' if i<10 else 'ghost']}} for i in range(40)]
+  # Both sets are admissible. Better thematic matches arrive after the first 60.
+  first=[dict(horror(600000+i),keywords=['unobserved theme']) for i in range(60)]
+  second=[horror(700000+i) for i in range(30)]
+  backend.movie=lambda path: next(m for m in first+second if m['id']==int(path.split('/')[1].split('?')[0]))
+  cfg=dict(load_config(),manual_quality_pool=80,history_enrichment_per_run=0)
+  with patch('recommend.discover',side_effect=[(first,[]),(second,[])]) as search,patch('recommend.profile',wraps=profile) as training:
+   self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,cfg,manual=True),30)
+  self.assertEqual(training.call_count,1)
+  self.assertEqual(search.call_count,2)
+  self.assertTrue(all(row['tmdb_id']>=700000 for row in backend.collection))
+  self.assertTrue(all(row['metadata']['recommendationModel']=='linear-taste31' for row in backend.collection))
+  self.assertTrue(all('recommendationScore' in row['metadata'] for row in backend.collection))
+
+ def test_search_rotates_twelve_positive_anchors_before_deeper_pages(self):
+  from recommendation_sources import tmdb_candidates
+  backend=Mock();backend.movie.return_value={'results':[]}
+  cfg={'minimum_votes':100,'pages':1,'_preferred_movie_ids':list(range(1,13)),'_search_round':1,'_now':NOW}
+  tmdb_candidates(backend,[],cfg)
+  paths=[c.args[0] for c in backend.movie.call_args_list if '/recommendations?' in c.args[0]]
+  self.assertEqual(len(paths),6)
+  self.assertTrue(paths[0].startswith('movie/7/'))
+  self.assertTrue(all(parse_qs(urlsplit(p).query)['page']==['1'] for p in paths))

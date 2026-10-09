@@ -24,6 +24,8 @@ on:
       - 'scripts/recommend.py'
       - 'scripts/recommendation_sources.py'
       - 'scripts/movie_features.py'
+      - 'scripts/taste_model.py'
+      - 'scripts/test_predictive_taste.py'
       - 'scripts/finish_manual_job.py'
       - 'config/category-rules.json'
       - 'scripts/simkl_source.py'

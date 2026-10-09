@@ -2,6 +2,7 @@
 import json, math, re
 from pathlib import Path
 from collections import defaultdict
+from taste_model import fit_margin,margin_features,MODEL_VERSION
 RULES=json.loads((Path(__file__).resolve().parents[1]/'config/category-rules.json').read_text())
 ORDER=['horror',*RULES['known']]
 GENERIC={'based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','woman director'}
@@ -76,18 +77,23 @@ def profile(ratings):
  weights={key:.25*sums[key]/(counts[key]+2)+.75*(sums[key]-baseline*shares[key])/(counts[key]+4) for key in sums}
  result=TasteProfile(weights,anchors=[(signal,vector,sum(share*importance(key) for key,share in vector.items())) for signal,vector,_ in anchors])
  result.contrast_weights=weights
- positive=defaultdict(float);negative=defaultdict(float);positive_count=negative_count=0
+ positive=defaultdict(float);negative=defaultdict(float);positive_count=negative_count=0;examples=[]
  for row in ratings:
   label=row.get('impression')
   if label not in ('like','dislike'):continue
   if label=='like':positive_count+=1;counts_by_class=positive
   else:negative_count+=1;counts_by_class=negative
-  for key,share in predictive_features(row.get('metadata') or {}).items():counts_by_class[key]+=share
+  vector=predictive_features(row.get('metadata') or {})
+  examples.append((margin_features(vector),label=='like'))
+  for key,share in vector.items():counts_by_class[key]+=share
  # Class-normalized, Laplace-smoothed log odds. A user's many rejections must not
  # overwhelm the smaller positive class. Neutral ratings are not negative labels.
  result.predictive=positive_count>=3 and negative_count>=3 and positive_count+negative_count>=20
  if result.predictive:
-  result.clear();result.update({key:math.log((positive[key]+1)/(positive_count+2))-math.log((negative[key]+1)/(negative_count+2)) for key in positive.keys()|negative.keys()})
+  result.balanced_weights={key:math.log((positive[key]+1)/(positive_count+2))-math.log((negative[key]+1)/(negative_count+2)) for key in positive.keys()|negative.keys()}
+  learned,result.bias=fit_margin(examples);result.clear();result.update(learned)
+ result.training_count=positive_count+negative_count;result.positive_count=positive_count;result.negative_count=negative_count
+ result.model_version=MODEL_VERSION if result.predictive else 'contrast-fallback'
  return result
 
 def predictive_features(movie):
@@ -123,12 +129,21 @@ def contrast_score(movie,taste):
  weights=getattr(taste,'contrast_weights',taste)
  return sum(weights.get(key,0)*share*importance(key) for key,share in vector.items())+nearby_score(vector,anchors)*2
 
+def balanced_score(movie,taste):
+ if not getattr(taste,'predictive',False):return contrast_score(movie,taste)
+ vector=predictive_features(movie);weights=taste.balanced_weights
+ return 3*sum(weights.get(key,0)*share*importance(key) for key,share in vector.items())/max(1,sum(share*importance(key) for key,share in vector.items()))
+
+def rejection_score(movie,taste):
+ if not getattr(taste,'predictive',False):return contrast_score(movie,taste)
+ return taste.bias+sum(taste.get(key,0)*share for key,share in margin_features(predictive_features(movie)).items())
+
 def match_score(movie,taste):
  if not getattr(taste,'predictive',False):return contrast_score(movie,taste)
- vector=predictive_features(movie)
- # Normalize by evidence length so verbose TMDB descriptions do not win simply
- # by having more keywords. Scale preserves the existing rejection guard's units.
- return 3*sum(taste.get(key,0)*share*importance(key) for key,share in vector.items())/max(1,sum(share*importance(key) for key,share in vector.items()))
+ # Blend selected on earlier chronological folds for top-10 performance.
+ # The independent classifier controls rejection; optimistic frequency weights
+ # cannot override that gate or become explanations/search seeds on their own.
+ return .25*rejection_score(movie,taste)+.75*balanced_score(movie,taste)
 
 
 def feature_metadata(detail):

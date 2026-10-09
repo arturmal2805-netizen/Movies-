@@ -59,7 +59,9 @@ def tmdb_candidates(backend, preferred, config):
     # Keep page 1 for fresh hits; rotate deeper pages so an exhausted first page is not the whole catalog.
     pages=[1]+[2+(slot*(count-1)+i)%(window-1) for i in range(count-1)]
     paths=['discover/movie?'+urllib.parse.urlencode(dict(query,**strategy,page=page)) for strategy in strategies for page in pages][:24]
-    paths.extend('movie/'+str(mid)+'/recommendations?language=ru-RU&page='+str(1+config.get('_search_round',0)) for mid in config.get('_preferred_movie_ids',[])[:6] if type(mid) is int and mid>0)
+    seeds=[mid for mid in config.get('_preferred_movie_ids',[])[:12] if type(mid) is int and mid>0]
+    groups=max(1,(len(seeds)+5)//6);search_round=config.get('_search_round',0);start=6*(search_round%groups)
+    paths.extend('movie/'+str(mid)+'/recommendations?language=ru-RU&page='+str(1+search_round//groups) for mid in seeds[start:start+6])
     def fetch(path):
         try:
             data=backend.movie(path)

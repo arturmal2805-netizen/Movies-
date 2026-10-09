@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildTasteProfile,tasteScore,tasteSignal} from './taste.js';
+import {buildTasteProfile,tasteScore,tasteSignal,tasteAcceptanceScore} from './taste.js';
 test('specific horror themes separate two films in the same genre',()=>{
  const rated={id:1,genreIds:[27],keywords:['body horror']};
  const profile=buildTasteProfile([rated],{1:{impression:'like',plot:9,cinematography:8}});
@@ -39,16 +39,31 @@ test('525 ratings retain an early favorite after 524 rejections of a different t
 });
 test('normal five-five is a neutral signal',()=>assert.equal(tasteSignal({impression:'neutral',plot:5,cinematography:5}),0));
 
-test('class-normalized model preserves rare positives and matches the Python formula',()=>{
+test('regularized classifier separates preferences despite class imbalance',()=>{
  const films=Array.from({length:100},(_,i)=>({id:i+1,genreIds:[27],keywords:[i<10?'alien lifeform':'haunted house'],originalLanguage:i<10?'en':'es',year:2020}));
  const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<10?'like':'dislike'}]));
  const model=buildTasteProfile(films,reactions);
  assert.equal(model.predictive,true);
- assert.ok(Math.abs(model.get('keyword:alien lifeform')-(Math.log(11/12)-Math.log(1/92)))<1e-12);
+ assert.ok(model.get('keyword:alien lifeform')>0);assert.ok(model.get('keyword:haunted house')<0);
  assert.ok(tasteScore(films[0],model)>tasteScore(films[99],model));
  assert.ok(Math.abs(model.get('genre:27'))<.1);
- assert.equal(tasteScore({keywords:['unobserved theme']},model),0);
+ assert.ok(Math.abs(tasteScore({keywords:['unobserved theme']},model)-model.bias)<1e-12);
  const neutralFilms=Array.from({length:500},(_,i)=>({...films[0],id:101+i}));
  const neutralReactions={...reactions,...Object.fromEntries(neutralFilms.map(f=>[f.id,{impression:'neutral',plot:10,cinematography:10}]))};
  assert.equal(tasteScore(films[0],model),tasteScore(films[0],buildTasteProfile([...films,...neutralFilms],neutralReactions)));
+});
+
+test('cached taste retrains after in-place rating and metadata changes',()=>{
+ const films=Array.from({length:30},(_,i)=>({id:i+1,genreIds:[27],keywords:[i<10?'alien lifeform':'haunted house']}));
+ const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<10?'like':'dislike'}]));
+ const first=buildTasteProfile(films,reactions);assert.equal(buildTasteProfile(films,reactions),first);
+ reactions[1].impression='dislike';const updated=buildTasteProfile(films,reactions);assert.notEqual(updated,first);
+ films[1].keywords=['mutation'];assert.notEqual(buildTasteProfile(films,reactions),updated);
+});
+
+test('optimistic rare-tag frequency cannot override the separate rejection score',()=>{
+ const films=Array.from({length:100},(_,i)=>({id:i+1,genreIds:[27],year:2020,originalLanguage:i<10?'en':'es',keywords:i<10?['alien lifeform']:i<34?['haunted house',`rare label ${i-10}`]:['haunted house']}));
+ const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<10?'like':'dislike'}]));
+ const p=buildTasteProfile(films,reactions),candidate={genreIds:[27],year:2020,originalLanguage:'es',keywords:['haunted house',...Array.from({length:24},(_,i)=>`rare label ${i}`)]};
+ assert.ok(tasteScore(candidate,p)>1);assert.ok(tasteAcceptanceScore(candidate,p)<-.8);
 });
