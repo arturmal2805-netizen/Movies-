@@ -88,7 +88,8 @@ function renderHourlyStatus(){
  if(!server.session){status.textContent='Войдите, чтобы видеть пополнения';status.title='Личные рекомендации сохраняются в серверной коллекции';return;}
  if(collectionSyncedAt===null){status.textContent=collectionSyncFailed?'Пополнения недоступны · повторим проверку':'Проверяем пополнения…';return;}
  const {count,latest}=recentRecommendations(recommendationRows,now);
- status.textContent=`За последний час: +${count} фильмов${collectionSyncFailed?' · данные не обновлены':''}`;
+ const ending=new Intl.PluralRules('ru').select(count);const word=ending==='one'?'фильм':ending==='few'?'фильма':'фильмов';
+ status.textContent=`За последний час: +${count} ${word}${collectionSyncFailed?' · данные не обновлены':''}`;
  status.title=`Персональный подбор за последние 60 минут. Синхронизация: ${kyivTime(collectionSyncedAt)} · Киев.${latest?' Последнее добавление: '+kyivTime(latest)+' · Киев.':''}`;
 }
 setInterval(renderHourlyStatus,30*1000);
