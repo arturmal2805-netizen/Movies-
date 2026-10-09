@@ -45,9 +45,16 @@ def error_summary(error):
 class Backend:
  def __init__(self):
   self.url=os.environ['SUPABASE_URL'].strip().rstrip('/')
-  self.key=os.environ['SUPABASE_SERVICE_ROLE_KEY'].strip()
-  self.tmdb=os.environ['TMDB_ACCESS_TOKEN'].strip()
-  if not self.url.startswith('https://'):raise RequestFailure('SUPABASE_URL must be an HTTPS project URL')
+  # API tokens contain no whitespace; clipboard wrapping must not break HTTP headers.
+  self.key=''.join(os.environ['SUPABASE_SERVICE_ROLE_KEY'].split())
+  self.tmdb=''.join(os.environ['TMDB_ACCESS_TOKEN'].split())
+  try:
+   parsed=urllib.parse.urlsplit(self.url)
+   valid=parsed.scheme=='https' and bool(parsed.hostname) and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment and parsed.path in ('','/') and not any(c.isspace() for c in self.url)
+  except ValueError:valid=False
+  if not valid:raise RequestFailure('SUPABASE_URL must be an HTTPS project URL')
+  for name,token in [('SUPABASE_SERVICE_ROLE_KEY',self.key),('TMDB_ACCESS_TOKEN',self.tmdb)]:
+   if not token or any(not(c.isascii() and (c.isalnum() or c in '._-')) for c in token):raise RequestFailure(name+': invalid token format; paste only the key value')
   if self.key.startswith('sb_publishable_'):raise RequestFailure('Server key is a public publishable key; use service_role or sb_secret key')
   if self.key.count('.')==2:
    try:role=json.loads(base64.urlsafe_b64decode(self.key.split('.')[1]+'==='))['role']
@@ -73,6 +80,8 @@ class Backend:
       if value in ('42501','42P01','PGRST205','PGRST301','PGRST302','invalid_api_key'):code=' code='+value
      except Exception:pass
      raise RequestFailure(label+': HTTP '+str(error.code)+code+hint) from None
+   except ValueError:
+    raise RequestFailure(label+': invalid request format; check configuration values') from None
    except (urllib.error.URLError,TimeoutError):
     if method!='GET' or attempt==2:raise RequestFailure(label+': network unavailable or timeout') from None
    time.sleep(2**attempt)
