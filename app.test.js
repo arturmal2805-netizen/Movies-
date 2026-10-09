@@ -6,7 +6,7 @@ test('search accepts Russian, original title and director',()=>{assert.equal(sel
 test('saved films respect the other filters',()=>{assert.deepEqual(selectFilms({savedOnly:true,saved:[1,8],mood:'romance'}).map(f=>f.id),[8]);assert.equal(selectFilms({savedOnly:true}).length,0);});
 test('catalog has unique IDs and usable metadata',()=>{assert.equal(new Set(films.map(f=>f.id)).size,films.length);for(const f of films){assert.ok(f.description&&f.original&&f.moods.length);assert.ok(f.minutes>0&&f.rating>0&&f.rating<=10);}});
 import {hasCompleteMetadata,sourceState} from './sources.js';
-test('complete cards require every real metric including zero popularity',()=>{assert.equal(hasCompleteMetadata({poster:'poster.jpg',imdb:8,popcornmeter:80,popularity:0}),true);assert.equal(hasCompleteMetadata({poster:'poster.jpg',imdb:8,popularity:20}),false);});
+test('complete cards require every real metric including zero popularity',()=>{assert.equal(hasCompleteMetadata({poster:'poster.jpg',imdb:8,popularity:0}),true);assert.equal(hasCompleteMetadata({poster:'poster.jpg',popularity:20}),false);});
 test('source reports stale success and disconnected providers',()=>{assert.equal(sourceState('tmdb',{sources:{tmdb:{status:'ok',lastSuccess:'2026-10-09T00:00:00Z'}}},Date.parse('2026-10-09T04:00:00Z')).status,'stale');assert.equal(sourceState('netflix',null).status,'not_connected');});
 import {normalizeRating,ratingWeight,isArchived} from './ratings.js';
 test('old ratings migrate without losing favorites or watched films',()=>{assert.deepEqual(normalizeRating('like'),{impression:'like'});assert.equal(isArchived('watched'),true);assert.equal(isArchived('like'),false);assert.equal(normalizeRating({cinematography:99,plot:'8'}),null);});
