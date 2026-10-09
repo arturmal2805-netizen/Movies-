@@ -11,3 +11,6 @@ test('generic sequel tag cannot overrule taste or cause unrelated matches',()=>{
  const profile=buildTasteProfile([{id:1,genreIds:[27],keywords:['sequel']}],{1:{impression:'like'}});
  assert.equal(tasteScore({genreIds:[35],keywords:['sequel']},profile),0);
 });
+test('explicit horror preference ranks horror first before ratings exist',()=>{
+ const horror={genreIds:[27]},comedy={genreIds:[35]};assert.ok(tasteScore(horror,new Map())>tasteScore(comedy,new Map()));
+});

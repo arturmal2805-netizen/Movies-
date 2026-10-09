@@ -11,7 +11,7 @@ def taste(ratings):return {value:weight for (kind,value),weight in profile(ratin
 
 def valid_candidate(movie,minimum_votes,today):
  if not isinstance(movie,dict) or type(movie.get('id')) is not int or movie['id']<=0:return False
- if movie.get('adult') or not movie.get('poster_path'):return False
+ if movie.get('adult') or not movie.get('poster_path') or 99 in genres(movie):return False
  try:
   released=datetime.date.fromisoformat(movie.get('release_date',''))
   count=float(movie.get('vote_count',0));rating=float(movie.get('vote_average',0));popularity=float(movie.get('popularity',0))
@@ -27,11 +27,13 @@ def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None):
   # Shrink low-vote perfect scores; taste is bounded so common genres cannot drown out specific themes.
   quality=(float(movie['vote_average'])*count+6.5*500)/(count+500)
   value=match_score(movie,tastes)*5+quality*.4+min(8,math.log1p(max(0,float(movie.get('popularity',0)))))*.1
+  if 27 in genres(movie):value+=5
   favorite=sorted((g for g in genres(movie) if tastes.get(('genre',g),0)>0),key=lambda g:tastes[('genre',g)],reverse=True)
   themes=sorted((normalize(k if isinstance(k,str) else k.get('name')) for k in keywords(movie) if tastes.get(('keyword',normalize(k if isinstance(k,str) else k.get('name'))),0)>0),key=lambda name:tastes[('keyword',name)],reverse=True)
   reason='Совпадает с вашими оценками: '+', '.join(GENRES.get(g,'Жанр') for g in favorite[:2])+'.' if favorite else 'Для знакомства с новым жанром; учтены оценки и популярность TMDB.'
   if themes:reason+=' Близкие темы: '+', '.join(themes[:2])+'.'
   if not ratings:reason='Стартовая рекомендация по оценкам TMDB. После ваших оценок подбор станет персональным.'
+  if 27 in genres(movie):reason='Приоритет хоррорам. '+reason
   ranked.append((value,movie,reason))
  return sorted(ranked,key=lambda entry:(-entry[0],entry[1]['id']))
 

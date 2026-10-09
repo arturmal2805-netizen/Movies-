@@ -48,9 +48,10 @@ def simkl_candidates(backend,preferred,config):
 def tmdb_candidates(backend, preferred, config):
     now=config.get('_now') or datetime.datetime.now(datetime.timezone.utc)
     query={'language':'ru-RU','include_adult':'false','include_video':'false',
-           'primary_release_date.lte':now.date().isoformat(),'vote_count.gte':config['minimum_votes']}
-    strategies=[{'sort_by':'popularity.desc'},{'sort_by':'vote_average.desc'}]
-    strategies.extend({'sort_by':'popularity.desc','with_genres':genre} for genre in preferred[:3])
+           'primary_release_date.lte':now.date().isoformat(),'vote_count.gte':config['minimum_votes'],'without_genres':99}
+    strategies=[{'sort_by':'popularity.desc','with_genres':27},{'sort_by':'vote_average.desc','with_genres':27},
+                {'sort_by':'popularity.desc'},{'sort_by':'vote_average.desc'}]
+    strategies.extend({'sort_by':'popularity.desc','with_genres':genre} for genre in preferred[:3] if genre not in (27,99))
     strategies.extend({'sort_by':'popularity.desc','with_keywords':keyword} for keyword in config.get('_preferred_keywords',[])[:2])
     count=config.get('pages',2);window=max(count,min(20,config.get('page_window',20)))
     slot=int((now.timestamp()-17*60)//3600)

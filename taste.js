@@ -25,4 +25,5 @@ export function buildTasteProfile(films,reactions){
  return new Map([...sums].map(([key,value])=>[key,value/(counts.get(key)+2)]));
 }
 const importance={genre:3,category:4,keyword:4,director:2};
-export function tasteScore(film,profile){return tasteFeatures(film).reduce((value,[key,share,kind])=>value+(profile.get(key)||0)*share*importance[kind],0);}
+export function isDocumentary(film){return (film.genreIds||[]).includes(99)||/документ|documentary/i.test(film.genre||'');}
+export function tasteScore(film,profile){return ((film.genreIds||[]).includes(27)||film.genre==='Ужасы'?1:0)+tasteFeatures(film).reduce((value,[key,share,kind])=>value+(profile.get(key)||0)*share*importance[kind],0);}
