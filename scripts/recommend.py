@@ -98,7 +98,7 @@ def load_config():
  config=json.loads((Path(__file__).resolve().parents[1]/'config/recommendations.json').read_text())
  for key in ('base_per_hour','extra_per_source','maximum_per_hour','minimum_votes'):
   if type(config[key]) is not int or config[key]<0:raise ValueError('Invalid recommendation limit')
- if not 1<=config['maximum_per_hour']<=30:raise ValueError('Hourly maximum must be 1..30')
+ if not 1<=config['maximum_per_hour']<=50:raise ValueError('Hourly maximum must be 1..50')
  ids=[s['id'] for s in config['sources']]
  if len(ids)!=len(set(ids)):raise ValueError('Source IDs must be unique')
  for source in config['sources']:
