@@ -1,4 +1,4 @@
-import {installMobileFeed} from './mobile-feed.js?v=swipe-touch24';
+import {installMobileFeed} from './mobile-feed.js?v=pearl-glass25';
 import {categoryOptions,filmCategories,isEligibleForDiscovery} from './categories.js?v=liquid-focus21';
 import {buildTasteProfile,tasteScore} from './taste.js?v=liquid-focus21';
 import {ManualRecommendations} from './manual-recommendations.js';
