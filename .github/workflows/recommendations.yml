@@ -10,6 +10,7 @@ on:
       - 'config/recommendations.json'
       - 'scripts/recommend.py'
       - 'scripts/recommendation_sources.py'
+      - 'scripts/simkl_source.py'
       - 'scripts/test_recommend*.py'
 permissions:
   contents: read

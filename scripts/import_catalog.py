@@ -1,6 +1,7 @@
 """Refresh verified metadata; retain the last successful values on provider errors."""
 import json, os, datetime, urllib.request, urllib.parse, urllib.error
 from pathlib import Path
+from simkl_source import FEED_URL, HEADERS, entries, credential_url
 TARGET = Path(__file__).resolve().parents[1] / 'data/catalog.json'
 # Stable TMDB identities for the curated catalog; never match by title alone.
 IDS = {1:157336,2:120467,3:693134,4:313369,5:546554,6:508442,7:329865,8:194,9:76341,10:370755,11:105,12:76}
@@ -124,6 +125,25 @@ def refresh(snapshot, request=get_json, environ=None, now=None):
     else:
         state.pop('diagnosticChecks', None)
     states['trakt'] = state
+    state = dict(states.get('simkl', {}), status='error', lastAttempt=now)
+    for field in ('httpStatus', 'credentialHttpStatus', 'credentialStatus'):
+        state.pop(field, None)
+    try:
+        rows = entries(request(FEED_URL, HEADERS))
+        state.update(status='ok', lastSuccess=now, available=len(rows))
+    except Exception as error:
+        if isinstance(error, urllib.error.HTTPError): state['httpStatus'] = error.code
+    key = environ.get('SIMKL_CLIENT_ID', '')
+    state['credentialStatus'] = 'not_configured' if not key.strip() else 'error'
+    if key.strip():
+        try:
+            value = request(credential_url(key), HEADERS)
+            if not isinstance(value, dict) or type(value.get('id')) is not int or value['id'] <= 0 or not isinstance(value.get('simkl'), dict) or value.get('error'):
+                raise ValueError('Invalid SIMKL credential response')
+            state['credentialStatus'] = 'ok'
+        except Exception as error:
+            if isinstance(error, urllib.error.HTTPError): state['credentialHttpStatus'] = error.code
+    states['simkl'] = state
     return snapshot
 
 if __name__ == '__main__':
@@ -136,3 +156,6 @@ if __name__ == '__main__':
         print(name,state['status'],'imported:',state.get('imported',0),'failed:',state.get('failed',0))
         if name == 'trakt' and state.get('diagnostic'):
             print('Trakt check:', state['diagnostic'].get('httpStatus', 'no HTTP response'), state['diagnostic']['category'])
+        if name == 'simkl':
+            print('SIMKL feed:', state['status'], 'Client ID:', state.get('credentialStatus'),
+                  'HTTP:', state.get('credentialHttpStatus', state.get('httpStatus', 'none')))

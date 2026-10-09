@@ -2,7 +2,7 @@ import unittest
 from import_catalog import refresh, IDS, trakt_failure
 class ImportTests(unittest.TestCase):
  def test_missing_keys_report_disconnected(self):
-  value=refresh({'films':{},'sources':{}},environ={},now='2026-10-09T10:00:00Z')
+  value=refresh({'films':{},'sources':{}},request=lambda *_:[],environ={},now='2026-10-09T10:00:00Z')
   self.assertEqual(value['sources']['tmdb']['status'],'not_connected')
  def test_outage_preserves_snapshot(self):
   def fail(*args): raise TimeoutError()

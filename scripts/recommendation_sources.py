@@ -1,6 +1,45 @@
 """Discovery adapters return canonical TMDB IDs; metadata providers do not count."""
 import os
 import urllib.parse
+from simkl_source import FEED_URL, HEADERS, entries
+
+
+def simkl_candidates(backend, preferred, config):
+    """Official public feed needs no credentials; never use SIMKL IDs as TMDB IDs."""
+    rows = entries(backend.request(FEED_URL, HEADERS))
+    limit = config.get('candidate_limit', 40)
+    ids, candidates = set(), []
+    # Bound lookups even when records are malformed or cannot be matched.
+    for row in rows[:limit]:
+        if row.get('type', 'movie') not in ('movie', 'movies'):
+            continue
+        external = row.get('ids', {})
+        if not isinstance(external, dict):
+            continue
+        mid = external.get('tmdb')
+        if isinstance(mid, str) and mid.isascii() and mid.isdigit():
+            mid = int(mid)
+        try:
+            if type(mid) is not int or mid <= 0:
+                imdb = external.get('imdb', '')
+                if not isinstance(imdb, str) or not imdb.startswith('tt') or not imdb[2:].isascii() or not imdb[2:].isdigit():
+                    continue
+                found = backend.movie('find/' + imdb + '?external_source=imdb_id').get('movie_results', [])
+                if len(found) != 1:
+                    continue
+                mid = found[0].get('id')
+            if type(mid) is not int or mid <= 0 or mid in ids:
+                continue
+            ids.add(mid)
+            detail = backend.movie(f'movie/{mid}?language=ru-RU')
+            if not isinstance(detail, dict) or detail.get('id') != mid:
+                continue
+            candidates.append(dict(detail, genre_ids=[g['id'] for g in detail.get('genres', [])]))
+        except Exception:
+            continue
+    if rows and not candidates:
+        raise RuntimeError('SIMKL candidates could not be resolved')
+    return candidates
 
 
 def tmdb_candidates(backend, preferred, config):
@@ -88,7 +127,7 @@ def trakt_candidates(backend, preferred, config):
     return candidates
 
 
-ADAPTERS = {'tmdb_discover': tmdb_candidates, 'tmdb_id_feed': tmdb_id_feed, 'trakt': trakt_candidates}
+ADAPTERS = {'tmdb_discover': tmdb_candidates, 'tmdb_id_feed': tmdb_id_feed, 'trakt': trakt_candidates, 'simkl': simkl_candidates}
 
 
 def discover(backend, preferred, config):

@@ -3,6 +3,7 @@ export const sourceDefinitions = [
  {id:'local',name:'Локальный каталог',purpose:'Исходная подборка из 12 фильмов',status:'local',note:'Встроен в сайт. Это не внешний импорт.'},
  {id:'tmdb',name:'TMDB',purpose:'Постеры и popularity score',status:'not_connected',note:'Автоматический импорт подготовлен. Нужен TMDB_ACCESS_TOKEN в GitHub Actions.'},
  {id:'trakt',name:'Trakt',purpose:'Тренды и популярные фильмы для персонального подбора',status:'scheduled',note:'Ожидаем подтверждённое пополнение через Trakt. Войдите в аккаунт, чтобы проверить серверную коллекцию.'},
+ {id:'simkl',name:'SIMKL Trending Movies',url:'https://simkl.com/movies/best-movies/most-watched/',purpose:'Популярные фильмы из бесплатной ленты SIMKL',status:'scheduled',note:'Ожидает проверки ленты. Для подбора Client Secret не нужен.'},
  {id:'imdb',name:'IMDb через OMDb',purpose:'Рейтинг IMDb',status:'not_connected',note:'Сейчас оценки записаны вручную. Для обновлений нужен OMDB_API_KEY в GitHub Actions.'},
  {id:'netflix',name:'Netflix',purpose:'Каталог стриминга',status:'not_connected',note:'Прямой импорт не подключён. Наличие фильма на Netflix не проверяется.'},
  {id:'shudder',name:'Shudder',purpose:'Каталог стриминга',status:'not_connected',note:'Прямой импорт не подключён. Наличие фильма на Shudder не проверяется.'}
@@ -21,5 +22,6 @@ export function sourceState(id,snapshot,now=Date.now(),collection=[]){
  if(!entry)return {...base};
  const stamp=Date.parse(entry.lastSuccess||'');
  const stale=!Number.isFinite(stamp)||now-stamp>3*60*60*1000;
+ if(id==='simkl')return {...base,...entry,status:entry.status==='ok'&&stale?'stale':entry.status,note:(entry.status==='ok'?'Бесплатная лента SIMKL успешно ответила; она работает без ключа.':'Лента SIMKL пока недоступна.')+(entry.credentialStatus==='ok'?' Client ID также подтверждён.':entry.credentialStatus==='error'?' Проверка Client ID не прошла'+(entry.credentialHttpStatus?' (HTTP '+entry.credentialHttpStatus+')':'')+'. Это не мешает чтению бесплатной ленты.':' Client ID не передан в задание проверки; для ленты он не требуется.')};
  return {...base,...entry,...(id==='trakt'?{note:entry.status==='ok'?'Trakt API успешно ответил на проверочный запрос. Подтверждение не зависит от добавления новых фильмов.':entry.status==='not_connected'?'В задании проверки не найден TRAKT_CLIENT_ID.':entry.httpStatus?'Trakt API отклонил проверку: HTTP '+entry.httpStatus+'. Проверьте Client ID и доступ приложения.':'Проверка Trakt API не удалась. Последние сохранённые данные не удалены.'}:{}),status:entry.status==='ok'&&stale?'stale':entry.status};
 }

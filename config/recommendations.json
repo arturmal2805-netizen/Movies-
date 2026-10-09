@@ -7,6 +7,7 @@
     {"id": "tmdb", "adapter": "tmdb_discover", "enabled": true, "pages": 2},
     {"id": "future_feed", "adapter": "tmdb_id_feed", "enabled": false,
      "url_env": "MOVIE_FEED_URL", "token_env": "MOVIE_FEED_TOKEN", "candidate_limit": 40},
-    {"id": "trakt", "adapter": "trakt", "enabled": true, "candidate_limit": 40}
+    {"id": "trakt", "adapter": "trakt", "enabled": true, "candidate_limit": 40},
+    {"id": "simkl", "adapter": "simkl", "enabled": true, "candidate_limit": 40}
   ]
 }
