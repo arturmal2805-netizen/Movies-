@@ -1,0 +1,44 @@
+name: Refresh movie sources
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: movie-catalog
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refresh metadata without exposing credentials
+        env:
+          TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
+          OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
+        run: python3 scripts/import_catalog.py
+      - name: Commit catalog snapshot
+        run: |
+          git add data/catalog.json
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Refresh movie metadata and source status'
+          git push
+      - name: Prepare static website
+        run: |
+          mkdir -p /tmp/nightshift-site/data
+          cp index.html style.css app.js sources.js .nojekyll /tmp/nightshift-site/
+          cp data/catalog.json /tmp/nightshift-site/data/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: /tmp/nightshift-site
+      - uses: actions/deploy-pages@v4
+        id: deployment

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-09T08:50:51.258070+00:00",
+  "films": {
+    "1": {},
+    "2": {},
+    "3": {},
+    "4": {},
+    "5": {},
+    "6": {},
+    "7": {},
+    "8": {},
+    "9": {},
+    "10": {},
+    "11": {},
+    "12": {}
+  },
+  "sources": {
+    "tmdb": {
+      "status": "not_connected",
+      "lastAttempt": "2026-10-09T08:50:51.258070+00:00",
+      "imported": 0,
+      "failed": 0
+    },
+    "imdb": {
+      "status": "not_connected",
+      "lastAttempt": "2026-10-09T08:50:51.258070+00:00",
+      "imported": 0,
+      "failed": 0
+    }
+  }
+}
