@@ -1,5 +1,5 @@
 """Private recommendations stay in Supabase, never in the public Pages snapshot."""
-import os,json,datetime,urllib.request,urllib.parse,math,time,base64,threading,copy
+import os,json,datetime,urllib.request,urllib.parse,math,time,base64,threading,copy,uuid
 from concurrent.futures import Future,ThreadPoolExecutor
 from pathlib import Path
 from recommendation_sources import discover,hourly_limit,detail_path
@@ -181,10 +181,10 @@ def enrich_history(b,uid,ratings,collection,config):
  if selected:print('History metadata refreshed:',completed,'records; other collection fields retained.')
 
 
-def recommend_user(b,user,now,config):
+def recommend_user(b,user,now,config,manual=False,request_id=None):
  slot=schedule_slot(now)
  previous=parsed_time(user.get('last_recommendation_at'))
- if previous and schedule_slot(previous)>=slot:
+ if not manual and previous and schedule_slot(previous)>=slot:
   print('Private batch skipped: this scheduled hour has already completed.')
   return 0
  uid=user['user_id'];ratings=read_rows(b,'ratings?user_id=eq.'+uid+'&select=*&order=tmdb_id');collection=read_rows(b,'collection?user_id=eq.'+uid+'&select=*&order=tmdb_id')
@@ -201,13 +201,14 @@ def recommend_user(b,user,now,config):
  print('Discovery:',json.dumps(statuses))
  ranked=rank_candidates(candidates,ratings,collection,config['minimum_votes'],now)
  print('Candidate pool:',len(candidates),'eligible:',len(ranked))
- stamps=[parsed_time(row.get('created_at')) for row in collection if row.get('reason')]
+ stamps=[parsed_time(row.get('created_at')) for row in collection if row.get('reason') and (row.get('metadata') or {}).get('recommendationMode')!='manual']
  stamps=[stamp for stamp in stamps if stamp and stamp<=now]
  recent=sum(1 for stamp in stamps if (now-stamp).total_seconds()<3600)
  in_slot=sum(1 for stamp in stamps if schedule_slot(stamp)==slot)
  # A target batch belongs to its scheduled hour; the hard maximum remains a rolling 60-minute cap.
  # Base is not a minimum: even one eligible film is saved within the remaining budget.
- budget=min(max(0,hourly_limit(config,ranked)-in_slot),max(0,config['maximum_per_hour']-recent))
+ budget=hourly_limit(config,ranked) if manual else min(max(0,hourly_limit(config,ranked)-in_slot),max(0,config['maximum_per_hour']-recent))
+ if manual:print('Manual request: hourly guards bypassed; per-request target:',budget)
  if not budget:
   print('Private batch skipped: scheduled-hour budget or rolling 60-minute maximum reached.')
   return 0
@@ -233,6 +234,8 @@ def recommend_user(b,user,now,config):
   metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':director(detail),'moods':classify(detail),'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity',0),'tmdbUpdatedAt':now.isoformat()}}
   metadata['discoverySources']=movie.get('discovery_sources',[])
   metadata.update(feature_metadata(detail))
+  metadata['recommendationMode']='manual' if manual else 'scheduled'
+  if request_id:metadata['recommendationRequestId']=request_id
   if os.environ.get('OMDB_API_KEY') and detail.get('imdb_id'):
    try:
     result=b.request('https://www.omdbapi.com/?'+urllib.parse.urlencode({'apikey':os.environ['OMDB_API_KEY'],'i':detail['imdb_id']}),{})
@@ -241,9 +244,18 @@ def recommend_user(b,user,now,config):
    except Exception:pass
   inserted=b.db('collection?on_conflict=user_id,tmdb_id','POST',{'user_id':uid,'tmdb_id':detail['id'],'metadata':metadata,'reason':reason},'resolution=ignore-duplicates,return=representation')
   if inserted:added+=1
- b.db('profiles?user_id=eq.'+uid,'PATCH',{'last_recommendation_at':now.isoformat()})
+ if not manual:b.db('profiles?user_id=eq.'+uid,'PATCH',{'last_recommendation_at':now.isoformat()})
  print('Private recommendation batch complete; added:',added)
  return added
+def validated_uuid(value,label):
+ try:return str(uuid.UUID(value))
+ except (ValueError,TypeError,AttributeError):raise RequestFailure(label+': invalid UUID') from None
+
+def finish_manual_job(b,request_id,user_id,status,added=0):
+ b.db('recommendation_jobs?id=eq.'+request_id+'&user_id=eq.'+user_id+'&status=in.(queued,running)', 'PATCH',
+      {'status':status,'added_count':added,'finished_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+       'error_code':'workflow_failed' if status=='failed' else None})
+
 def run():
  needed=['SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY','TMDB_ACCESS_TOKEN']
  missing=[k for k in needed if not os.environ.get(k)]
@@ -251,19 +263,46 @@ def run():
   print('Missing configuration names:',', '.join(missing));raise RuntimeError('Configuration incomplete')
  print('Loading recommendation configuration and connecting to Supabase profiles')
  config=load_config();b=Backend();now=datetime.datetime.now(datetime.timezone.utc)
+ manual=os.environ.get('MANUAL_RECOMMENDATIONS','false').lower()=='true'
+ target=os.environ.get('RECOMMENDATION_USER_ID','').strip();request_id=os.environ.get('RECOMMENDATION_REQUEST_ID','').strip()
+ if target:target=validated_uuid(target,'User ID')
+ if request_id:
+  request_id=validated_uuid(request_id,'Request ID')
+  if not manual:raise RequestFailure('A queued request requires manual mode')
+  jobs=b.db('recommendation_jobs?id=eq.'+request_id+'&select=id,user_id,status')
+  if not jobs or jobs[0]['status']!='queued':
+   print('Manual request is already handled or does not exist.');return
+  owner=validated_uuid(jobs[0]['user_id'],'Job owner')
+  if target and target!=owner:raise RequestFailure('Request does not match the specified user')
+  target=owner
+  run_id=os.environ.get('GITHUB_RUN_ID','')
+  run_url='https://github.com/arturmal2805-netizen/Movies-/actions/runs/'+run_id if run_id.isdigit() else None
+  claimed=b.db('recommendation_jobs?id=eq.'+request_id+'&user_id=eq.'+target+'&status=eq.queued','PATCH',
+               {'status':'running','started_at':now.isoformat(),'run_url':run_url},'return=representation')
+  if not claimed:
+   print('Manual request is already handled or does not match this user.');return
  users=[];offset=0
- while True:
-  page=b.db(f'profiles?select=user_id,last_recommendation_at&order=user_id&limit=500&offset={offset}')
-  users.extend(page)
-  if len(page)<500:break
-  offset+=500
- failures=0
- for user in users:
-  try:recommend_user(b,user,now,config)
-  except Exception as error:
-   failures+=1;print('Private batch failed:',error_summary(error),'; existing collection retained. Retry on next run.')
- print('Profiles processed:',len(users),'failed:',failures)
- if failures:raise RuntimeError('Some private batches failed')
+ try:
+  while True:
+   path=f'profiles?select=user_id,last_recommendation_at&order=user_id&limit=500&offset={offset}'
+   if target:path+='&user_id=eq.'+target
+   page=b.db(path);users.extend(page)
+   if len(page)<500:break
+   offset+=500
+  if target and not users:raise RequestFailure('The requested user profile does not exist')
+  failures=0;added=0
+  for user in users:
+   try:added+=recommend_user(b,user,now,config,manual=manual,request_id=request_id or None)
+   except Exception as error:
+    failures+=1;print('Private batch failed:',error_summary(error),'; existing collection retained. Retry on next run.')
+  print('Profiles processed:',len(users),'failed:',failures)
+  if failures:raise RuntimeError('Some private batches failed')
+  if request_id:finish_manual_job(b,request_id,target,'completed',added)
+ except Exception:
+  if request_id:
+   try:finish_manual_job(b,request_id,target,'failed')
+   except Exception:print('Could not update manual job status.')
+  raise
 if __name__=='__main__':
  try:run()
  except Exception as error:

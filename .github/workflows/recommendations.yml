@@ -1,6 +1,19 @@
 name: Nightshift — подбор фильмов каждый час
 on:
   workflow_dispatch:
+    inputs:
+      manual:
+        description: 'Run a fresh full search without hourly guards'
+        type: boolean
+        default: true
+      user_id:
+        description: 'User UUID (empty runs for all profiles)'
+        type: string
+        default: ''
+      request_id:
+        description: 'Website request UUID (leave empty for a GitHub UI run)'
+        type: string
+        default: ''
   schedule:
     - cron: '17 * * * *'
   push:
@@ -11,19 +24,27 @@ on:
       - 'scripts/recommend.py'
       - 'scripts/recommendation_sources.py'
       - 'scripts/movie_features.py'
+      - 'scripts/finish_manual_job.py'
       - 'config/category-rules.json'
       - 'scripts/simkl_source.py'
       - 'scripts/test_recommend*.py'
 permissions:
   contents: read
 concurrency:
-  group: movie-recommendations
+  group: movie-recommendations-${{ github.event_name == 'workflow_dispatch' && (inputs.request_id || 'manual') || 'scheduled' }}
   cancel-in-progress: false
 jobs:
   recommendations:
     name: Hourly personalized recommendations
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 360
+    env:
+      MANUAL_RECOMMENDATIONS: ${{ github.event_name == 'workflow_dispatch' && inputs.manual || false }}
+      RECOMMENDATION_USER_ID: ${{ inputs.user_id || '' }}
+      RECOMMENDATION_REQUEST_ID: ${{ inputs.request_id || '' }}
+      SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://tecntqujshynuttfdxhx.supabase.co' }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
     permissions:
       contents: read
     steps:
@@ -42,3 +63,6 @@ jobs:
           MOVIE_FEED_URL: ${{ vars.MOVIE_FEED_URL }}
           MOVIE_FEED_TOKEN: ${{ secrets.MOVIE_FEED_TOKEN }}
         run: python3 scripts/recommend.py
+      - name: Report a failed or cancelled website request
+        if: ${{ always() && inputs.request_id != '' && (failure() || cancelled()) }}
+        run: python3 scripts/finish_manual_job.py

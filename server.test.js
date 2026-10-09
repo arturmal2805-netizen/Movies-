@@ -32,3 +32,9 @@ test('SMTP failure is reported as delivery failure without creating a session',a
  resetStorage();const s=new ServerStore({url:'https://example.com',publishableKey:'public'},async()=>new Response(JSON.stringify({code:'unexpected_failure'}),{status:500}));
  await assert.rejects(s.sendCode('test@example.com'),e=>e.status===500&&/SMTP/.test(e.message));assert.equal(s.session,null);assert.equal(localStorage.getItem('nightshift.session'),null);
 });
+test('manual recommendation dispatch uses account authentication without trusting a client user ID',async()=>{
+ let sent;const s=new ServerStore({url:'https://example.com',publishableKey:'public'},async(url,options)=>{sent={url,...options};return new Response(JSON.stringify({id:'00000000-0000-4000-8000-000000000001',status:'queued'}));});s.session=session();await s.startRecommendations();assert.ok(sent.url.endsWith('/rpc/start_manual_recommendation'));assert.equal(sent.headers.Authorization,'Bearer test-access');assert.deepEqual(JSON.parse(sent.body),{});
+});
+test('uninstalled manual RPC gives a concrete setup error',async()=>{
+ const s=new ServerStore({url:'https://example.com',publishableKey:'public'},async()=>new Response(JSON.stringify({code:'PGRST202',message:'function missing'}),{status:404}));s.session=session();await assert.rejects(s.startRecommendations(),/Ручной подбор ещё не подключён/);
+});
