@@ -1,0 +1,39 @@
+name: Nightshift — подбор фильмов каждый час
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/recommendations.yml'
+      - 'config/recommendations.json'
+      - 'scripts/recommend.py'
+      - 'scripts/recommendation_sources.py'
+permissions:
+  contents: read
+concurrency:
+  group: movie-catalog
+  cancel-in-progress: false
+jobs:
+  recommendations:
+    name: Hourly personalized recommendations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Test recommendation logic
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Add private personalized films
+        env:
+          TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
+          OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://tecntqujshynuttfdxhx.supabase.co' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MOVIE_FEED_URL: ${{ vars.MOVIE_FEED_URL }}
+          MOVIE_FEED_TOKEN: ${{ secrets.MOVIE_FEED_TOKEN }}
+        run: python3 scripts/recommend.py

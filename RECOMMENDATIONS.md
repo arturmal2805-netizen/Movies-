@@ -1,8 +1,9 @@
 # Почасовой персональный подбор
 
-GitHub Actions → **Refresh movie sources** → задание **Hourly personalized recommendations**.
+GitHub Actions → **Nightshift — подбор фильмов каждый час** → задание **Hourly personalized recommendations**.
+Прямая ссылка: https://github.com/arturmal2805-netizen/Movies-/actions/workflows/recommendations.yml
 Расписание: на 17-й минуте каждого часа UTC; GitHub может задерживать запуск.
-Задание подбора независимо от обновления постеров и публикации Pages.
+Подбор запускается отдельным workflow, независимо от обновления постеров и публикации Pages. Изменения кода подбора в main запускают проверку и подбор автоматически.
 Для первой проверки нажмите **Run workflow** (ветка `main`).
 
 ## Подключение
