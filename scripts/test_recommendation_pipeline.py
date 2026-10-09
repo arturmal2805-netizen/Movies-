@@ -50,9 +50,9 @@ class PipelineTests(unittest.TestCase):
 
     def test_hourly_batch_uses_server_taste_and_never_duplicates(self):
         with patch.dict('os.environ', {}, clear=True):
-            self.assertEqual(recommend_user(self.backend, self.user, NOW, self.config), 3)
+            self.assertEqual(recommend_user(self.backend, self.user, NOW, self.config), self.config["base_per_hour"])
             self.assertEqual(recommend_user(self.backend, self.user, NOW, self.config), 0)
-        self.assertEqual(len(self.backend.collection), 3)
+        self.assertEqual(len(self.backend.collection), self.config["base_per_hour"])
         row = self.backend.collection[0]
         self.assertEqual(row['metadata']['discoverySources'], ['tmdb'])
         self.assertIn('Фантастика', row['reason'])
@@ -64,8 +64,8 @@ class PipelineTests(unittest.TestCase):
             recommend_user(self.backend, self.user, NOW, self.config)
         self.assertEqual(self.backend.patched, [])
         self.backend.fail_after = None
-        self.assertEqual(recommend_user(self.backend, self.user, NOW, self.config), 2)
-        self.assertEqual(len(self.backend.collection), 3)
+        self.assertEqual(recommend_user(self.backend, self.user, NOW, self.config), self.config["base_per_hour"] - 1)
+        self.assertEqual(len(self.backend.collection), self.config["base_per_hour"])
 
     def test_completed_recent_batch_does_not_query_providers(self):
         user = dict(self.user, last_recommendation_at=NOW.isoformat())
@@ -84,8 +84,8 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(next(m for m in pool if m['id'] == 901)['discovery_sources'], ['tmdb', 'other'])
         self.assertEqual(statuses[-1]['status'], 'failed')
         ranked = [(0, m, '') for m in pool]
-        self.assertEqual(hourly_limit(config, ranked), 5)
-        self.assertEqual(hourly_limit(config, [(0, {'discovery_sources': list('abcdef')}, '')]), 9)
+        self.assertEqual(hourly_limit(config, ranked), config["base_per_hour"] + config["extra_per_source"])
+        self.assertEqual(hourly_limit(config, [(0, {'discovery_sources': list(range(30))}, '')]), config['maximum_per_hour'])
 
     def test_all_providers_failed_is_failure_without_success_timestamp(self):
         with patch.object(self.backend, 'movie', side_effect=RuntimeError('Unavailable')):
@@ -114,4 +114,4 @@ class PipelineTests(unittest.TestCase):
         with patch.dict('os.environ', {}, clear=True):
             pool, statuses = discover(self.backend, [], config)
         self.assertEqual(statuses[-1]['status'], 'failed')
-        self.assertEqual(hourly_limit(config, [(0, m, '') for m in pool]), 3)
+        self.assertEqual(hourly_limit(config, [(0, m, '') for m in pool]), config['base_per_hour'])
