@@ -9,6 +9,23 @@ GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'
 
 def taste(ratings):return {value:weight for (kind,value),weight in profile(ratings).items() if kind=='genre'}
 
+def preferred_keyword_seeds(ratings,tastes):
+ # Smoothed weights can be optimistic for rare tags. Search expansion needs
+ # actual repeated positive evidence, not tags seen only in rejected movies.
+ positive_support={};keyword_ids={}
+ for row in ratings:
+  if row.get('impression')!='like':continue
+  for name in set(normalize(k if isinstance(k,str) else k.get('name')) for k in keywords(row.get('metadata') or {})):
+   positive_support[name]=positive_support.get(name,0)+1
+ for row in ratings:
+  metadata=row.get('metadata') or {}
+  for name,kid in zip(metadata.get('keywords') or [],metadata.get('keywordIds') or []):
+   name=normalize(name if isinstance(name,str) else name.get('name'))
+   weight=tastes.get(('keyword',name),0)
+   if tastes.predictive and positive_support.get(name,0)<2:continue
+   if type(kid) is int and kid>0 and weight>0:keyword_ids[kid]=weight
+ return sorted(keyword_ids,key=lambda kid:(-keyword_ids[kid],kid))[:2]
+
 def valid_candidate(movie,minimum_votes,today,require_target=None):
  if not isinstance(movie,dict) or type(movie.get('id')) is not int or movie['id']<=0:return False
  if movie.get('adult') or not movie.get('poster_path') or not eligible_for_discovery(movie,require_target=require_target):return False
@@ -28,7 +45,7 @@ def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None,pre
   quality=(float(movie['vote_average'])*count+6.5*500)/(count+500)
   personal=match_score(movie,tastes)
   if not preliminary and informative>=20 and personal<-.8:continue
-  value=personal*5+quality*.4+min(8,math.log1p(max(0,float(movie.get('popularity',0)))))*.1
+  value=personal*5+quality*(.03 if tastes.predictive else .4)+min(8,math.log1p(max(0,float(movie.get('popularity',0)))))*(.01 if tastes.predictive else .1)
   categories=classify(movie)
   if 'horror' in categories or 'dystopian' in categories or movie.get('_discovery_category')=='dystopian':value+=5
   favorite=sorted((g for g in genres(movie) if tastes.get(('genre',g),0)>0),key=lambda g:tastes[('genre',g)],reverse=True)
@@ -214,14 +231,9 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
  uid=user['user_id'];ratings=read_rows(b,'ratings?user_id=eq.'+uid+'&select=*&order=tmdb_id');collection=read_rows(b,'collection?user_id=eq.'+uid+'&select=*&order=tmdb_id')
  enrich_history(b,uid,ratings,collection,config)
  weights=taste(ratings);preferred=sorted((g for g,v in weights.items() if v>0 and g in (27,53,878)),key=lambda g:weights[g],reverse=True)[:3]
- tastes=profile(ratings);keyword_ids={}
- for row in ratings:
-  metadata=row.get('metadata') or {}
-  for name,kid in zip(metadata.get('keywords') or [],metadata.get('keywordIds') or []):
-   weight=tastes.get(('keyword',normalize(name)),0)
-   if type(kid) is int and kid>0 and weight>0:keyword_ids[kid]=weight
+ tastes=profile(ratings)
  preferred_movies=liked_movie_seeds(ratings)
- search_config=dict(config,_preferred_movie_ids=preferred_movies,_now=now,_page_seed=(int(request_id.replace('-','')[-8:],16) if request_id else len(collection)) if manual else 0,_excluded_ids={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values()),_preferred_keywords=sorted(keyword_ids,key=keyword_ids.get,reverse=True)[:2])
+ search_config=dict(config,_preferred_movie_ids=preferred_movies,_now=now,_page_seed=(int(request_id.replace('-','')[-8:],16) if request_id else len(collection)) if manual else 0,_excluded_ids={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values()),_preferred_keywords=preferred_keyword_seeds(ratings,tastes))
  candidates,statuses=discover(b,preferred,search_config)
  print('Discovery:',json.dumps(statuses))
  ranked=rank_candidates(candidates,ratings,collection,config['minimum_votes'],now,preliminary=True)

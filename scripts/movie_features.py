@@ -63,6 +63,7 @@ class TasteProfile(dict):
     if specific_feature(key):self.neighbor_index[key].append(i)
 
 def profile(ratings):
+ ratings=list(ratings)
  sums=defaultdict(float);counts=defaultdict(int);shares=defaultdict(float);anchors=[]
  for row in ratings:
   signal=rating_signal(row)
@@ -73,11 +74,34 @@ def profile(ratings):
  baseline=sum(a[0] for a in anchors)/len(anchors) if anchors else 0
  # Contrast with the user's own baseline: mass rejection must not erase every horror preference.
  weights={key:.25*sums[key]/(counts[key]+2)+.75*(sums[key]-baseline*shares[key])/(counts[key]+4) for key in sums}
- return TasteProfile(weights,anchors=[(signal,vector,sum(share*importance(key) for key,share in vector.items())) for signal,vector,_ in anchors])
+ result=TasteProfile(weights,anchors=[(signal,vector,sum(share*importance(key) for key,share in vector.items())) for signal,vector,_ in anchors])
+ result.contrast_weights=weights
+ positive=defaultdict(float);negative=defaultdict(float);positive_count=negative_count=0
+ for row in ratings:
+  label=row.get('impression')
+  if label not in ('like','dislike'):continue
+  if label=='like':positive_count+=1;counts_by_class=positive
+  else:negative_count+=1;counts_by_class=negative
+  for key,share in predictive_features(row.get('metadata') or {}).items():counts_by_class[key]+=share
+ # Class-normalized, Laplace-smoothed log odds. A user's many rejections must not
+ # overwhelm the smaller positive class. Neutral ratings are not negative labels.
+ result.predictive=positive_count>=3 and negative_count>=3 and positive_count+negative_count>=20
+ if result.predictive:
+  result.clear();result.update({key:math.log((positive[key]+1)/(positive_count+2))-math.log((negative[key]+1)/(negative_count+2)) for key in positive.keys()|negative.keys()})
+ return result
+
+def predictive_features(movie):
+ vector=features(movie)
+ language=movie.get('originalLanguage') or movie.get('original_language')
+ if language:vector[('language',language)]=1
+ try:year=int(movie.get('year') or str(movie.get('release_date',''))[:4])
+ except (TypeError,ValueError):year=0
+ if year:vector[('period',year//5)]=1
+ return vector
 
 def specific_feature(key):return key[0] in ('keyword','director') or key[0]=='category' and key[1]!='horror'
 
-IMPORTANCE={'genre':1,'category':5,'keyword':4,'director':2}
+IMPORTANCE={'genre':1,'category':5,'keyword':4,'director':2,'language':.75,'period':.75}
 def importance(key):return .5 if key==('category','horror') else IMPORTANCE[key[0]]
 
 def nearby_score(vector,anchors):
@@ -92,11 +116,19 @@ def nearby_score(vector,anchors):
  matches=sorted(matches,key=lambda pair:pair[0],reverse=True)[:6]
  return sum(sim*signal for sim,signal in matches)/(1.5+sum(sim for sim,_ in matches))
 
-def match_score(movie,taste):
+def contrast_score(movie,taste):
  vector=features(movie)
  index=getattr(taste,'neighbor_index',None);anchors=getattr(taste,'anchors',())
  if index is not None:anchors=[anchors[i] for i in sorted({i for key in vector for i in index.get(key,())})]
- return sum(taste.get(key,0)*share*importance(key) for key,share in vector.items())+nearby_score(vector,anchors)*2
+ weights=getattr(taste,'contrast_weights',taste)
+ return sum(weights.get(key,0)*share*importance(key) for key,share in vector.items())+nearby_score(vector,anchors)*2
+
+def match_score(movie,taste):
+ if not getattr(taste,'predictive',False):return contrast_score(movie,taste)
+ vector=predictive_features(movie)
+ # Normalize by evidence length so verbose TMDB descriptions do not win simply
+ # by having more keywords. Scale preserves the existing rejection guard's units.
+ return 3*sum(taste.get(key,0)*share*importance(key) for key,share in vector.items())/max(1,sum(share*importance(key) for key,share in vector.items()))
 
 
 def feature_metadata(detail):

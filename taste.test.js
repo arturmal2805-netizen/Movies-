@@ -38,3 +38,17 @@ test('525 ratings retain an early favorite after 524 rejections of a different t
  assert.ok(tasteScore(favorite,model)>1);assert.ok(tasteScore(favorite,model)>tasteScore(films[1],model));
 });
 test('normal five-five is a neutral signal',()=>assert.equal(tasteSignal({impression:'neutral',plot:5,cinematography:5}),0));
+
+test('class-normalized model preserves rare positives and matches the Python formula',()=>{
+ const films=Array.from({length:100},(_,i)=>({id:i+1,genreIds:[27],keywords:[i<10?'alien lifeform':'haunted house'],originalLanguage:i<10?'en':'es',year:2020}));
+ const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<10?'like':'dislike'}]));
+ const model=buildTasteProfile(films,reactions);
+ assert.equal(model.predictive,true);
+ assert.ok(Math.abs(model.get('keyword:alien lifeform')-(Math.log(11/12)-Math.log(1/92)))<1e-12);
+ assert.ok(tasteScore(films[0],model)>tasteScore(films[99],model));
+ assert.ok(Math.abs(model.get('genre:27'))<.1);
+ assert.equal(tasteScore({keywords:['unobserved theme']},model),0);
+ const neutralFilms=Array.from({length:500},(_,i)=>({...films[0],id:101+i}));
+ const neutralReactions={...reactions,...Object.fromEntries(neutralFilms.map(f=>[f.id,{impression:'neutral',plot:10,cinematography:10}]))};
+ assert.equal(tasteScore(films[0],model),tasteScore(films[0],buildTasteProfile([...films,...neutralFilms],neutralReactions)));
+});

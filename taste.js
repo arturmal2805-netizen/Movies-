@@ -1,4 +1,4 @@
-import {filmCategories} from './categories.js?v=private-export29';
+import {filmCategories} from './categories.js?v=balanced-taste30';
 import {normalizeRating} from './ratings.js';
 const generic=new Set(['based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','woman director']);
 const normalize=value=>String(value||'').toLocaleLowerCase('ru').replace(/[-_]/g,' ').replace(/\s+/g,' ').trim();
@@ -24,9 +24,14 @@ export function buildTasteProfile(films,reactions){
   for(const [key,share] of tasteFeatures(film)){sums.set(key,(sums.get(key)||0)+signal*share);counts.set(key,(counts.get(key)||0)+1);shares.set(key,(shares.get(key)||0)+share);}
  }
  const baseline=anchors.length?anchors.reduce((sum,[signal])=>sum+signal,0)/anchors.length:0;
- const profile=new Map([...sums].map(([key,value])=>[key,.25*value/(counts.get(key)+2)+.75*(value-baseline*shares.get(key))/(counts.get(key)+4)]));profile.anchors=anchors.map(([signal,vector,at])=>[signal,vector,at,[...vector].reduce((sum,[key,{share,kind}])=>sum+share*featureWeight(key,kind),0)]);profile.neighborIndex=new Map();for(let i=0;i<profile.anchors.length;i++)for(const [key,{kind}] of profile.anchors[i][1])if(kind==='keyword'||kind==='director'||kind==='category'&&key!=='category:horror'){if(!profile.neighborIndex.has(key))profile.neighborIndex.set(key,[]);profile.neighborIndex.get(key).push(i);}return profile;
+ const profile=new Map([...sums].map(([key,value])=>[key,.25*value/(counts.get(key)+2)+.75*(value-baseline*shares.get(key))/(counts.get(key)+4)]));profile.anchors=anchors.map(([signal,vector,at])=>[signal,vector,at,[...vector].reduce((sum,[key,{share,kind}])=>sum+share*featureWeight(key,kind),0)]);profile.neighborIndex=new Map();for(let i=0;i<profile.anchors.length;i++)for(const [key,{kind}] of profile.anchors[i][1])if(kind==='keyword'||kind==='director'||kind==='category'&&key!=='category:horror'){if(!profile.neighborIndex.has(key))profile.neighborIndex.set(key,[]);profile.neighborIndex.get(key).push(i);}profile.contrastWeights=new Map(profile);
+ const positive=new Map(),negative=new Map();let positiveCount=0,negativeCount=0;
+ for(const film of films){const label=normalizeRating(reactions[film.id])?.impression;if(label!=='like'&&label!=='dislike')continue;const counts=label==='like'?positive:negative;if(label==='like')positiveCount++;else negativeCount++;for(const [key,share] of predictiveFeatures(film))counts.set(key,(counts.get(key)||0)+share);}
+ profile.predictive=positiveCount>=3&&negativeCount>=3&&positiveCount+negativeCount>=20;
+ if(profile.predictive){profile.clear();for(const key of new Set([...positive.keys(),...negative.keys()]))profile.set(key,Math.log(((positive.get(key)||0)+1)/(positiveCount+2))-Math.log(((negative.get(key)||0)+1)/(negativeCount+2)));}
+ return profile;
 }
-const importance={genre:1,category:5,keyword:4,director:2};
+const importance={genre:1,category:5,keyword:4,director:2,language:.75,period:.75};
 const featureWeight=(key,kind)=>key==='category:horror'?.5:importance[kind];
 function nearbyScore(vector,anchors){
  const candidate=new Map(vector.map(([key,share,kind])=>[key,{share,kind}])),matches=[];
@@ -42,4 +47,15 @@ function nearbyScore(vector,anchors){
 }
 
 export function isDocumentary(film){return (film.genreIds||[]).includes(99)||/документ|documentary/i.test(film.genre||'');}
-export function tasteScore(film,profile){const vector=tasteFeatures(film),target=filmCategories(film).some(c=>c==='horror'||c==='dystopian');return (target?1:0)+vector.reduce((value,[key,share,kind])=>value+(profile.get(key)||0)*share*featureWeight(key,kind),0)+nearbyScore(vector,profile.neighborIndex?[...new Set(vector.flatMap(([key])=>profile.neighborIndex.get(key)||[]))].sort((a,b)=>a-b).map(i=>profile.anchors[i]):profile.anchors||[])*2;}
+function predictiveFeatures(film){
+ const vector=tasteFeatures(film),language=film.originalLanguage||film.original_language;
+ if(language)vector.push([`language:${language}`,1,'language']);
+ const year=Number(film.year||String(film.release_date||'').slice(0,4));
+ if(Number.isInteger(year)&&year>0)vector.push([`period:${Math.floor(year/5)}`,1,'period']);
+ return vector;
+}
+export function tasteScore(film,profile){
+ const target=filmCategories(film).some(c=>c==='horror'||c==='dystopian');
+ if(profile.predictive){const vector=predictiveFeatures(film);return (target?1:0)+3*vector.reduce((value,[key,share,kind])=>value+(profile.get(key)||0)*share*featureWeight(key,kind),0)/Math.max(1,vector.reduce((sum,[key,share,kind])=>sum+share*featureWeight(key,kind),0));}
+ const vector=tasteFeatures(film);return (target?1:0)+vector.reduce((value,[key,share,kind])=>value+(profile.get(key)||0)*share*featureWeight(key,kind),0)+nearbyScore(vector,profile.neighborIndex?[...new Set(vector.flatMap(([key])=>profile.neighborIndex.get(key)||[]))].sort((a,b)=>a-b).map(i=>profile.anchors[i]):profile.anchors||[])*2;
+}

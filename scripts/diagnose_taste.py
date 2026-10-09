@@ -1,6 +1,6 @@
 """Read-only personal taste audit. Keep inputs/reports outside the public repository."""
 import argparse,collections,json,math,os,urllib.request,uuid
-from movie_features import features,profile,match_score,rating_signal,keywords,eligible_for_discovery
+from movie_features import features,profile,match_score,contrast_score,rating_signal,keywords,eligible_for_discovery
 
 def patterns(rows):
  grouped=collections.defaultdict(list)
@@ -45,7 +45,7 @@ def evaluation(rows):
   auc=sum(1 if p>n else .5 if p==n else 0 for p in positive for n in negative)/(len(positive)*len(negative)) if positive and negative else None
   top=sorted(predictions,key=lambda prediction:prediction[0],reverse=True)[:min(10,len(predictions))]
   return {'pairwise_auc':round(auc,4) if auc is not None else None,'precision_at_10':round(sum(y for _,y in top)/len(top),4)}
- return {'status':'evaluated','split':'chronological_80_20' if all(r.get('updated_at') for r in decisive) else 'stable_id_fallback_80_20','training_count':len(train),'held_out_count':len(test),'held_out_like_rate':round(sum(r['impression']=='like' for r in test)/len(test),4),'previous':metrics(lambda movie:legacy_score(movie,train)),'current':metrics(lambda movie:match_score(movie,model))}
+ return {'status':'evaluated','split':'chronological_80_20' if all(r.get('updated_at') for r in decisive) else 'stable_id_fallback_80_20','training_count':len(train),'held_out_count':len(test),'held_out_like_rate':round(sum(r['impression']=='like' for r in test)/len(test),4),'previous':metrics(lambda movie:legacy_score(movie,train)),'previous_full_history':metrics(lambda movie:contrast_score(movie,model)),'current':metrics(lambda movie:match_score(movie,model))}
 
 def analyze(rows):
  if not isinstance(rows,list) or any(not isinstance(r,dict) for r in rows):raise ValueError('Expected a JSON array of ratings')

@@ -1,4 +1,4 @@
-import {categoryRules} from './category-rules.js?v=private-export29';
+import {categoryRules} from './category-rules.js?v=balanced-taste30';
 export const categoryOptions = [
  ['all','✦','Все фильмы'],
  ['horror','☠','Horror'],
