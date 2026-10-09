@@ -2,12 +2,25 @@ import unittest
 import urllib.error
 import urllib.parse
 from unittest.mock import Mock
-from simkl_source import client_id, FEED_URL
+from simkl_source import client_id, FEED_URL, auth_diagnostic, api_requirements
 from recommendation_sources import simkl_candidates
 from import_catalog import refresh
 
 
 class SimklTests(unittest.TestCase):
+    def test_auth_diagnostics_do_not_copy_sensitive_body(self):
+        import io
+        error = urllib.error.HTTPError('https://api.simkl.com/private', 401, 'private', {}, io.BytesIO(b'Missing OAuth bearer token private-secret'))
+        result = auth_diagnostic(error)
+        self.assertEqual(result['category'], 'authentication_rejected')
+        self.assertIn('token', result['reasonHints'])
+        self.assertNotIn('private-secret', str(result))
+
+    def test_current_docs_expose_required_auth_and_app_fields(self):
+        result = api_requirements({'paths': {'/ratings': {'get': {'security': [{'bearerAuth': []}], 'parameters': [{'name': 'app-name', 'in': 'query', 'required': True}]}}}})
+        self.assertEqual(result['parameters'][0]['name'], 'app-name')
+        self.assertEqual(result['security'], [{'bearerAuth': []}])
+
     def test_normalize_wrapped_key_and_reject_client_secret(self):
         self.assertEqual(client_id(' abcd\nefgh \r\n'), 'abcdefgh')
         for value in ('simkl_cs_fake', '', 'abc:bad', 'ключ'):

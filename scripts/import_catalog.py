@@ -1,7 +1,7 @@
 """Refresh verified metadata; retain the last successful values on provider errors."""
 import json, os, datetime, urllib.request, urllib.parse, urllib.error
 from pathlib import Path
-from simkl_source import FEED_URL, HEADERS, entries, credential_url, client_id
+from simkl_source import FEED_URL, HEADERS, entries, credential_url, client_id, auth_diagnostic, api_requirements
 TARGET = Path(__file__).resolve().parents[1] / 'data/catalog.json'
 # Stable TMDB identities for the curated catalog; never match by title alone.
 IDS = {1:157336,2:120467,3:693134,4:313369,5:546554,6:508442,7:329865,8:194,9:76341,10:370755,11:105,12:76}
@@ -126,7 +126,7 @@ def refresh(snapshot, request=get_json, environ=None, now=None):
         state.pop('diagnosticChecks', None)
     states['trakt'] = state
     state = dict(states.get('simkl', {}), status='error', lastAttempt=now)
-    for field in ('httpStatus', 'credentialHttpStatus', 'credentialStatus'):
+    for field in ('httpStatus', 'credentialHttpStatus', 'credentialStatus', 'credentialDiagnostic'):
         state.pop(field, None)
     try:
         rows = entries(request(FEED_URL, HEADERS))
@@ -143,6 +143,13 @@ def refresh(snapshot, request=get_json, environ=None, now=None):
             state['credentialStatus'] = 'ok'
         except Exception as error:
             if isinstance(error, urllib.error.HTTPError): state['credentialHttpStatus'] = error.code
+            state['credentialDiagnostic'] = auth_diagnostic(error)
+    # Inspect current API contracts separately from frozen Apiary documentation.
+    if state.get('credentialHttpStatus') == 401 and not state.get('apiRequirements'):
+        try:
+            state['apiRequirements'] = api_requirements(request('https://api.simkl.org/openapi.json', HEADERS))
+        except Exception:
+            pass
     states['simkl'] = state
     return snapshot
 
