@@ -31,6 +31,8 @@ def trakt_failure(error):
             result['category'] = 'access_forbidden'
         elif error.code == 429:
             result['category'] = 'rate_limited'
+        markers = ('origin','cors','permission','approved','disabled','invalid','client','api key','cloudflare','blocked','policy','vip','subscription','forbidden','denied','rate limit','error code: 1020','error code: 1015')
+        result['reasonHints'] = [marker for marker in markers if marker in body]
     except Exception:
         pass
     return result
@@ -85,13 +87,16 @@ def refresh(snapshot, request=get_json, environ=None, now=None):
         state.pop(field, None)
     if trakt_key:
         # First preserve evidence from the original request, then test explicit app identification.
-        for agent in (None, 'Nightshift/1.0'):
+        for agent, origin in ((None,None), ('Nightshift/1.0',None), ('Nightshift/1.0','https://arturmal2805-netizen.github.io')):
             try:
                 headers = {'trakt-api-version':'2','trakt-api-key':trakt_key,'Content-Type':'application/json'}
                 if agent: headers['User-Agent'] = agent
+                if origin: headers['Origin'] = origin
                 result = request('https://api.trakt.tv/movies/trending?limit=1', headers)
                 if not isinstance(result, list): raise ValueError('Invalid Trakt response')
                 state.update(status='ok', lastSuccess=now)
+                if origin: state['originRequired'] = True
+                else: state.pop('originRequired', None)
                 state.pop('httpStatus', None)
                 state.pop('diagnostic', None)
                 break
