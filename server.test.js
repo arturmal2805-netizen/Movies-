@@ -28,3 +28,7 @@ test('session-only legacy login migrates and explicit logout clears both stores'
  const temp=resetStorage();temp.set('nightshift.session',JSON.stringify(session()));const s=new ServerStore({url:'https://example.com',publishableKey:'public'},async url=>new Response(JSON.stringify(url.endsWith('/user')?{id:'test-user'}:[])));
  assert.equal(await s.restore(),true);assert.ok(localStorage.getItem('nightshift.session'));assert.equal(temp.size,0);await s.logout();assert.equal(localStorage.getItem('nightshift.session'),null);assert.equal(s.session,null);
 });
+test('SMTP failure is reported as delivery failure without creating a session',async()=>{
+ resetStorage();const s=new ServerStore({url:'https://example.com',publishableKey:'public'},async()=>new Response(JSON.stringify({code:'unexpected_failure'}),{status:500}));
+ await assert.rejects(s.sendCode('test@example.com'),e=>e.status===500&&/SMTP/.test(e.message));assert.equal(s.session,null);assert.equal(localStorage.getItem('nightshift.session'),null);
+});
