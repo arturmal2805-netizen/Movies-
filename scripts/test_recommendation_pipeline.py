@@ -58,6 +58,16 @@ class PipelineTests(unittest.TestCase):
         self.assertIn('Фантастика', row['reason'])
         self.assertEqual(row['metadata']['tmdbId'], row['tmdb_id'])
 
+    def test_fewer_than_base_candidates_are_saved_instead_of_discarded(self):
+        for count in (1, 3, 9):
+            backend = FakeBackend()
+            config = dict(self.config, base_per_hour=10)
+            candidates = [dict(movie(901+i), discovery_sources=['tmdb']) for i in range(count)]
+            with patch('recommend.discover', return_value=(candidates, [{'source':'tmdb','status':'ok','candidates':count}])):
+                self.assertEqual(recommend_user(backend, self.user, NOW, config), count)
+            self.assertEqual(len(backend.collection), count)
+            self.assertEqual(len(backend.patched), 1)
+
     def test_partial_write_retry_respects_rolling_hour_cap(self):
         self.backend.fail_after = 1
         with self.assertRaises(RuntimeError):

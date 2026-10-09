@@ -121,6 +121,8 @@ def recommend_user(b,user,now,config):
  print('Discovery:',json.dumps(statuses))
  ranked=rank_candidates(candidates,ratings,collection,config['minimum_votes'])
  recent=sum(1 for row in collection if row.get('reason') and row.get('created_at') and (now-datetime.datetime.fromisoformat(row['created_at'].replace('Z','+00:00'))).total_seconds()<3600)
+ # Base is a target budget, never a minimum required to save candidates.
+ # Even one eligible film is saved when the remaining hourly budget allows it.
  budget=max(0,hourly_limit(config,ranked)-recent)
  if not budget:return 0
  added=0
