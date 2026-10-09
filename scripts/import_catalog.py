@@ -134,3 +134,5 @@ if __name__ == '__main__':
     temporary.replace(TARGET)
     for name,state in result['sources'].items():
         print(name,state['status'],'imported:',state.get('imported',0),'failed:',state.get('failed',0))
+        if name == 'trakt' and state.get('diagnostic'):
+            print('Trakt check:', state['diagnostic'].get('httpStatus', 'no HTTP response'), state['diagnostic']['category'])
