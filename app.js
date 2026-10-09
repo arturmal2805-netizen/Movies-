@@ -83,11 +83,23 @@ async function syncAccount(){const [rows,collection]=await server.load();reactio
 function renderAccount(){const logged=Boolean(server.session);$('account-open').textContent=logged?'✓ Аккаунт':'Войти';$('account-status').textContent=!server.configured?'Сервер ещё не настроен. Оценки доступны после подключения Supabase.':logged?'Оценки и коллекция синхронизируются с сервером.':'Войдите по email, чтобы сохранять оценки на сервере.';$('auth-form').hidden=logged||!server.configured;$('account-logout').hidden=!logged;$('import-local').hidden=!logged||(!Object.keys(legacyRatings).length&&!legacySaved.length);}
 function openAccount(){renderAccount();if(!$('account-dialog').open)$('account-dialog').showModal();}
 $('account-open').onclick=openAccount;$('account-close').onclick=()=>$('account-dialog').close();
-$('send-code').onclick=async()=>{const email=$('account-email').value.trim();if(!email||!$('account-email').checkValidity()){toast('Введите корректный email');return;}const b=$('send-code');b.disabled=true;try{await server.sendCode(email);$('verify-fields').hidden=false;$('account-status').textContent='Введите код из письма. Проверьте папку «Спам».';}catch(error){toast(error.message);}finally{b.disabled=false;}};
+$('send-code').onclick=async()=>{const email=$('account-email').value.trim();if(!email||!$('account-email').checkValidity()){toast('Введите корректный email');return;}const b=$('send-code');b.disabled=true;try{await server.sendCode(email,new URL('.',location.href).href);$('verify-fields').hidden=false;$('account-status').textContent='Откройте ссылку из письма или введите код, если он есть. Проверьте папку «Спам».';}catch(error){toast(error.message);}finally{b.disabled=false;}};
 $('verify-code').onclick=async()=>{const b=$('verify-code');b.disabled=true;try{await server.verify($('account-email').value.trim(),$('account-code').value.trim());await syncAccount();$('account-dialog').close();toast('Вход выполнен · Оценки на сервере');}catch(error){toast(error.message);}finally{b.disabled=false;}};
 $('account-logout').onclick=async()=>{try{await server.logout();}catch{}finally{reactions={};saved=[];films.splice(12);render();renderAccount();toast('Вы вышли из аккаунта');}};
 $('import-local').onclick=async()=>{const b=$('import-local');b.disabled=true;try{for(const [id,r] of Object.entries(legacyRatings)){const f=films.find(f=>f.id===Number(id));if(f)await server.saveRating(f,r);}for(const id of legacySaved){const f=films.find(f=>f.id===id);if(f)await server.saveCollection(f,true);}await syncAccount();localStorage.removeItem('nightshift.reactions');localStorage.removeItem('afterglow.saved');for(const key of Object.keys(legacyRatings))delete legacyRatings[key];legacySaved.length=0;renderAccount();toast('Старые оценки перенесены на сервер');}catch(error){toast(error.message+' Локальная копия сохранена.');}finally{b.disabled=false;}};
-async function initializeAccount(){renderAccount();if(server.configured&&await server.restore()){try{await syncAccount();}catch(error){toast(error.message);}}setInterval(async()=>{if(server.session&&!archiving&&!savingRating)try{await syncAccount();}catch{}},5*60*1000);}
+async function initializeAccount(){
+ const fragment=location.hash;
+ const params=new URLSearchParams(fragment.slice(1));
+ const callback=params.has('access_token')||params.has('error');
+ // Remove login credentials from the address bar before any asynchronous work.
+ if(callback)history.replaceState(null,'',location.pathname+location.search);
+ renderAccount();
+ if(server.configured){try{
+  const logged=callback?await server.acceptLink(fragment):await server.restore();
+  if(logged){await server.ensureProfile();await syncAccount();if(callback){toast('Вход выполнен');openAccount();}}
+ }catch(error){toast(error.message);renderAccount();}}
+ setInterval(async()=>{if(server.session&&!archiving&&!savingRating)try{await syncAccount();}catch{}},5*60*1000);
+}
 
 }
 

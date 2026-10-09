@@ -11,8 +11,22 @@ export class ServerStore {
  remember(session){this.session={...session,expires_at:session.expires_at||Math.floor(Date.now()/1000)+session.expires_in};sessionStorage.setItem('nightshift.session',JSON.stringify(this.session));}
  async restore(){try{const session=JSON.parse(sessionStorage.getItem('nightshift.session')||'null');if(!session?.refresh_token)return false;this.session=session;await this.refresh();await this.api('/auth/v1/user');return true;}catch{this.session=null;sessionStorage.removeItem('nightshift.session');return false;}}
  async refresh(){const value=await this.api('/auth/v1/token?grant_type=refresh_token',{method:'POST',auth:false,body:{refresh_token:this.session.refresh_token}});this.remember(value);}
- async sendCode(email){await this.api('/auth/v1/otp',{method:'POST',auth:false,body:{email,create_user:true}});}
+ async sendCode(email,redirectTo){await this.api('/auth/v1/otp'+(redirectTo?'?redirect_to='+encodeURIComponent(redirectTo):''),{method:'POST',auth:false,body:{email,create_user:true}});}
  async verify(email,token){const session=await this.api('/auth/v1/verify',{method:'POST',auth:false,body:{email,token,type:'email'}});this.remember(session);await this.api('/rest/v1/profiles?on_conflict=user_id',{method:'POST',body:{user_id:this.session.user.id},headers:{Prefer:'resolution=ignore-duplicates'}});}
+ async ensureProfile(){await this.api('/rest/v1/profiles?on_conflict=user_id',{method:'POST',body:{user_id:this.session.user.id},headers:{Prefer:'resolution=ignore-duplicates'}});}
+ async acceptLink(fragment){
+  const params=new URLSearchParams(fragment.replace(/^#/,''));
+  if(params.has('error'))throw new Error('Ссылка входа истекла. Запросите новое письмо.');
+  const access=params.get('access_token'),refresh=params.get('refresh_token');
+  if(!access||!refresh)return false;
+  try{
+   const expires=Number(params.get('expires_in'))||3600;
+   this.session={access_token:access,refresh_token:refresh,expires_at:Math.floor(Date.now()/1000)+Math.min(Math.max(expires,60),86400)};
+   const user=await this.api('/auth/v1/user');
+   if(!user?.id)throw new Error('Ссылка входа недействительна.');
+   this.remember({...this.session,user});await this.ensureProfile();return true;
+  }catch(error){this.session=null;sessionStorage.removeItem('nightshift.session');throw error;}
+ }
  async load(){return await Promise.all([this.api('/rest/v1/ratings?select=*'),this.api('/rest/v1/collection?select=*&order=created_at.desc')]);}
  async saveRating(f,r){if(!this.session)throw new Error('Войдите, чтобы сохранить оценку на сервере.');return this.api('/rest/v1/ratings?on_conflict=user_id,tmdb_id',{method:'POST',body:{user_id:this.session.user.id,tmdb_id:f.tmdbId,cinematography:r.cinematography??null,plot:r.plot??null,impression:r.impression,metadata:f,updated_at:r.ratedAt||new Date().toISOString()},headers:{Prefer:'resolution=merge-duplicates,return=representation'}});}
  async deleteRating(f){await this.api('/rest/v1/ratings?tmdb_id=eq.'+f.tmdbId,{method:'DELETE'});}
