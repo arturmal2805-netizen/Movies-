@@ -13,3 +13,10 @@ export function recentRecommendations(collection,now=Date.now()){
  }
  return {count:ids.size,latest};
 }
+
+// GitHub Actions cron: 17 * * * *. UTC arithmetic also handles Kyiv DST.
+export function nextRecommendationRun(now=Date.now()){
+ const hour=60*60*1000;
+ const slot=Math.floor(now/hour)*hour+17*60*1000;
+ return slot>now?slot:slot+hour;
+}

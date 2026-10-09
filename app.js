@@ -1,4 +1,4 @@
-import {kyivTime,recentRecommendations} from './time.js';
+import {kyivTime,recentRecommendations,nextRecommendationRun} from './time.js';
 import {ServerStore} from './server.js';
 import {normalizeRating,ratingWeight,isArchived} from './ratings.js';
 import {cardRule,sourceDefinitions,sourceState,hasCompleteMetadata} from './sources.js';
@@ -95,13 +95,16 @@ function safeMovie(raw){if(!raw||!Number.isInteger(raw.id)||!Number.isInteger(ra
 async function syncAccount(){let rows,collection;try{[rows,collection]=await server.load();}catch(error){collectionSyncFailed=true;renderHourlyStatus();throw error;}recommendationRows=collection;collectionSyncedAt=Date.now();collectionSyncFailed=false;reactions={};saved=[];films.splice(12);for(const row of [...collection,...rows]){if(!films.some(f=>f.tmdbId===row.tmdb_id)){const f=safeMovie(row.metadata);if(f)films.push(f);}}for(const row of rows){const f=films.find(f=>f.tmdbId===row.tmdb_id);if(f)reactions[f.id]={cinematography:row.cinematography,plot:row.plot,impression:row.impression,ratedAt:row.updated_at};}for(const row of collection){const f=films.find(f=>f.tmdbId===row.tmdb_id);if(f&&row.saved)saved.push(f.id);}for(const g of new Set(films.map(f=>f.genre))){if(![...$('genre').options].some(o=>o.value===g)){const o=document.createElement('option');o.value=g;o.textContent=g;$('genre').append(o);}}render();renderAccount();if($('sources-dialog').open)renderSources();}
 function renderHourlyStatus(){
  const now=Date.now();$('kyiv-clock').textContent=kyivTime(now,false)+' · Киев';$('kyiv-clock').dateTime=new Date(now).toISOString();
+ const next=nextRecommendationRun(now);
+ document.querySelector('.hourly-schedule').textContent='Следующий подбор ~'+kyivTime(next,false);
+ document.querySelector('.hourly-schedule').title='Плановый запуск: '+kyivTime(next)+' · Киев. GitHub может задержать запуск.';
  const status=$('hourly-added');
  if(!server.session){status.textContent='Войдите, чтобы видеть пополнения';status.title='Личные рекомендации сохраняются в серверной коллекции';return;}
  if(collectionSyncedAt===null){status.textContent=collectionSyncFailed?'Пополнения недоступны · повторим проверку':'Проверяем пополнения…';return;}
  const {count,latest}=recentRecommendations(recommendationRows,now);
  const ending=new Intl.PluralRules('ru').select(count);const word=ending==='one'?'фильм':ending==='few'?'фильма':'фильмов';
- status.textContent=`За последний час: +${count} ${word}${collectionSyncFailed?' · данные не обновлены':''}`;
- status.title=`Персональный подбор за последние 60 минут. Синхронизация: ${kyivTime(collectionSyncedAt)} · Киев.${latest?' Последнее добавление: '+kyivTime(latest)+' · Киев.':''}`;
+ status.textContent=`За последний час: +${count} ${word}${latest?' · Добавлено в '+kyivTime(latest,false):' · Пополнений ещё не было'}${collectionSyncFailed?' · данные не обновлены':''}`;
+ status.title=`Следующий плановый подбор: ${kyivTime(next)} · Киев. Персональный подбор за последние 60 минут. Синхронизация: ${kyivTime(collectionSyncedAt)} · Киев.${latest?' Последнее добавление: '+kyivTime(latest)+' · Киев.':''}`;
 }
 setInterval(renderHourlyStatus,30*1000);
 function renderAccount(){renderHourlyStatus();const logged=Boolean(server.session);$('account-open').textContent=logged?'✓ Аккаунт':'Войти';$('account-status').textContent=!server.configured?'Сервер ещё не настроен. Оценки доступны после подключения Supabase.':logged?'Оценки и коллекция синхронизируются с сервером.':'Войдите по коду из письма. На этом устройстве вход сохранится после закрытия браузера.';$('auth-form').hidden=logged||!server.configured;$('account-logout').hidden=!logged;$('import-local').hidden=!logged||(!Object.keys(legacyRatings).length&&!legacySaved.length);}
