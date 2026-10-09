@@ -11,5 +11,6 @@ export function ratingWeight(value){const r=normalizeRating(value);if(!r)return 
 export function isArchived(value){const r=normalizeRating(value);return Boolean(r?.ratedAt||['watched','dislike'].includes(r?.impression));}
 
 export function worstRating(){return {cinematography:1,plot:1,impression:'dislike',ratedAt:new Date().toISOString()};}
+export function neutralRating(){return {cinematography:5,plot:5,impression:'neutral',ratedAt:new Date().toISOString()};}
 export function bestRating(){return {cinematography:10,plot:10,impression:'like',ratedAt:new Date().toISOString()};}
 export function ratingLabel(value){const r=normalizeRating(value);return r?.impression==='dislike'&&r.cinematography===1&&r.plot===1?'Полная хуйня':r?.impression==='like'&&r.cinematography===10&&r.plot===10?'Самый разъёб':({like:'Кайф',neutral:'Норм',dislike:'Хуета',watched:'Просмотрено'})[r?.impression]||'—';}
