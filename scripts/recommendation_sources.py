@@ -4,7 +4,7 @@ import datetime
 from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
 from simkl_source import FEED_URL, HEADERS, entries
-from movie_features import genres
+from movie_features import genres,RULES
 
 def detail_path(mid):return f'movie/{mid}?language=ru-RU&append_to_response=keywords,credits'
 
@@ -48,20 +48,23 @@ def simkl_candidates(backend,preferred,config):
 def tmdb_candidates(backend, preferred, config):
     now=config.get('_now') or datetime.datetime.now(datetime.timezone.utc)
     query={'language':'ru-RU','include_adult':'false','include_video':'false',
-           'primary_release_date.lte':now.date().isoformat(),'vote_count.gte':config['minimum_votes'],'without_genres':99}
+           'primary_release_date.lte':now.date().isoformat(),'primary_release_date.gte':str(RULES['selection']['minimum_year'])+'-01-01','vote_count.gte':config['minimum_votes'],'without_genres':99}
     strategies=[{'sort_by':'popularity.desc','with_genres':27},{'sort_by':'vote_average.desc','with_genres':27},
-                {'sort_by':'popularity.desc'},{'sort_by':'vote_average.desc'}]
-    strategies.extend({'sort_by':'popularity.desc','with_genres':genre} for genre in preferred[:3] if genre not in (27,99))
+                {'sort_by':'popularity.desc','with_keywords':4565}]
+    strategies.extend({'sort_by':'popularity.desc','with_genres':genre} for genre in preferred[:3] if genre in (53,878))
     strategies.extend({'sort_by':'popularity.desc','with_keywords':keyword} for keyword in config.get('_preferred_keywords',[])[:2])
     count=config.get('pages',2);window=max(count,min(20,config.get('page_window',20)))
-    slot=int((now.timestamp()-17*60)//3600)
+    slot=int((now.timestamp()-17*60)//3600)+config.get('_page_seed',0)
     # Keep page 1 for fresh hits; rotate deeper pages so an exhausted first page is not the whole catalog.
     pages=[1]+[2+(slot*(count-1)+i)%(window-1) for i in range(count-1)]
     paths=['discover/movie?'+urllib.parse.urlencode(dict(query,**strategy,page=page)) for strategy in strategies for page in pages][:24]
     def fetch(path):
         try:
             data=backend.movie(path)
-            return data['results'] if isinstance(data,dict) and isinstance(data.get('results'),list) else None
+            if not isinstance(data,dict) or not isinstance(data.get('results'),list):return None
+            rows=data['results']
+            if urllib.parse.parse_qs(urllib.parse.urlsplit(path).query).get('with_keywords')==['4565']:rows=[dict(m,_discovery_category='dystopian') if isinstance(m,dict) else m for m in rows]
+            return rows
         except Exception:return None
     with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
         results=list(executor.map(fetch,paths))
@@ -137,7 +140,7 @@ def discover(backend, preferred, config):
             continue
         name = source['id']
         try:
-            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _preferred_keywords=config.get('_preferred_keywords',[]), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
+            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _preferred_keywords=config.get('_preferred_keywords',[]), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
             valid = [m for m in candidates if isinstance(m,dict) and type(m.get('id')) is int and m['id'] > 0 and not excluded(config,m['id'])]
             for movie in valid:
                 mid = movie['id']

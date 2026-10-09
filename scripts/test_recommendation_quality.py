@@ -4,7 +4,7 @@ from unittest.mock import Mock,patch
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlsplit,parse_qs
 from recommend import Backend,rank_candidates,diverse_candidates,recommend_user,load_config
-from movie_features import classify,profile,rating_signal
+from movie_features import classify,profile,rating_signal,eligible_for_discovery,match_score
 from recommendation_sources import tmdb_candidates,simkl_candidates,trakt_candidates,detail_path
 from test_recommendation_pipeline import FakeBackend,movie
 
@@ -14,6 +14,45 @@ class QualityTests(unittest.TestCase):
  def test_common_annotated_category_examples(self):
   for case in json.loads((ROOT/'config/category-checks.json').read_text()):
    with self.subTest(case['name']):self.assertEqual(classify(case['movie']),case['expected'])
+ def test_discovery_policy_shared_with_browser(self):
+  for case in json.loads((ROOT/'config/discovery-checks.json').read_text()):
+   with self.subTest(case['name']):self.assertEqual(eligible_for_discovery(case['movie']),case['expected'])
+ def test_rejecting_ghosts_preserves_body_horror_preference(self):
+  body={'genreIds':[27],'keywords':['body horror','mutation'],'director':'Body Director'}
+  ghost={'genreIds':[27],'keywords':['ghost','haunted house'],'director':'Ghost Director'}
+  ratings=[{'impression':'like','plot':10,'cinematography':10,'metadata':body}]+[{'impression':'dislike','plot':1,'cinematography':1,'metadata':ghost} for _ in range(8)]
+  taste=profile(ratings)
+  self.assertGreater(match_score(body,taste),0);self.assertGreater(match_score(body,taste),match_score(ghost,taste))
+ def test_neutral_does_not_dilute_and_neighbors_are_bounded(self):
+  movie={'genreIds':[27],'keywords':['body horror']};liked={'metadata':movie,'impression':'like'}
+  self.assertEqual(match_score(movie,profile([liked])),match_score(movie,profile([liked]+[dict(liked,impression='neutral')]*100)))
+  self.assertEqual(len(profile([liked]*100).anchors),60)
+ def test_search_requests_only_modern_films_and_excludes_documentaries(self):
+  backend=Mock();backend.movie.return_value={'results':[]}
+  tmdb_candidates(backend,[35,28,18,878],{'minimum_votes':100,'pages':2,'_now':NOW})
+  for call in backend.movie.call_args_list:
+   p=parse_qs(urlsplit(call.args[0]).query)
+   self.assertEqual(p['primary_release_date.gte'],['2000-01-01']);self.assertEqual(p['without_genres'],['99'])
+   if 'with_genres' in p:self.assertIn(p['with_genres'][0],['27','878'])
+ def test_pipeline_rechecks_canonical_genres_and_saves_small_valid_batch(self):
+  backend=FakeBackend()
+  candidates=[dict(movie(901),genre_ids=[27]),dict(movie(902),genre_ids=[27]),dict(movie(903),genre_ids=[27]),dict(movie(904),genre_ids=[18],_discovery_category='dystopian')]
+  canonical={901:dict(movie(901),genres=[{'id':27},{'id':18}],genre_ids=[27,18]),902:dict(movie(902),release_date='1999-01-01',genres=[{'id':27}],genre_ids=[27]),903:dict(movie(903),genres=[{'id':27},{'id':99}],genre_ids=[27,99]),904:dict(movie(904),genres=[{'id':18}],genre_ids=[18])}
+  backend.movie=lambda path:canonical[int(path.split('/')[1].split('?')[0])]
+  with patch('recommend.discover',return_value=(candidates,[])):
+   self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,load_config(),manual=True),1)
+  self.assertEqual([r['tmdb_id'] for r in backend.collection],[901])
+ def test_manual_search_changes_deeper_pages_with_request_seed(self):
+  backend=Mock();backend.movie.return_value={'results':[]}
+  config={'minimum_votes':100,'pages':3,'_now':NOW}
+  tmdb_candidates(backend,[],dict(config,_page_seed=1));first={parse_qs(urlsplit(c.args[0]).query)['page'][0] for c in backend.movie.call_args_list}
+  backend.reset_mock();tmdb_candidates(backend,[],dict(config,_page_seed=2));second={parse_qs(urlsplit(c.args[0]).query)['page'][0] for c in backend.movie.call_args_list}
+  self.assertNotEqual(first,second)
+ def test_all_canonically_excluded_is_empty_success_not_network_error(self):
+  backend=FakeBackend();backend.movie=lambda path:dict(movie(901),genres=[{'id':27},{'id':99}],genre_ids=[27,99])
+  with patch('recommend.discover',return_value=([dict(movie(901),genre_ids=[27])],[])):
+   self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,load_config(),manual=True),0)
+  self.assertEqual(backend.collection,[])
  def test_theme_preference_breaks_same_genre_tie(self):
   ratings=[{'tmdb_id':800,'impression':'like','metadata':{'genreIds':[27],'keywords':['body horror']}}]
   body=dict(movie(901),genre_ids=[27],keywords={'keywords':[{'id':1,'name':'body horror'}]})
@@ -33,10 +72,10 @@ class QualityTests(unittest.TestCase):
  def test_rotating_search_separates_genres_and_is_bounded(self):
   backend=Mock();backend.movie.return_value={'results':[movie(901)]}
   config={'minimum_votes':100,'pages':3,'_now':NOW,'_preferred_keywords':[123]}
-  tmdb_candidates(backend,[27,35],config)
+  tmdb_candidates(backend,[27,878],config)
   params=[parse_qs(urlsplit(call.args[0]).query) for call in backend.movie.call_args_list]
   self.assertLessEqual(len(params),24)
-  self.assertIn({'27','35'},[set(p['with_genres'][0] for p in params if 'with_genres' in p)])
+  self.assertIn({'27','878'},[set(p['with_genres'][0] for p in params if 'with_genres' in p)])
   self.assertTrue(any(p['sort_by']==['vote_average.desc'] for p in params))
   self.assertTrue(any(p.get('with_keywords')==['123'] for p in params))
   first_pages={p['page'][0] for p in params}
@@ -82,7 +121,7 @@ class QualityTests(unittest.TestCase):
   with patch('recommend.discover',return_value=(candidates,[])):
    self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,config),15)
   self.assertGreater(peak,1);self.assertLessEqual(peak,4)
-  meta=backend.collection[0]['metadata'];self.assertEqual(meta['moods'],['body-horror'])
+  meta=backend.collection[0]['metadata'];self.assertEqual(meta['moods'],['horror','body-horror'])
   self.assertEqual(meta['keywordIds'],[12]);self.assertEqual(meta['director'],'Test Director')
  def test_metadata_outage_does_not_mark_hour_completed(self):
   backend=FakeBackend();backend.movie=Mock(side_effect=RuntimeError())

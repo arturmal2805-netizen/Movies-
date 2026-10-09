@@ -5,6 +5,7 @@
       "tmdbId": 348
     },
     "expected": [
+      "horror",
       "creature-horror"
     ]
   },
@@ -14,6 +15,7 @@
       "tmdbId": 1091
     },
     "expected": [
+      "horror",
       "creature-horror",
       "body-horror"
     ]
@@ -24,6 +26,7 @@
       "tmdbId": 530385
     },
     "expected": [
+      "horror",
       "psychological-horror",
       "folklore-horror"
     ]
@@ -34,6 +37,7 @@
       "tmdbId": 310131
     },
     "expected": [
+      "horror",
       "psychological-horror",
       "folklore-horror"
     ]
@@ -62,6 +66,7 @@
       "tmdbId": 9426
     },
     "expected": [
+      "horror",
       "body-horror"
     ]
   },
@@ -88,6 +93,7 @@
       ]
     },
     "expected": [
+      "horror",
       "creature-horror"
     ]
   },
@@ -102,6 +108,7 @@
       ]
     },
     "expected": [
+      "horror",
       "creature-horror"
     ]
   },
@@ -116,6 +123,7 @@
       ]
     },
     "expected": [
+      "horror",
       "creature-horror"
     ]
   },
@@ -129,9 +137,7 @@
         "monster"
       ]
     },
-    "expected": [
-      "comedy"
-    ]
+    "expected": []
   },
   {
     "name": "Body transformation horror",
@@ -146,6 +152,7 @@
       ]
     },
     "expected": [
+      "horror",
       "body-horror"
     ]
   },
@@ -172,6 +179,7 @@
       ]
     },
     "expected": [
+      "horror",
       "body-horror"
     ]
   },
@@ -226,6 +234,7 @@
       ]
     },
     "expected": [
+      "horror",
       "psychological-horror"
     ]
   },
@@ -252,6 +261,7 @@
       ]
     },
     "expected": [
+      "horror",
       "folklore-horror"
     ]
   },
@@ -275,9 +285,7 @@
       ],
       "originalLanguage": "ja"
     },
-    "expected": [
-      "anime"
-    ]
+    "expected": []
   },
   {
     "name": "Western animation",
@@ -325,9 +333,7 @@
         "anime"
       ]
     },
-    "expected": [
-      "anime"
-    ]
+    "expected": []
   },
   {
     "name": "Comedy adventure",
@@ -337,10 +343,7 @@
         12
       ]
     },
-    "expected": [
-      "comedy",
-      "adventure"
-    ]
+    "expected": []
   },
   {
     "name": "Uncategorized drama",
@@ -359,7 +362,9 @@
       ],
       "keywords": null
     },
-    "expected": []
+    "expected": [
+      "horror"
+    ]
   },
   {
     "name": "Figurative monster",
@@ -369,7 +374,9 @@
       ],
       "description": "Чудовищный поступок превращает жизнь семьи в кошмар."
     },
-    "expected": []
+    "expected": [
+      "horror"
+    ]
   },
   {
     "name": "Explicit Russian body horror",
@@ -380,6 +387,7 @@
       "description": "Телесный хоррор о преображении человека."
     },
     "expected": [
+      "horror",
       "body-horror"
     ]
   },
@@ -391,7 +399,9 @@
       ],
       "description": "Это не body horror."
     },
-    "expected": []
+    "expected": [
+      "horror"
+    ]
   },
   {
     "name": "Not a body horror",
@@ -401,7 +411,9 @@
       ],
       "description": "Not a body horror."
     },
-    "expected": []
+    "expected": [
+      "horror"
+    ]
   },
   {
     "name": "Incidental keyword substring",
@@ -413,7 +425,9 @@
         "monster truck"
       ]
     },
-    "expected": []
+    "expected": [
+      "horror"
+    ]
   },
   {
     "name": "Japanese live action",

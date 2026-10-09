@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { films, selectFilms } from './app.js';
-test('filters combine category, duration and genre',()=>{assert.deepEqual(selectFilms({mood:'comedy',genre:'Комедия',duration:100}).map(f=>f.id),[2]);assert.equal(selectFilms({mood:'creature-horror',duration:100}).length,0);});
+test('filters combine category, duration and genre',()=>{assert.deepEqual(selectFilms({mood:'dystopian',genre:'Боевик',duration:130}).map(f=>f.id),[9]);assert.equal(selectFilms({mood:'creature-horror',duration:100}).length,0);});
 test('search accepts Russian, original title and director',()=>{assert.equal(selectFilms({query:'  АМЕЛИ  '})[0].id,8);assert.equal(selectFilms({query:'arrival'})[0].id,7);assert.deepEqual(selectFilms({query:'Вильнёв'}).map(f=>f.id),[3,7]);});
 test('saved films respect the other filters',()=>{assert.deepEqual(selectFilms({savedOnly:true,saved:[1,9],mood:'dystopian'}).map(f=>f.id),[9]);assert.equal(selectFilms({savedOnly:true}).length,0);});
 test('catalog has unique IDs and usable metadata',()=>{assert.equal(new Set(films.map(f=>f.id)).size,films.length);for(const f of films){assert.ok(f.description&&f.original&&Array.isArray(f.moods));assert.ok(f.minutes>0&&f.rating>0&&f.rating<=10);}});

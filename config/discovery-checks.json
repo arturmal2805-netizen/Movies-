@@ -1,0 +1,144 @@
+[
+  {
+    "name": "1999 horror excluded",
+    "movie": {
+      "year": 1999,
+      "genreIds": [
+        27
+      ]
+    },
+    "expected": false
+  },
+  {
+    "name": "2000 boundary horror allowed",
+    "movie": {
+      "year": 2000,
+      "genreIds": [
+        27
+      ]
+    },
+    "expected": true
+  },
+  {
+    "name": "modern drama excluded",
+    "movie": {
+      "year": 2024,
+      "genreIds": [
+        18
+      ]
+    },
+    "expected": false
+  },
+  {
+    "name": "modern action excluded",
+    "movie": {
+      "year": 2024,
+      "genreIds": [
+        28
+      ]
+    },
+    "expected": false
+  },
+  {
+    "name": "modern romance excluded",
+    "movie": {
+      "year": 2024,
+      "genreIds": [
+        10749
+      ]
+    },
+    "expected": false
+  },
+  {
+    "name": "horror drama romance action retained",
+    "movie": {
+      "year": 2024,
+      "genreIds": [
+        27,
+        18,
+        28,
+        10749
+      ]
+    },
+    "expected": true
+  },
+  {
+    "name": "dystopian drama retained",
+    "movie": {
+      "year": 2024,
+      "genreIds": [
+        18,
+        878
+      ],
+      "keywords": [
+        "dystopia"
+      ]
+    },
+    "expected": true
+  },
+  {
+    "name": "science fiction drama without dystopia excluded",
+    "movie": {
+      "year": 2024,
+      "genreIds": [
+        18,
+        878
+      ]
+    },
+    "expected": false
+  },
+  {
+    "name": "documentary horror always excluded",
+    "movie": {
+      "year": 2024,
+      "genreIds": [
+        27,
+        99
+      ]
+    },
+    "expected": false
+  },
+  {
+    "name": "documentary dystopian always excluded",
+    "movie": {
+      "year": 2024,
+      "genreIds": [
+        99,
+        878
+      ],
+      "keywords": [
+        "dystopia"
+      ]
+    },
+    "expected": false
+  },
+  {
+    "name": "unclassified science fiction retained",
+    "movie": {
+      "year": 2024,
+      "genreIds": [
+        878
+      ]
+    },
+    "expected": true
+  },
+  {
+    "name": "unknown year excluded",
+    "movie": {
+      "year": null,
+      "genreIds": [
+        27
+      ]
+    },
+    "expected": false
+  },
+  {
+    "name": "label documentary excluded",
+    "movie": {
+      "year": 2024,
+      "genreIds": [],
+      "genre": "Документальное"
+    },
+    "expected": false
+  }
+]

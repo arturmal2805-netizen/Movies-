@@ -14,3 +14,19 @@ test('generic sequel tag cannot overrule taste or cause unrelated matches',()=>{
 test('explicit horror preference ranks horror first before ratings exist',()=>{
  const horror={genreIds:[27]},comedy={genreIds:[35]};assert.ok(tasteScore(horror,new Map())>tasteScore(comedy,new Map()));
 });
+
+test('rejecting unrelated horror does not erase a strong body horror preference',()=>{
+ const liked={id:1,genreIds:[27],keywords:['body horror','mutation'],director:'Body Director'};
+ const rejected=Array.from({length:8},(_,i)=>({id:i+2,genreIds:[27],keywords:['ghost','haunted house'],director:'Ghost Director'}));
+ const reactions={1:{impression:'like',plot:10,cinematography:10},...Object.fromEntries(rejected.map(f=>[f.id,{impression:'dislike',plot:1,cinematography:1}]))};
+ const profile=buildTasteProfile([liked,...rejected],reactions);
+ assert.ok(tasteScore(liked,profile)>1);assert.ok(tasteScore(liked,profile)>tasteScore(rejected[0],profile));
+});
+test('unscored neutral ratings do not dilute preferences and neighbor search is bounded',()=>{
+ const films=Array.from({length:100},(_,i)=>({id:i+1,genreIds:[27],keywords:['body horror']}));
+ const positive={1:{impression:'like'}};
+ const neutral={...positive,...Object.fromEntries(films.slice(1).map(f=>[f.id,{impression:'neutral'}]))};
+ assert.equal(tasteScore(films[0],buildTasteProfile(films,positive)),tasteScore(films[0],buildTasteProfile(films,neutral)));
+ const all=Object.fromEntries(films.map(f=>[f.id,{impression:'like',ratedAt:new Date(2026,0,f.id).toISOString()}]));
+ assert.equal(buildTasteProfile(films,all).anchors.length,60);
+});

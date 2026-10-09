@@ -3,7 +3,7 @@ import json, math, re
 from pathlib import Path
 from collections import defaultdict
 RULES=json.loads((Path(__file__).resolve().parents[1]/'config/category-rules.json').read_text())
-ORDER=[*RULES['known'],'comedy','adventure','anime']
+ORDER=['horror',*RULES['known']]
 GENERIC={'based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','woman director'}
 
 def normalize(value):return re.sub(r'\s+',' ',re.sub('[-_]',' ',str(value or '').lower())).strip()
@@ -32,16 +32,12 @@ def classify(movie):
  for category,known in RULES['known'].items():
   if movie.get('tmdbId',movie.get('id')) in known:found.add(category);continue
   if category!='dystopian' and not horror:continue
-  hit=bool(words.intersection(RULES['keywords'][category]))
+  hit=bool(words.intersection(RULES['keywords'][category])) or any(all(term in words for term in group) for group in RULES.get('keyword_groups',{}).get(category,[]))
   for term in RULES['phrases'][category]:
    match=re.search(r'(?<!\w)'+re.escape(term)+r'(?!\w)',description)
    if match and not re.search(r'(?:not(?: a)?|не)\s*$',description[max(0,match.start()-8):match.start()]):hit=True
   if hit:found.add(category)
- if 35 in ids or movie.get('genre')=='Комедия':found.add('comedy')
- if 12 in ids or movie.get('genre')=='Приключения':found.add('adventure')
- lang=movie.get('originalLanguage',movie.get('original_language'))
- countries=movie.get('productionCountries') or [c.get('iso_3166_1') for c in movie.get('production_countries') or [] if isinstance(c,dict)]
- if movie.get('genre')=='Аниме' or 16 in ids and (lang=='ja' or 'anime' in words or not lang and 'JP' in countries):found.add('anime')
+ if horror or any(c!='dystopian' for c in found):found.add('horror')
  return [c for c in ORDER if c in found]
 
 def features(movie):
@@ -58,15 +54,37 @@ def rating_signal(row):
  adjustment=(sum(values)/len(values)-5.5)/4.5 if values else 0
  return sign*.8+adjustment*.2
 
+class TasteProfile(dict):
+ def __init__(self,*args,anchors=()):super().__init__(*args);self.anchors=anchors
+
 def profile(ratings):
- sums=defaultdict(float);counts=defaultdict(int)
+ sums=defaultdict(float);counts=defaultdict(int);anchors=[]
  for row in ratings:
   signal=rating_signal(row)
-  for key,share in features(row.get('metadata') or {}).items():sums[key]+=signal*share;counts[key]+=1
- return {key:value/(counts[key]+2) for key,value in sums.items()}
+  if not signal:continue
+  vector=features(row.get('metadata') or {})
+  anchors.append((signal,vector,row.get('updated_at') or row.get('ratedAt') or ''))
+  for key,share in vector.items():sums[key]+=signal*share;counts[key]+=1
+ return TasteProfile({key:value/(counts[key]+2) for key,value in sums.items()},anchors=[(signal,vector,sum(share*importance(key) for key,share in vector.items())) for signal,vector,_ in sorted(anchors,key=lambda a:a[2],reverse=True)[:60]])
 
-IMPORTANCE={'genre':3,'category':4,'keyword':4,'director':2}
-def match_score(movie,taste):return sum(taste.get(key,0)*share*IMPORTANCE[key[0]] for key,share in features(movie).items())
+IMPORTANCE={'genre':1,'category':5,'keyword':4,'director':2}
+def importance(key):return .5 if key==('category','horror') else IMPORTANCE[key[0]]
+
+def nearby_score(vector,anchors):
+ # Weighted Jaccard: shared horror alone is weak evidence; specific themes/directors matter more.
+ matches=[];candidate_total=sum(share*importance(key) for key,share in vector.items())
+ for signal,anchor,anchor_total in anchors:
+  shared=sum(min(vector[key],share)*importance(key) for key,share in anchor.items() if key in vector)
+  total=candidate_total+anchor_total-shared
+  similarity=shared/total if total else 0
+  if similarity>=.12:matches.append((similarity,signal))
+ matches=sorted(matches,key=lambda pair:pair[0],reverse=True)[:6]
+ return sum(sim*signal for sim,signal in matches)/(1.5+sum(sim for sim,_ in matches))
+
+def match_score(movie,taste):
+ vector=features(movie)
+ return sum(taste.get(key,0)*share*importance(key) for key,share in vector.items())+nearby_score(vector,getattr(taste,'anchors',()))*2
+
 
 def feature_metadata(detail):
  rows=[k for k in keywords(detail) if isinstance(k,dict) and isinstance(k.get('name'),str) and type(k.get('id')) is int]
@@ -74,3 +92,15 @@ def feature_metadata(detail):
          'director':director(detail),'originalLanguage':detail.get('original_language',''),
          'productionCountries':[c['iso_3166_1'] for c in detail.get('production_countries') or [] if isinstance(c,dict) and isinstance(c.get('iso_3166_1'),str)],
          'moods':classify(detail),'featureVersion':2}
+
+
+def eligible_for_discovery(movie):
+ policy=RULES['selection']
+ try:year=int(movie.get('year') or str(movie.get('release_date',''))[:4])
+ except (TypeError,ValueError):return False
+ if year<policy['minimum_year']:return False
+ ids=set(genres(movie));label={'Документальный':99,'Документальное':99,'Documentary':99,'Мелодрама':10749,'Романтика':10749,'Romance':10749,'Драма':18,'Drama':18,'Боевик':28,'Action':28}.get(movie.get('genre'))
+ if label:ids.add(label)
+ if ids.intersection(policy['always_excluded_genres']):return False
+ target=bool(set(classify(movie)).intersection(('horror','dystopian'))) or movie.get('_discovery_category')=='dystopian'
+ return not ids.intersection(policy['excluded_genres']) or policy['allow_target_mixed_genres'] and target

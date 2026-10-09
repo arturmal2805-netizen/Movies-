@@ -3,7 +3,7 @@ import os,json,datetime,urllib.request,urllib.parse,math,time,base64,threading,c
 from concurrent.futures import Future,ThreadPoolExecutor
 from pathlib import Path
 from recommendation_sources import discover,hourly_limit,detail_path
-from movie_features import profile,match_score,genres,keywords,director,classify,normalize,feature_metadata
+from movie_features import profile,match_score,genres,keywords,director,classify,normalize,feature_metadata,eligible_for_discovery
 from import_catalog import IDS
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 
@@ -11,7 +11,7 @@ def taste(ratings):return {value:weight for (kind,value),weight in profile(ratin
 
 def valid_candidate(movie,minimum_votes,today):
  if not isinstance(movie,dict) or type(movie.get('id')) is not int or movie['id']<=0:return False
- if movie.get('adult') or not movie.get('poster_path') or 99 in genres(movie):return False
+ if movie.get('adult') or not movie.get('poster_path') or not eligible_for_discovery(movie):return False
  try:
   released=datetime.date.fromisoformat(movie.get('release_date',''))
   count=float(movie.get('vote_count',0));rating=float(movie.get('vote_average',0));popularity=float(movie.get('popularity',0))
@@ -27,13 +27,15 @@ def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None):
   # Shrink low-vote perfect scores; taste is bounded so common genres cannot drown out specific themes.
   quality=(float(movie['vote_average'])*count+6.5*500)/(count+500)
   value=match_score(movie,tastes)*5+quality*.4+min(8,math.log1p(max(0,float(movie.get('popularity',0)))))*.1
-  if 27 in genres(movie):value+=5
+  categories=classify(movie)
+  if 'horror' in categories or 'dystopian' in categories or movie.get('_discovery_category')=='dystopian':value+=5
   favorite=sorted((g for g in genres(movie) if tastes.get(('genre',g),0)>0),key=lambda g:tastes[('genre',g)],reverse=True)
   themes=sorted((normalize(k if isinstance(k,str) else k.get('name')) for k in keywords(movie) if tastes.get(('keyword',normalize(k if isinstance(k,str) else k.get('name'))),0)>0),key=lambda name:tastes[('keyword',name)],reverse=True)
   reason='Совпадает с вашими оценками: '+', '.join(GENRES.get(g,'Жанр') for g in favorite[:2])+'.' if favorite else 'Для знакомства с новым жанром; учтены оценки и популярность TMDB.'
   if themes:reason+=' Близкие темы: '+', '.join(themes[:2])+'.'
   if not ratings:reason='Стартовая рекомендация по оценкам TMDB. После ваших оценок подбор станет персональным.'
-  if 27 in genres(movie):reason='Приоритет хоррорам. '+reason
+  if 'horror' in categories:reason='Приоритет хоррорам. '+reason
+  elif 'dystopian' in categories:reason='Приоритет антиутопиям. '+reason
   ranked.append((value,movie,reason))
  return sorted(ranked,key=lambda entry:(-entry[0],entry[1]['id']))
 
@@ -191,14 +193,14 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
   return 0
  uid=user['user_id'];ratings=read_rows(b,'ratings?user_id=eq.'+uid+'&select=*&order=tmdb_id');collection=read_rows(b,'collection?user_id=eq.'+uid+'&select=*&order=tmdb_id')
  enrich_history(b,uid,ratings,collection,config)
- weights=taste(ratings);preferred=sorted((g for g,v in weights.items() if v>0),key=lambda g:weights[g],reverse=True)[:3]
+ weights=taste(ratings);preferred=sorted((g for g,v in weights.items() if v>0 and g in (27,53,878)),key=lambda g:weights[g],reverse=True)[:3]
  tastes=profile(ratings);keyword_ids={}
  for row in ratings:
   metadata=row.get('metadata') or {}
   for name,kid in zip(metadata.get('keywords') or [],metadata.get('keywordIds') or []):
    weight=tastes.get(('keyword',normalize(name)),0)
    if type(kid) is int and kid>0 and weight>0:keyword_ids[kid]=weight
- search_config=dict(config,_now=now,_excluded_ids={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values()),_preferred_keywords=sorted(keyword_ids,key=keyword_ids.get,reverse=True)[:2])
+ search_config=dict(config,_now=now,_page_seed=(int(request_id.replace('-','')[-8:],16) if request_id else len(collection)) if manual else 0,_excluded_ids={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values()),_preferred_keywords=sorted(keyword_ids,key=keyword_ids.get,reverse=True)[:2])
  candidates,statuses=discover(b,preferred,search_config)
  print('Discovery:',json.dumps(statuses))
  ranked=rank_candidates(candidates,ratings,collection,config['minimum_votes'],now)
@@ -218,14 +220,15 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
   movie=entry[1]
   try:
    detail=b.movie(detail_path(movie['id']))
-   if not valid_candidate(detail,config['minimum_votes'],now.date()) or detail['id']!=movie['id'] or not detail.get('title') or type(detail.get('runtime')) not in (int,float) or detail['runtime']<=0:return None
-   return dict(detail,genre_ids=genres(detail),discovery_sources=movie.get('discovery_sources',[]))
-  except Exception:return None
+   if not valid_candidate(detail,config['minimum_votes'],now.date()) or detail['id']!=movie['id'] or not detail.get('title') or type(detail.get('runtime')) not in (int,float) or detail['runtime']<=0:return None,True
+   return dict(detail,genre_ids=genres(detail),discovery_sources=movie.get('discovery_sources',[])),True
+  except Exception:return None,False
  # Enrich a shortlist in parallel, then rerank with themes, subgenres and directors.
  # A bounded shortlist avoids spending API quotas on every discovered film.
  shortlist=ranked[:min(180,max(budget*3,budget+8))]
- with ThreadPoolExecutor(max_workers=config.get('detail_workers',4)) as executor:details=[d for d in executor.map(hydrate,shortlist) if d]
- if shortlist and not details:raise RequestFailure('Candidate metadata unavailable; retry next run')
+ with ThreadPoolExecutor(max_workers=config.get('detail_workers',4)) as executor:hydrated=list(executor.map(hydrate,shortlist))
+ details=[detail for detail,_ in hydrated if detail]
+ if shortlist and not any(fetched for _,fetched in hydrated):raise RequestFailure('Candidate metadata unavailable; retry next run')
  final=diverse_candidates(rank_candidates(details,ratings,collection,config['minimum_votes'],now))
  print('Enriched candidates:',len(details),'target:',budget)
  added=0

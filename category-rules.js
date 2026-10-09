@@ -107,5 +107,56 @@ export const categoryRules = {
       "фолк хоррор",
       "фольклорный хоррор"
     ]
+  },
+  "selection": {
+    "minimum_year": 2000,
+    "excluded_genres": [
+      99,
+      10749,
+      18,
+      28
+    ],
+    "always_excluded_genres": [
+      99
+    ],
+    "allow_target_mixed_genres": true
+  },
+  "keyword_groups": {
+    "creature-horror": [
+      [
+        "alien",
+        "creature feature"
+      ]
+    ],
+    "psychological-horror": [
+      [
+        "paranoia",
+        "hallucination"
+      ],
+      [
+        "psychological",
+        "horror"
+      ]
+    ],
+    "body-horror": [
+      [
+        "mutation",
+        "body mutilation"
+      ],
+      [
+        "body transformation",
+        "horror"
+      ]
+    ],
+    "folklore-horror": [
+      [
+        "ritual",
+        "paganism"
+      ],
+      [
+        "cult",
+        "folk horror"
+      ]
+    ]
   }
 };
