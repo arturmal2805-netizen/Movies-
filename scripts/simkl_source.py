@@ -24,8 +24,8 @@ def entries(value):
 
 
 def credential_url(value):
-    return 'https://api.simkl.com/ratings?' + urllib.parse.urlencode(
-        {'tmdb': 157336, 'type': 'movie', 'fields': 'simkl', 'client_id': client_id(value)})
+    return 'https://api.simkl.com/movies/tt0816692?' + urllib.parse.urlencode(
+        {'client_id': client_id(value), 'app-name': 'Nightshift', 'app-version': '1.0'})
 
 
 def auth_diagnostic(error):
@@ -46,11 +46,10 @@ def auth_diagnostic(error):
 def api_requirements(spec):
     """Public documentation summary; fetched without any app credentials."""
     paths = spec.get('paths', {})
-    get = paths.get('/ratings', {}).get('get', {})
-    if not get:
-        get = next((v['get'] for k, v in paths.items() if 'ratings' in k and isinstance(v, dict) and 'get' in v), {})
-    if not get: return {'ratingsOperationFound': False, 'documentKeys': list(spec)[:15]}
-    return {'security': get.get('security', spec.get('security', [])),
-            'parameters': [{'name': p.get('name'), 'in': p.get('in'), 'required': p.get('required', False), 'description': p.get('description', '')[:800]} for p in get.get('parameters', [])],
+    get = paths.get('/movies/{id}', {}).get('get', {})
+    if not get: return {'movieOperationFound': False, 'moviePaths': [k for k in paths if 'movies' in k][:15]}
+    params = [spec.get('components', {}).get('parameters', {}).get(p.get('$ref','').rsplit('/',1)[-1], p) for p in get.get('parameters', [])]
+    return {'endpoint': '/movies/{id}', 'security': get.get('security', spec.get('security', [])),
+            'parameters': [{'name': p.get('name'), 'in': p.get('in'), 'required': p.get('required', False), 'description': p.get('description', '')[:800]} for p in params],
             'description': get.get('description', '')[:2500],
             'securitySchemes': {k: {'type': v.get('type'), 'scheme': v.get('scheme'), 'name': v.get('name'), 'in': v.get('in')} for k, v in spec.get('components', {}).get('securitySchemes', {}).items()}}

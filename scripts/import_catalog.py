@@ -138,14 +138,14 @@ def refresh(snapshot, request=get_json, environ=None, now=None):
     if key.strip():
         try:
             value = request(credential_url(key), dict(HEADERS, **{'simkl-api-key': client_id(key)}))
-            if not isinstance(value, dict) or type(value.get('id')) is not int or value['id'] <= 0 or not isinstance(value.get('simkl'), dict) or value.get('error'):
+            if not isinstance(value, dict) or not isinstance(value.get('ids'), dict) or value['ids'].get('imdb') != 'tt0816692' or value.get('error'):
                 raise ValueError('Invalid SIMKL credential response')
             state['credentialStatus'] = 'ok'
         except Exception as error:
             if isinstance(error, urllib.error.HTTPError): state['credentialHttpStatus'] = error.code
             state['credentialDiagnostic'] = auth_diagnostic(error)
     # Inspect current API contracts separately from frozen Apiary documentation.
-    if state.get('credentialHttpStatus') == 401 and not state.get('apiRequirements'):
+    if state.get('apiRequirements', {}).get('endpoint') != '/movies/{id}':
         try:
             state['apiRequirements'] = api_requirements(request('https://api.simkl.org/openapi.json', HEADERS))
             state['apiDocumentationStatus'] = 'loaded'

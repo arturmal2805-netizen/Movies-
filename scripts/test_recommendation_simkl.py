@@ -17,7 +17,7 @@ class SimklTests(unittest.TestCase):
         self.assertNotIn('private-secret', str(result))
 
     def test_current_docs_expose_required_auth_and_app_fields(self):
-        result = api_requirements({'paths': {'/ratings': {'get': {'security': [{'bearerAuth': []}], 'parameters': [{'name': 'app-name', 'in': 'query', 'required': True}]}}}})
+        result = api_requirements({'paths': {'/movies/{id}': {'get': {'security': [{'bearerAuth': []}], 'parameters': [{'name': 'app-name', 'in': 'query', 'required': True}]}}}})
         self.assertEqual(result['parameters'][0]['name'], 'app-name')
         self.assertEqual(result['security'], [{'bearerAuth': []}])
 
@@ -57,11 +57,14 @@ class SimklTests(unittest.TestCase):
         def request(url, headers):
             calls.append(url)
             if url != FEED_URL: self.assertEqual(headers['simkl-api-key'], 'abcdef')
-            return [] if url == FEED_URL else {'id': 123, 'simkl': {'rating': 8}}
+            if url.endswith('openapi.json'): return {}
+            return [] if url == FEED_URL else {'ids': {'imdb': 'tt0816692', 'simkl': 123}}
         result = refresh({}, request=request, environ={'SIMKL_CLIENT_ID': ' abc\ndef '})
         state = result['sources']['simkl']
         self.assertEqual((state['status'], state['credentialStatus']), ('ok', 'ok'))
-        self.assertEqual(urllib.parse.parse_qs(urllib.parse.urlparse(calls[-1]).query)['client_id'], ['abcdef'])
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(next(url for url in calls if '/movies/' in url and '?' in url)).query)
+        self.assertEqual(query['client_id'], ['abcdef'])
+        self.assertEqual(query['app-name'], ['Nightshift'])
         self.assertNotIn('abcdef', str(result))
 
     def test_bad_client_id_does_not_disable_public_feed(self):
