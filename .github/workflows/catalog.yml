@@ -1,6 +1,13 @@
 name: Refresh movie sources
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - '*.js'
+      - 'style.css'
+      - '.github/workflows/catalog.yml'
   schedule:
     - cron: '17 * * * *'
 permissions:
