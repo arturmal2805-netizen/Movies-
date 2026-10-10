@@ -77,7 +77,7 @@ def profile(ratings):
  weights={key:.25*sums[key]/(counts[key]+2)+.75*(sums[key]-baseline*shares[key])/(counts[key]+4) for key in sums}
  result=TasteProfile(weights,anchors=[(signal,vector,sum(share*importance(key) for key,share in vector.items())) for signal,vector,_ in anchors])
  result.contrast_weights=weights
- positive=defaultdict(float);negative=defaultdict(float);positive_count=negative_count=0;examples=[]
+ positive=defaultdict(float);negative=defaultdict(float);positive_support=defaultdict(int);positive_count=negative_count=0;examples=[]
  for row in ratings:
   label=row.get('impression')
   if label not in ('like','dislike'):continue
@@ -85,13 +85,19 @@ def profile(ratings):
   else:negative_count+=1;counts_by_class=negative
   vector=predictive_features(row.get('metadata') or {})
   examples.append((margin_features(vector),label=='like'))
-  for key,share in vector.items():counts_by_class[key]+=share
- # Class-normalized, Laplace-smoothed log odds. A user's many rejections must not
- # overwhelm the smaller positive class. Neutral ratings are not negative labels.
+  for key,share in vector.items():
+   counts_by_class[key]+=share
+   if label=='like':positive_support[key]+=1
+ # Class-normalized log odds with a two-observation empirical prior.
+ # Equal +1 pseudocounts can reward tags seen only in rejected movies when
+ # classes are imbalanced. Split prior mass by the user's actual class ratio.
+ # Unobserved evidence is neutral; negative-only evidence is always negative.
  result.predictive=positive_count>=3 and negative_count>=3 and positive_count+negative_count>=20
  if result.predictive:
-  result.balanced_weights={key:math.log((positive[key]+1)/(positive_count+2))-math.log((negative[key]+1)/(negative_count+2)) for key in positive.keys()|negative.keys()}
+  total=positive_count+negative_count;positive_prior=2*positive_count/total;negative_prior=2*negative_count/total
+  result.balanced_weights={key:math.log((positive[key]+positive_prior)/(positive_count+positive_prior))-math.log((negative[key]+negative_prior)/(negative_count+negative_prior)) for key in positive.keys()|negative.keys()}
   learned,result.bias=fit_margin(examples);result.clear();result.update(learned)
+ result.positive_support=dict(positive_support)
  result.training_count=positive_count+negative_count;result.positive_count=positive_count;result.negative_count=negative_count
  result.model_version=MODEL_VERSION if result.predictive else 'contrast-fallback'
  return result
@@ -140,9 +146,8 @@ def rejection_score(movie,taste):
 
 def match_score(movie,taste):
  if not getattr(taste,'predictive',False):return contrast_score(movie,taste)
- # Blend selected on earlier chronological folds for top-10 performance.
- # The independent classifier controls rejection; optimistic frequency weights
- # cannot override that gate or become explanations/search seeds on their own.
+ # Keep ranking and rejection distinct. Frequency evidence uses the empirical
+ # prior, while the classifier controls acceptance and search seeds.
  return .25*rejection_score(movie,taste)+.75*balanced_score(movie,taste)
 
 

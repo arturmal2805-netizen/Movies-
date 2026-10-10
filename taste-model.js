@@ -1,5 +1,5 @@
 // Deterministic balanced logistic regression with L2; mirrors scripts/taste_model.py.
-export const tasteModelVersion='linear-taste31';
+export const tasteModelVersion='empirical-taste32';
 const scales={genre:1,category:.5,keyword:1,director:1,language:.5,period:.5};
 export const marginFeatures=vector=>vector.map(([key,value,kind])=>[key,value*scales[kind],kind]);
 export function fitMargin(examples,iterations=240){

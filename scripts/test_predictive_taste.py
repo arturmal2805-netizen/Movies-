@@ -50,7 +50,7 @@ class PredictiveTasteTests(unittest.TestCase):
   for row in rows[-3:]:row['metadata']['keywords']=['rejected topic']
   self.assertLess(profile(rows)[('keyword','rejected topic')],0)
 
- def test_optimistic_frequency_score_cannot_override_rejection_gate(self):
+ def test_negative_only_rare_tags_are_penalties_and_cannot_override_rejection_gate(self):
   from movie_features import rejection_score
   from recommend import rank_candidates
   from test_recommendation_pipeline import movie,NOW
@@ -58,6 +58,27 @@ class PredictiveTasteTests(unittest.TestCase):
   for i,row in enumerate(rows[10:34]):row['metadata']['keywords']=['haunted house',f'rare label {i}']
   candidate=dict(movie(901),genres=[{'id':27}],genre_ids=[27],original_language='es',keywords=['haunted house']+[f'rare label {i}' for i in range(24)])
   model=profile(rows)
-  self.assertGreater(match_score(candidate,model),0)
+  self.assertLess(match_score(candidate,model),0)
+  self.assertTrue(all(model.balanced_weights[('keyword',f'rare label {i}')]<0 for i in range(24)))
   self.assertLess(rejection_score(candidate,model),-.8)
   self.assertEqual(rank_candidates([candidate],rows,[],now=NOW,tastes=model),[])
+
+ def test_empirical_prior_handles_both_imbalance_directions(self):
+  for like_count in (3,97):
+   rows=[{'impression':'like' if i<like_count else 'dislike','metadata':{'genreIds':[27],'keywords':['shared']}} for i in range(100)]
+   rows[0]['metadata']['keywords'].append('only liked')
+   rows[-1]['metadata']['keywords'].append('only rejected')
+   model=profile(rows)
+   self.assertGreater(model.balanced_weights[('keyword','only liked')],0)
+   self.assertLess(model.balanced_weights[('keyword','only rejected')],0)
+   self.assertAlmostEqual(model.balanced_weights[('genre',27)],0)
+
+ def test_explanation_needs_repeated_positive_evidence_and_positive_lift(self):
+  from recommend import supported_preference
+  model=profile(history());key=('keyword','haunted house')
+  model[key]=.8 # A conditional coefficient alone cannot justify a preference.
+  self.assertFalse(supported_preference(model,key))
+  model.positive_support[key]=2
+  self.assertFalse(supported_preference(model,key))
+  model.balanced_weights[key]=.2
+  self.assertTrue(supported_preference(model,key))

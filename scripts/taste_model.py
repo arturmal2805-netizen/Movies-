@@ -2,7 +2,7 @@
 import math
 from collections import Counter
 
-MODEL_VERSION='linear-taste31'
+MODEL_VERSION='empirical-taste32'
 SCALES={'genre':1,'category':.5,'keyword':1,'director':1,'language':.5,'period':.5}
 
 def margin_features(vector):return {key:share*SCALES[key[0]] for key,share in vector.items()}

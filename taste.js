@@ -1,6 +1,6 @@
-import {filmCategories} from './categories.js?v=linear-taste31';
+import {filmCategories} from './categories.js?v=empirical-taste32';
 import {normalizeRating} from './ratings.js';
-import {fitMargin,marginFeatures,tasteModelVersion} from './taste-model.js?v=linear-taste31';
+import {fitMargin,marginFeatures,tasteModelVersion} from './taste-model.js?v=empirical-taste32';
 const generic=new Set(['based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','woman director']);
 const normalize=value=>String(value||'').toLocaleLowerCase('ru').replace(/[-_]/g,' ').replace(/\s+/g,' ').trim();
 export function tasteFeatures(film){
@@ -32,7 +32,7 @@ export function buildTasteProfile(films,reactions){
  const positive=new Map(),negative=new Map(),examples=[];let positiveCount=0,negativeCount=0;
  for(const film of films){const label=normalizeRating(reactions[film.id])?.impression;if(label!=='like'&&label!=='dislike')continue;const counts=label==='like'?positive:negative;if(label==='like')positiveCount++;else negativeCount++;const vector=predictiveFeatures(film);examples.push([marginFeatures(vector),label==='like']);for(const [key,share] of vector)counts.set(key,(counts.get(key)||0)+share);}
  profile.predictive=positiveCount>=3&&negativeCount>=3&&positiveCount+negativeCount>=20;
- if(profile.predictive){profile.balancedWeights=new Map([...new Set([...positive.keys(),...negative.keys()])].map(key=>[key,Math.log(((positive.get(key)||0)+1)/(positiveCount+2))-Math.log(((negative.get(key)||0)+1)/(negativeCount+2))]));const trained=fitMargin(examples);profile.clear();for(const [key,value] of trained.weights)profile.set(key,value);profile.bias=trained.bias;}
+ if(profile.predictive){const total=positiveCount+negativeCount,positivePrior=2*positiveCount/total,negativePrior=2*negativeCount/total;profile.balancedWeights=new Map([...new Set([...positive.keys(),...negative.keys()])].map(key=>[key,Math.log(((positive.get(key)||0)+positivePrior)/(positiveCount+positivePrior))-Math.log(((negative.get(key)||0)+negativePrior)/(negativeCount+negativePrior))]));const trained=fitMargin(examples);profile.clear();for(const [key,value] of trained.weights)profile.set(key,value);profile.bias=trained.bias;}
  profile.modelVersion=profile.predictive?tasteModelVersion:'contrast-fallback';
 
  cachedProfiles.set(reactions,{signature,profile});return profile;

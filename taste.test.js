@@ -61,9 +61,9 @@ test('cached taste retrains after in-place rating and metadata changes',()=>{
  films[1].keywords=['mutation'];assert.notEqual(buildTasteProfile(films,reactions),updated);
 });
 
-test('optimistic rare-tag frequency cannot override the separate rejection score',()=>{
+test('negative-only rare tags are penalized and cannot override rejection',()=>{
  const films=Array.from({length:100},(_,i)=>({id:i+1,genreIds:[27],year:2020,originalLanguage:i<10?'en':'es',keywords:i<10?['alien lifeform']:i<34?['haunted house',`rare label ${i-10}`]:['haunted house']}));
  const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<10?'like':'dislike'}]));
  const p=buildTasteProfile(films,reactions),candidate={genreIds:[27],year:2020,originalLanguage:'es',keywords:['haunted house',...Array.from({length:24},(_,i)=>`rare label ${i}`)]};
- assert.ok(tasteScore(candidate,p)>1);assert.ok(tasteAcceptanceScore(candidate,p)<-.8);
+ assert.ok(tasteScore(candidate,p)<1);for(let i=0;i<24;i++)assert.ok(p.balancedWeights.get(`keyword:rare label ${i}`)<0);assert.ok(tasteAcceptanceScore(candidate,p)<-.8);
 });

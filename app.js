@@ -1,9 +1,9 @@
-import {installMobileFeed} from './mobile-feed.js?v=linear-taste31';
-import {categoryOptions,filmCategories,isEligibleForDiscovery} from './categories.js?v=linear-taste31';
-import {buildTasteProfile,tasteScore,tasteAcceptanceScore} from './taste.js?v=linear-taste31';
+import {installMobileFeed} from './mobile-feed.js?v=empirical-taste32';
+import {categoryOptions,filmCategories,isEligibleForDiscovery} from './categories.js?v=empirical-taste32';
+import {buildTasteProfile,tasteScore,tasteAcceptanceScore} from './taste.js?v=empirical-taste32';
 import {ManualRecommendations} from './manual-recommendations.js';
 import {kyivTime,recentRecommendations,nextRecommendationRun} from './time.js';
-import {ServerStore} from './server.js?v=linear-taste31';
+import {ServerStore} from './server.js?v=empirical-taste32';
 import {normalizeRating,isArchived,worstRating,bestRating,neutralRating,ratingLabel} from './ratings.js?v=swipe-touch24';
 import {cardRule,sourceDefinitions,sourceState,hasCompleteMetadata} from './sources.js';
 export const films = [

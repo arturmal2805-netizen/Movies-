@@ -84,7 +84,7 @@ class RefillTests(unittest.TestCase):
   self.assertEqual(training.call_count,1)
   self.assertEqual(search.call_count,2)
   self.assertTrue(all(row['tmdb_id']>=700000 for row in backend.collection))
-  self.assertTrue(all(row['metadata']['recommendationModel']=='linear-taste31' for row in backend.collection))
+  self.assertTrue(all(row['metadata']['recommendationModel']=='empirical-taste32' for row in backend.collection))
   self.assertTrue(all('recommendationScore' in row['metadata'] for row in backend.collection))
 
  def test_search_rotates_twelve_positive_anchors_before_deeper_pages(self):

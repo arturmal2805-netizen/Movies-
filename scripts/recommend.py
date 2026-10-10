@@ -22,9 +22,15 @@ def preferred_keyword_seeds(ratings,tastes):
   for name,kid in zip(metadata.get('keywords') or [],metadata.get('keywordIds') or []):
    name=normalize(name if isinstance(name,str) else name.get('name'))
    weight=tastes.get(('keyword',name),0)
-   if tastes.predictive and positive_support.get(name,0)<2:continue
+   if tastes.predictive and (positive_support.get(name,0)<2 or tastes.balanced_weights.get(('keyword',name),0)<=0):continue
    if type(kid) is int and kid>0 and weight>0:keyword_ids[kid]=weight
  return sorted(keyword_ids,key=lambda kid:(-keyword_ids[kid],kid))[:2]
+
+def supported_preference(tastes,key):
+ if tastes.get(key,0)<=0:return False
+ if not tastes.predictive:return True
+ return tastes.positive_support.get(key,0)>=2 and tastes.balanced_weights.get(key,0)>0
+
 
 def valid_candidate(movie,minimum_votes,today,require_target=None):
  if not isinstance(movie,dict) or type(movie.get('id')) is not int or movie['id']<=0:return False
@@ -50,7 +56,7 @@ def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None,pre
   categories=classify(movie)
   if 'horror' in categories or 'dystopian' in categories or movie.get('_discovery_category')=='dystopian':value+=5
   favorite=sorted((g for g in genres(movie) if tastes.get(('genre',g),0)>0),key=lambda g:tastes[('genre',g)],reverse=True)
-  themes=sorted((normalize(k if isinstance(k,str) else k.get('name')) for k in keywords(movie) if tastes.get(('keyword',normalize(k if isinstance(k,str) else k.get('name'))),0)>0),key=lambda name:tastes[('keyword',name)],reverse=True)
+  themes=sorted((normalize(k if isinstance(k,str) else k.get('name')) for k in keywords(movie) if supported_preference(tastes,('keyword',normalize(k if isinstance(k,str) else k.get('name'))))),key=lambda name:tastes[('keyword',name)],reverse=True)
   reason='Совпадает с вашими оценками: '+', '.join(GENRES.get(g,'Жанр') for g in favorite[:2])+'.' if favorite else 'Для знакомства с новым жанром; учтены оценки и популярность TMDB.'
   if themes:reason='По вашим оценкам подходят темы: '+', '.join(themes[:2])+'.'
   elif personal<=0 and ratings:reason='Слабое совпадение с оценками; кандидат для изучения вкуса.'
