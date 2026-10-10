@@ -96,7 +96,8 @@ class PersonalizedDiscoveryTests(unittest.TestCase):
   discover(backend,[],config)
   paths=[c.args[0] for c in backend.movie.call_args_list if c.args[0].startswith('discover/movie?')]
   self.assertEqual(len(paths),21)
-  for path in paths[:12]:
+  # Every learned theme is probed first, then pages share the request budget.
+  for path in paths[:4]:
    query=parse_qs(urlsplit(path).query);self.assertIn(int(query['with_keywords'][0]),[101,102,103,104]);self.assertEqual(query['with_genres'],['27'])
 
  def test_translated_director_is_resolved_from_two_verified_liked_film_credits(self):

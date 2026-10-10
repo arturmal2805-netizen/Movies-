@@ -80,9 +80,42 @@ def tmdb_candidates(backend, preferred, config):
     strategies=[{'sort_by':'popularity.desc','with_genres':27,'with_keywords':keyword} for keyword in config.get('_preferred_keywords',[])[:4]]+strategies
     count=config.get('pages',2);window=max(count,min(20,config.get('page_window',20)))
     slot=int((now.timestamp()-17*60)//3600)+config.get('_page_seed',0)
-    # Keep page 1 for fresh hits; rotate deeper pages so an exhausted first page is not the whole catalog.
-    pages=[1]+[2+(slot*(count-1)+i)%(window-1) for i in range(count-1)]
-    paths=['discover/movie?'+urllib.parse.urlencode(dict(query,**strategy,page=page)) for strategy in strategies for page in pages][:24]
+    # Probe every strategy before spending the request budget on deeper pages.
+    # TMDB supplies the real page count: a fixed first-20-page window becomes
+    # exhausted after hundreds of ratings. Keep a per-run ledger across refills.
+    probes=['discover/movie?'+urllib.parse.urlencode(dict(query,**strategy,page=1)) for strategy in strategies]
+    ledger=config.get('_discovery_pages',{})
+    def probe(path):
+        try:
+            data=backend.movie(path)
+            return data if isinstance(data,dict) and isinstance(data.get('results'),list) else None
+        except Exception:return None
+    with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
+        probed=list(executor.map(probe,probes))
+    paths=[];initial=[];page_options=[]
+    for path,data in zip(probes,probed):
+        seen=ledger.setdefault(path,set())
+        if 1 not in seen:
+            rows=None if data is None else data['results']
+            if rows is not None and urllib.parse.parse_qs(urllib.parse.urlsplit(path).query).get('with_keywords')==['4565']:
+                rows=[dict(m,_discovery_category='dystopian') if isinstance(m,dict) else m for m in rows]
+            initial.append(rows);seen.add(1)
+        total=data.get('total_pages',window) if data else window
+        total=max(1,min(500,total)) if type(total) is int else window
+        options=[]
+        for offset in range(max(0,total-1)):
+            page=2+(slot*max(1,count-1)+offset)%(total-1)
+            if page not in seen:options.append(page)
+            if len(options)>=count-1:break
+        page_options.append(options)
+    # Round-robin allocation ensures learned keyword queries cannot crowd out
+    # broad horror/dystopia discovery under the 24-request ceiling.
+    for depth in range(count-1):
+        for path,options in zip(probes,page_options):
+            if len(probes)+len(paths)>=24:break
+            if depth<len(options):
+                page=options[depth];ledger[path].add(page)
+                paths.append(path.rsplit('page=',1)[0]+'page='+str(page))
     seeds=[mid for mid in config.get('_preferred_movie_ids',[])[:12] if type(mid) is int and mid>0]
     groups=max(1,(len(seeds)+5)//6);search_round=config.get('_search_round',0);start=6*(search_round%groups)
     paths.extend('movie/'+str(mid)+'/recommendations?language=ru-RU&page='+str(1+search_round//groups) for mid in seeds[start:start+6])
@@ -97,12 +130,12 @@ def tmdb_candidates(backend, preferred, config):
             return rows
         except Exception:return None
     with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
-        results=list(executor.map(fetch,paths))
+        results=initial+list(executor.map(fetch,paths))
     pool=[m for result in results if isinstance(result,list) for m in result
           if isinstance(m,dict) and not excluded(config,m.get('id'))]
     names=config.get('_preferred_directors',[])
     if names and search_round==0:pool.extend(director_candidates(backend,names,config))
-    if all(result is None for result in results) and not pool:raise RuntimeError('TMDB discovery unavailable')
+    if all(data is None for data in probed) and all(result is None for result in results) and not pool:raise RuntimeError('TMDB discovery unavailable')
     return pool
 
 
@@ -173,7 +206,7 @@ def discover(backend, preferred, config):
             continue
         name = source['id']
         try:
-            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _search_round=config.get('_search_round',0), _preferred_movie_ids=config.get('_preferred_movie_ids',[]), _preferred_keywords=config.get('_preferred_keywords',[]), _preferred_directors=config.get('_preferred_directors',[]), _director_anchor_ids=config.get('_director_anchor_ids',{}), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
+            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _search_round=config.get('_search_round',0), _preferred_movie_ids=config.get('_preferred_movie_ids',[]), _preferred_keywords=config.get('_preferred_keywords',[]), _preferred_directors=config.get('_preferred_directors',[]), _director_anchor_ids=config.get('_director_anchor_ids',{}), _discovery_pages=config.get('_discovery_pages',{}), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
             valid = [m for m in candidates if isinstance(m,dict) and type(m.get('id')) is int and m['id'] > 0 and not excluded(config,m['id'])]
             for movie in valid:
                 mid = movie['id']

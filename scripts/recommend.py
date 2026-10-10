@@ -272,6 +272,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
  preferred_movies=liked_movie_seeds(ratings,limit=12 if manual and tastes.predictive else 6,rotation=seed_rotation)
  preferred_directors=preferred_director_seeds(ratings,tastes)
  search_config=dict(config,_preferred_movie_ids=preferred_movies,_preferred_directors=preferred_directors,_director_anchor_ids=director_anchor_ids(ratings,preferred_directors),_now=now,_page_seed=(int(request_id.replace('-','')[-8:],16) if request_id else len(collection)) if manual else 0,_excluded_ids={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values()),_preferred_keywords=preferred_keyword_seeds(ratings,tastes))
+ search_config['_discovery_pages']={}
  candidates,statuses=discover(b,preferred,search_config)
  print('Discovery:',json.dumps(statuses))
  ranked=rank_candidates(candidates,ratings,collection,config['minimum_votes'],now,preliminary=True,tastes=tastes)
@@ -297,6 +298,8 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
  # Coarse discover results lack keywords/countries: filter taste only after canonical enrichment.
  # Exhaust the current pool before rotating pages; never fill a batch with rejected movies.
  attempted=set();details={};fetched_any=False;final=[]
+ search_unavailable=any(s.get('source')=='tmdb' and s.get('status')=='failed' for s in statuses)
+ metadata_failures=0
  detail_limit=config.get('detail_candidate_limit',240)
  quality_pool=min(detail_limit,config.get('manual_quality_pool',160)) if manual and tastes.predictive else 0
  rounds=config.get('search_rounds',3)
@@ -312,6 +315,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
     extra,statuses=discover(b,preferred,followup)
    except Exception:
     print('Search refill unavailable; retaining verified candidates.')
+    search_unavailable=True
     break
    for candidate in extra:pool.setdefault(candidate['id'],candidate)
    print('Refill discovery:',json.dumps(statuses))
@@ -322,12 +326,14 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
    pending=pending[len(chunk):]
    attempted.update(entry[1]['id'] for entry in chunk)
    with ThreadPoolExecutor(max_workers=config.get('detail_workers',4)) as executor:hydrated=list(executor.map(hydrate,chunk))
+   metadata_failures+=sum(not fetched for _,fetched in hydrated)
    fetched_any=fetched_any or any(fetched for _,fetched in hydrated)
    details.update((detail['id'],detail) for detail,_ in hydrated if detail)
    final=diverse_candidates(rank_candidates(list(details.values()),ratings,collection,config['minimum_votes'],now,tastes=tastes))
-  print('Search pass:',search_round+1,'unique pool:',len(pool),'details attempted:',len(attempted),'canonical eligible:',len(details),'personalized eligible:',len(final),'target:',budget)
+  print('Search pass:',search_round+1,'unique pool:',len(pool),'details attempted:',len(attempted),'metadata failures:',metadata_failures,'canonical eligible:',len(details),'personalized eligible:',len(final),'target:',budget)
   if len(final)>=budget and len(attempted)>=quality_pool or len(attempted)>=detail_limit:break
  if attempted and not fetched_any:raise RequestFailure('Candidate metadata unavailable; retry next run')
+ if not final and (search_unavailable or metadata_failures):raise RequestFailure('Search incomplete: provider requests failed; retry the manual request')
  if len(final)<budget:print('Batch below target:',len(final),'of',budget,'after bounded search; excluded films are not used as filler.')
  added=0
  for _,detail,reason in final:
