@@ -36,7 +36,7 @@
   "page_window": 20,
   "history_enrichment_per_run": 80,
   "manual_batch_target": 30,
-  "search_rounds": 3,
-  "detail_candidate_limit": 360,
-  "manual_quality_pool": 160
+  "search_rounds": 4,
+  "detail_candidate_limit": 400,
+  "manual_quality_pool": 240
 }

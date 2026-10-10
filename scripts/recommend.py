@@ -1,5 +1,5 @@
 """Private recommendations stay in Supabase, never in the public Pages snapshot."""
-import os,json,datetime,urllib.request,urllib.parse,math,time,base64,threading,copy,uuid
+import os,json,hashlib,datetime,urllib.request,urllib.parse,math,time,base64,threading,copy,uuid
 from concurrent.futures import Future,ThreadPoolExecutor
 from pathlib import Path
 from recommendation_sources import discover,hourly_limit,detail_path
@@ -23,8 +23,9 @@ def preferred_keyword_seeds(ratings,tastes):
    name=normalize(name if isinstance(name,str) else name.get('name'))
    weight=tastes.get(('keyword',name),0)
    if tastes.predictive and (positive_support.get(name,0)<2 or tastes.balanced_weights.get(('keyword',name),0)<=0):continue
-   if type(kid) is int and kid>0 and weight>0:keyword_ids[kid]=weight
- return sorted(keyword_ids,key=lambda kid:(-keyword_ids[kid],kid))[:2]
+   if type(kid) is int and kid>0 and weight>0:
+    keyword_ids[kid]=tastes.balanced_weights.get(('keyword',name),0)*math.log1p(positive_support.get(name,0)) if tastes.predictive else weight
+ return sorted(keyword_ids,key=lambda kid:(-keyword_ids[kid],kid))[:4]
 
 def supported_preference(tastes,key):
  if tastes.get(key,0)<=0:return False
@@ -183,20 +184,47 @@ def parsed_time(value):
   return stamp if stamp.tzinfo else stamp.replace(tzinfo=datetime.timezone.utc)
  except (ValueError,TypeError,AttributeError):return None
 
-def liked_movie_seeds(ratings,limit=6):
+def liked_movie_seeds(ratings,limit=6,rotation=0):
  # Six near-identical favorites produce near-identical recommendation lists.
  # Keep explicit positive anchors, but cover their different themes and directors.
  rows={r['tmdb_id']:r for r in ratings if type(r.get('tmdb_id')) is int and r['tmdb_id']>0 and rating_signal(r)>.4 and eligible_for_discovery(r.get('metadata') or {})}
  selected=[];used={}
+ def select(row):
+  mid=row['tmdb_id'];selected.append(mid);rows.pop(mid)
+  for key in features(row.get('metadata') or {}):used[key]=used.get(key,0)+1
+ # Reserve a third of the anchors for recent explicit positives. Do not let
+ # keyword-rich older favorites crowd out the latest feedback.
+ recent=sorted((r for r in rows.values() if parsed_time(r.get('updated_at'))),key=lambda r:(r['updated_at'],r['tmdb_id']),reverse=True)
+ for row in recent[:min(4,max(1,limit//3),limit)]:select(row)
  def priority(row):
   vector=features(row.get('metadata') or {})
   coverage=sum(share/(1+used.get(key,0)) for key,share in vector.items() if specific_feature(key))
   stamp=parsed_time(row.get('updated_at'))
-  return rating_signal(row)*2+coverage*.25,stamp.timestamp() if stamp else 0,-row['tmdb_id']
+  rotation_bonus=int.from_bytes(hashlib.sha256(f"{rotation}:{row['tmdb_id']}".encode()).digest()[:4],'big')/2**32*.8 if rotation else 0
+  return rating_signal(row)*2+coverage*.25+rotation_bonus,stamp.timestamp() if stamp else 0,-row['tmdb_id']
  while rows and len(selected)<min(12,limit):
-  row=max(rows.values(),key=priority);mid=row['tmdb_id'];selected.append(mid);rows.pop(mid)
-  for key in features(row.get('metadata') or {}):used[key]=used.get(key,0)+1
+  select(max(rows.values(),key=priority))
  return selected
+
+def preferred_director_seeds(ratings,tastes,limit=4):
+ # Two explicit positives and positive class-normalized lift, not a guessed genre.
+ names={}
+ for row in ratings:
+  name=director(row.get('metadata') or {})
+  if row.get('impression')=='like' and isinstance(name,str) and name and ',' not in name:names[normalize(name)]=name
+ if not tastes.predictive:return []
+ keys=[key for key in names if tastes.positive_support.get(('director',key),0)>=2 and tastes.balanced_weights.get(('director',key),0)>0]
+ return [names[key] for key in sorted(keys,key=lambda key:(-tastes.balanced_weights[('director',key)],key))[:limit]]
+
+
+def director_anchor_ids(ratings,names):
+ result={name:[] for name in names}
+ for row in ratings:
+  name=director(row.get('metadata') or {})
+  if name in result and row.get('impression')=='like' and type(row.get('tmdb_id')) is int and row['tmdb_id']>0:
+   if row['tmdb_id'] not in result[name]:result[name].append(row['tmdb_id'])
+ return {name:ids[:2] for name,ids in result.items()}
+
 
 def enrich_history(b,uid,ratings,collection,config):
  # Small resumable migration: enrich rated films first, without altering ratings, saved flags or timestamps.
@@ -240,8 +268,10 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
  tastes=profile(ratings)
  weights={value:weight for (kind,value),weight in tastes.items() if kind=='genre'}
  preferred=sorted((g for g,v in weights.items() if v>0 and g in (27,53,878)),key=lambda g:weights[g],reverse=True)[:3]
- preferred_movies=liked_movie_seeds(ratings,limit=12 if manual and tastes.predictive else 6)
- search_config=dict(config,_preferred_movie_ids=preferred_movies,_now=now,_page_seed=(int(request_id.replace('-','')[-8:],16) if request_id else len(collection)) if manual else 0,_excluded_ids={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values()),_preferred_keywords=preferred_keyword_seeds(ratings,tastes))
+ seed_rotation=int(request_id.replace('-','')[-8:],16) if request_id else schedule_slot(now)
+ preferred_movies=liked_movie_seeds(ratings,limit=12 if manual and tastes.predictive else 6,rotation=seed_rotation)
+ preferred_directors=preferred_director_seeds(ratings,tastes)
+ search_config=dict(config,_preferred_movie_ids=preferred_movies,_preferred_directors=preferred_directors,_director_anchor_ids=director_anchor_ids(ratings,preferred_directors),_now=now,_page_seed=(int(request_id.replace('-','')[-8:],16) if request_id else len(collection)) if manual else 0,_excluded_ids={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values()),_preferred_keywords=preferred_keyword_seeds(ratings,tastes))
  candidates,statuses=discover(b,preferred,search_config)
  print('Discovery:',json.dumps(statuses))
  ranked=rank_candidates(candidates,ratings,collection,config['minimum_votes'],now,preliminary=True,tastes=tastes)
@@ -262,7 +292,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
   try:
    detail=b.movie(detail_path(movie['id']))
    if not valid_candidate(detail,config['minimum_votes'],now.date()) or detail['id']!=movie['id'] or not detail.get('title') or type(detail.get('runtime')) not in (int,float) or detail['runtime']<=0:return None,True
-   return dict(detail,genre_ids=genres(detail),discovery_sources=movie.get('discovery_sources',[])),True
+   return dict(detail,genre_ids=genres(detail),discovery_sources=movie.get('discovery_sources',[]),_liked_anchor_ids=movie.get('_liked_anchor_ids',[]),_liked_directors=movie.get('_liked_directors',[])),True
   except Exception:return None,False
  # Coarse discover results lack keywords/countries: filter taste only after canonical enrichment.
  # Exhaust the current pool before rotating pages; never fill a batch with rejected movies.
@@ -307,7 +337,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
   metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':director(detail),'moods':classify(detail),'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity',0),'tmdbUpdatedAt':now.isoformat()}}
   metadata['discoverySources']=movie.get('discovery_sources',[])
   metadata.update(feature_metadata(detail))
-  metadata.update(recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
+  metadata.update(recommendationSearchVersion='feedback-search33',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
   metadata['recommendationMode']='manual' if manual else 'scheduled'
   if request_id:metadata['recommendationRequestId']=request_id
   if os.environ.get('OMDB_API_KEY') and detail.get('imdb_id'):

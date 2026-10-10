@@ -4,7 +4,7 @@ import datetime
 from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
 from simkl_source import FEED_URL, HEADERS, entries
-from movie_features import genres,RULES
+from movie_features import genres,RULES,normalize
 
 def detail_path(mid):return f'movie/{mid}?language=ru-RU&append_to_response=keywords,credits'
 
@@ -45,6 +45,30 @@ def simkl_candidates(backend,preferred,config):
     return candidates
 
 
+def director_candidates(backend,names,config):
+    # Resolve exact, unambiguous public names; never infer a person's ID.
+    def fetch(name):
+        try:
+            anchors=config.get('_director_anchor_ids',{}).get(name,[])[:2]
+            if len(anchors)==2:
+                # Imported display names may be translated. Two known liked films
+                # must share exactly one credited director; no name guessing.
+                people=None
+                for mid in anchors:
+                    detail=backend.movie(detail_path(mid));crew=(detail.get('credits') or {}).get('crew',[])
+                    credited={p['id'] for p in crew if isinstance(p,dict) and p.get('job')=='Director' and type(p.get('id')) is int and p['id']>0}
+                    people=credited if people is None else people.intersection(credited)
+            else:
+                data=backend.movie('search/person?'+urllib.parse.urlencode({'query':name,'include_adult':'false','language':'ru-RU','page':1}))
+                people={p['id'] for p in data.get('results',[]) if isinstance(p,dict) and type(p.get('id')) is int and p['id']>0 and normalize(name) in {normalize(p.get('name')),normalize(p.get('original_name'))}}
+            if len(people)!=1:return []
+            credits=backend.movie('person/'+str(next(iter(people)))+'/movie_credits?language=ru-RU')
+            return [dict(m,_liked_directors=[name]) for m in credits.get('crew',[]) if isinstance(m,dict) and m.get('job')=='Director' and type(m.get('id')) is int and m['id']>0 and not excluded(config,m['id'])][:80]
+        except Exception:return []
+    with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
+        return [m for result in executor.map(fetch,names[:4]) for m in result]
+
+
 def tmdb_candidates(backend, preferred, config):
     now=config.get('_now') or datetime.datetime.now(datetime.timezone.utc)
     query={'language':'ru-RU','include_adult':'false','include_video':'false',
@@ -53,7 +77,7 @@ def tmdb_candidates(backend, preferred, config):
                 {'sort_by':'popularity.desc','with_keywords':4565}]
     # Broad sci-fi/thriller lists waste the shortlist on unrelated family/adventure films.
     strategies.extend(dict(sort_by='popularity.desc',**({'with_genres':'27,53'} if genre==53 else {'with_genres':878,'with_keywords':4565})) for genre in preferred[:3] if genre in (53,878))
-    strategies.extend({'sort_by':'popularity.desc','with_keywords':keyword} for keyword in config.get('_preferred_keywords',[])[:2])
+    strategies=[{'sort_by':'popularity.desc','with_genres':27,'with_keywords':keyword} for keyword in config.get('_preferred_keywords',[])[:4]]+strategies
     count=config.get('pages',2);window=max(count,min(20,config.get('page_window',20)))
     slot=int((now.timestamp()-17*60)//3600)+config.get('_page_seed',0)
     # Keep page 1 for fresh hits; rotate deeper pages so an exhausted first page is not the whole catalog.
@@ -67,14 +91,19 @@ def tmdb_candidates(backend, preferred, config):
             data=backend.movie(path)
             if not isinstance(data,dict) or not isinstance(data.get('results'),list):return None
             rows=data['results']
+            if path.startswith('movie/'):
+                anchor=int(path.split('/')[1]);rows=[dict(m,_liked_anchor_ids=[anchor]) if isinstance(m,dict) else m for m in rows]
             if urllib.parse.parse_qs(urllib.parse.urlsplit(path).query).get('with_keywords')==['4565']:rows=[dict(m,_discovery_category='dystopian') if isinstance(m,dict) else m for m in rows]
             return rows
         except Exception:return None
     with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
         results=list(executor.map(fetch,paths))
-    if all(result is None for result in results):raise RuntimeError('TMDB discovery unavailable')
-    return [m for result in results if isinstance(result,list) for m in result
-            if isinstance(m,dict) and not excluded(config,m.get('id'))]
+    pool=[m for result in results if isinstance(result,list) for m in result
+          if isinstance(m,dict) and not excluded(config,m.get('id'))]
+    names=config.get('_preferred_directors',[])
+    if names and search_round==0:pool.extend(director_candidates(backend,names,config))
+    if all(result is None for result in results) and not pool:raise RuntimeError('TMDB discovery unavailable')
+    return pool
 
 
 def tmdb_id_feed(backend, preferred, config):
@@ -144,12 +173,14 @@ def discover(backend, preferred, config):
             continue
         name = source['id']
         try:
-            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _search_round=config.get('_search_round',0), _preferred_movie_ids=config.get('_preferred_movie_ids',[]), _preferred_keywords=config.get('_preferred_keywords',[]), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
+            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _search_round=config.get('_search_round',0), _preferred_movie_ids=config.get('_preferred_movie_ids',[]), _preferred_keywords=config.get('_preferred_keywords',[]), _preferred_directors=config.get('_preferred_directors',[]), _director_anchor_ids=config.get('_director_anchor_ids',{}), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
             valid = [m for m in candidates if isinstance(m,dict) and type(m.get('id')) is int and m['id'] > 0 and not excluded(config,m['id'])]
             for movie in valid:
                 mid = movie['id']
                 if mid not in pool:
                     pool[mid] = dict(movie, discovery_sources=[])
+                for field in ('_liked_anchor_ids','_liked_directors'):
+                    if movie.get(field):pool[mid][field]=list(dict.fromkeys(pool[mid].get(field,[])+movie[field]))
                 if name not in pool[mid]['discovery_sources']:
                     pool[mid]['discovery_sources'].append(name)
             statuses.append({'source': name, 'status': 'ok', 'candidates': len({m['id'] for m in valid})})

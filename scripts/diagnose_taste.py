@@ -33,7 +33,7 @@ def legacy_score(movie,rows):
  nearest=sorted(matches,reverse=True)[:6]
  return sum(sums[key]/(counts[key]+2)*share*importance(key) for key,share in vector.items())+2*sum(sim*signal for sim,signal in nearest)/(1.5+sum(sim for sim,_ in nearest))
 
-def prior_frequency_score(movie,rows):
+def prior_frequency_weights(rows):
  # Frozen equal-pseudocount baseline; keep diagnostics comparable after upgrades.
  positive=collections.defaultdict(float);negative=collections.defaultdict(float);p=n=0
  for row in rows:
@@ -42,7 +42,10 @@ def prior_frequency_score(movie,rows):
   if label=='like':p+=1;counts=positive
   else:n+=1;counts=negative
   for key,share in predictive_features(row.get('metadata') or {}).items():counts[key]+=share
- weights={key:math.log((positive[key]+1)/(p+2))-math.log((negative[key]+1)/(n+2)) for key in positive.keys()|negative.keys()}
+ return {key:math.log((positive[key]+1)/(p+2))-math.log((negative[key]+1)/(n+2)) for key in positive.keys()|negative.keys()}
+
+def prior_frequency_score(movie,rows,weights=None):
+ weights=prior_frequency_weights(rows) if weights is None else weights
  vector=predictive_features(movie)
  return 3*sum(weights.get(key,0)*share*importance(key) for key,share in vector.items())/max(1,sum(share*importance(key) for key,share in vector.items()))
 
@@ -52,14 +55,14 @@ def evaluation(rows):
  decisive=[r for r in rows if r.get('impression') in ('like','dislike')]
  if len(decisive)<20:return {'status':'insufficient_decisive_ratings'}
  decisive=sorted(decisive,key=lambda r:(str(r.get('updated_at') or ''),r.get('tmdb_id',0)))
- split=int(len(decisive)*.8);train=decisive[:split];test=decisive[split:];model=profile(train)
+ split=int(len(decisive)*.8);train=decisive[:split];test=decisive[split:];model=profile(train);old_weights=prior_frequency_weights(train)
  def metrics(score):
   predictions=[(score(r.get('metadata') or {}),r['impression']=='like') for r in test]
   positive=[s for s,y in predictions if y];negative=[s for s,y in predictions if not y]
   auc=sum(1 if p>n else .5 if p==n else 0 for p in positive for n in negative)/(len(positive)*len(negative)) if positive and negative else None
   top=sorted(predictions,key=lambda prediction:prediction[0],reverse=True)[:min(10,len(predictions))]
   return {'pairwise_auc':round(auc,4) if auc is not None else None,'precision_at_10':round(sum(y for _,y in top)/len(top),4)}
- return {'status':'evaluated','split':'chronological_80_20' if all(r.get('updated_at') for r in decisive) else 'stable_id_fallback_80_20','training_count':len(train),'held_out_count':len(test),'held_out_like_rate':round(sum(r['impression']=='like' for r in test)/len(test),4),'previous':metrics(lambda movie:legacy_score(movie,train)),'previous_full_history':metrics(lambda movie:contrast_score(movie,model)),'previous_balanced':metrics(lambda movie:prior_frequency_score(movie,train)),'current':metrics(lambda movie:match_score(movie,model))}
+ return {'status':'evaluated','split':'chronological_80_20' if all(r.get('updated_at') for r in decisive) else 'stable_id_fallback_80_20','training_count':len(train),'held_out_count':len(test),'held_out_like_rate':round(sum(r['impression']=='like' for r in test)/len(test),4),'previous':metrics(lambda movie:legacy_score(movie,train)),'previous_full_history':metrics(lambda movie:contrast_score(movie,model)),'previous_balanced':metrics(lambda movie:prior_frequency_score(movie,train,old_weights)),'current':metrics(lambda movie:match_score(movie,model))}
 
 def validate_rows(rows):
  if not isinstance(rows,list) or any(not isinstance(r,dict) for r in rows):raise ValueError('Expected a JSON array of ratings')
@@ -80,15 +83,16 @@ def compare_exports(previous,current):
  seen={r['tmdb_id']:r for r in previous}
  fresh=[r for r in current if r['tmdb_id'] not in seen]
  test=[r for r in fresh if r.get('impression') in ('like','dislike') and eligible_for_discovery(r.get('metadata') or {})]
- model=profile(previous);predictions=[(match_score(r['metadata'],model),r['impression']=='like',rejection_score(r['metadata'],model)) for r in test]
+ model=profile(previous);old_weights=prior_frequency_weights(previous);predictions=[(match_score(r['metadata'],model),r['impression']=='like',rejection_score(r['metadata'],model)) for r in test]
  positives=[s for s,y,_ in predictions if y];negatives=[s for s,y,_ in predictions if not y]
  ordered=sorted(predictions,key=lambda p:p[0],reverse=True)
- prior=[(.25*rejection_score(r['metadata'],model)+.75*prior_frequency_score(r['metadata'],previous),r['impression']=='like') for r in test]
+ prior=[(.25*rejection_score(r['metadata'],model)+.75*prior_frequency_score(r['metadata'],previous,old_weights),r['impression']=='like') for r in test]
  prior_pos=[s for s,y in prior if y];prior_neg=[s for s,y in prior if not y]
  return {'previous_count':len(previous),'current_count':len(current),'new_count':len(fresh),
          'new_impressions':dict(collections.Counter(r.get('impression') for r in fresh)),
          'changed_existing_count':sum(r!=seen[r['tmdb_id']] for r in current if r['tmdb_id'] in seen),
          'actual_model_versions':dict(collections.Counter((r.get('metadata') or {}).get('recommendationModel','not_recorded') for r in fresh)),
+         'actual_search_versions':dict(collections.Counter((r.get('metadata') or {}).get('recommendationSearchVersion','not_recorded') for r in fresh)),
          'held_out_count':len(test),'held_out_like_count':len(positives),'training_count':model.training_count,
          'prior_likes_at_10':sum(y for _,y in sorted(prior,reverse=True)[:10]),
          'prior_pairwise_auc':sum((a>b)+.5*(a==b) for a in prior_pos for b in prior_neg)/(len(prior_pos)*len(prior_neg)) if prior_pos and prior_neg else None,
