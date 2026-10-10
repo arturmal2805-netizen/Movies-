@@ -1,135 +1,135 @@
 {
   "schemaVersion": 1,
-  "checkedAt": "2026-10-10T17:26:25.128698+00:00",
+  "checkedAt": "2026-10-10T18:31:07.109740+00:00",
   "films": {
     "1": {
       "poster": "https://image.tmdb.org/t/p/w500/yQvGrMoipbRoddT0ZR8tPoR7NfX.jpg",
       "popularity": 64.9027,
-      "tmdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00",
+      "tmdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00",
       "tmdbId": 157336,
       "imdbId": "tt0816692",
       "imdb": 8.7,
-      "imdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00"
+      "imdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00"
     },
     "2": {
       "poster": "https://image.tmdb.org/t/p/w500/eWdyYQreja6JGCzqHWXpWHDrrPo.jpg",
       "popularity": 25.4721,
-      "tmdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00",
+      "tmdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00",
       "tmdbId": 120467,
       "imdbId": "tt2278388",
       "imdb": 8.1,
-      "imdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00"
+      "imdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00"
     },
     "3": {
       "poster": "https://image.tmdb.org/t/p/w500/6izwz7rsy95ARzTR3poZ8H6c5pp.jpg",
       "popularity": 61.1287,
-      "tmdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00",
+      "tmdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00",
       "tmdbId": 693134,
       "imdbId": "tt15239678",
       "imdb": 8.4,
-      "imdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00"
+      "imdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00"
     },
     "4": {
       "poster": "https://image.tmdb.org/t/p/w500/uDO8zWDhfWwoFdKS4fzkUJt0Rf0.jpg",
       "popularity": 29.2198,
-      "tmdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00",
+      "tmdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00",
       "tmdbId": 313369,
       "imdbId": "tt3783958",
       "imdb": 8.0,
-      "imdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00"
+      "imdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00"
     },
     "5": {
       "poster": "https://image.tmdb.org/t/p/w500/pThyQovXQrw2m0s9x82twj48Jq4.jpg",
       "popularity": 27.8046,
-      "tmdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00",
+      "tmdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00",
       "tmdbId": 546554,
       "imdbId": "tt8946378",
       "imdb": 7.9,
-      "imdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00"
+      "imdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00"
     },
     "6": {
       "poster": "https://image.tmdb.org/t/p/w500/hm58Jw4Lw8OIeECIq5qyPYhAeRJ.jpg",
       "popularity": 22.5367,
-      "tmdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00",
+      "tmdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00",
       "tmdbId": 508442,
       "imdbId": "tt2948372",
       "imdb": 8.0,
-      "imdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00"
+      "imdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00"
     },
     "7": {
       "poster": "https://image.tmdb.org/t/p/w500/pEzNVQfdzYDzVK0XqxERIw2x2se.jpg",
       "popularity": 26.3804,
-      "tmdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00",
+      "tmdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00",
       "tmdbId": 329865,
       "imdbId": "tt2543164",
       "imdb": 7.9,
-      "imdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00"
+      "imdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00"
     },
     "8": {
       "poster": "https://image.tmdb.org/t/p/w500/nSxDa3M9aMvGVLoItzWTepQ5h5d.jpg",
       "popularity": 20.5689,
-      "tmdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00",
+      "tmdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00",
       "tmdbId": 194,
       "imdbId": "tt0211915",
       "imdb": 8.2,
-      "imdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00"
+      "imdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00"
     },
     "9": {
       "poster": "https://image.tmdb.org/t/p/w500/ulcAi4dKpAjHwYGS08vNyx9H6I9.jpg",
       "popularity": 54.2562,
-      "tmdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00",
+      "tmdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00",
       "tmdbId": 76341,
       "imdbId": "tt1392190",
       "imdb": 8.1,
-      "imdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00"
+      "imdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00"
     },
     "10": {
       "poster": "https://image.tmdb.org/t/p/w500/AuJ1ZlfqwuAr9H5Qr1U9KILylse.jpg",
       "popularity": 6.3257,
-      "tmdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00",
+      "tmdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00",
       "tmdbId": 370755,
       "imdbId": "tt5247022",
       "imdb": 7.3,
-      "imdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00"
+      "imdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00"
     },
     "11": {
       "poster": "https://image.tmdb.org/t/p/w500/vN5B5WgYscRGcQpVhHl6p9DDTP0.jpg",
       "popularity": 39.615,
-      "tmdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00",
+      "tmdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00",
       "tmdbId": 105,
       "imdbId": "tt0088763",
       "imdb": 8.5,
-      "imdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00"
+      "imdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00"
     },
     "12": {
       "poster": "https://image.tmdb.org/t/p/w500/kf1Jb1c2JAOqjuzA3H4oDM263uB.jpg",
       "popularity": 16.9545,
-      "tmdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00",
+      "tmdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00",
       "tmdbId": 76,
       "imdbId": "tt0112471",
       "imdb": 8.1,
-      "imdbUpdatedAt": "2026-10-10T17:26:25.128698+00:00"
+      "imdbUpdatedAt": "2026-10-10T18:31:07.109740+00:00"
     }
   },
   "sources": {
     "tmdb": {
       "status": "ok",
-      "lastAttempt": "2026-10-10T17:26:25.128698+00:00",
+      "lastAttempt": "2026-10-10T18:31:07.109740+00:00",
       "imported": 12,
       "failed": 0,
-      "lastSuccess": "2026-10-10T17:26:25.128698+00:00"
+      "lastSuccess": "2026-10-10T18:31:07.109740+00:00"
     },
     "imdb": {
       "status": "ok",
-      "lastAttempt": "2026-10-10T17:26:25.128698+00:00",
+      "lastAttempt": "2026-10-10T18:31:07.109740+00:00",
       "imported": 12,
       "failed": 0,
-      "lastSuccess": "2026-10-10T17:26:25.128698+00:00"
+      "lastSuccess": "2026-10-10T18:31:07.109740+00:00"
     },
     "trakt": {
       "status": "ok",
-      "lastAttempt": "2026-10-10T17:26:25.128698+00:00",
-      "lastSuccess": "2026-10-10T17:26:25.128698+00:00",
+      "lastAttempt": "2026-10-10T18:31:07.109740+00:00",
+      "lastSuccess": "2026-10-10T18:31:07.109740+00:00",
       "baselineDiagnostic": {
         "httpStatus": 403,
         "category": "access_forbidden",
@@ -139,8 +139,8 @@
     },
     "simkl": {
       "status": "ok",
-      "lastAttempt": "2026-10-10T17:26:25.128698+00:00",
-      "lastSuccess": "2026-10-10T17:26:25.128698+00:00",
+      "lastAttempt": "2026-10-10T18:31:07.109740+00:00",
+      "lastSuccess": "2026-10-10T18:31:07.109740+00:00",
       "available": 100,
       "apiRequirements": {
         "endpoint": "/movies/{id}",
