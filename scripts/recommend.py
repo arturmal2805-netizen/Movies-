@@ -5,6 +5,7 @@ from pathlib import Path
 from recommendation_sources import discover,hourly_limit,detail_path
 from movie_features import profile,match_score,rejection_score,genres,keywords,director,classify,normalize,feature_metadata,eligible_for_discovery,rating_signal,features,specific_feature
 from import_catalog import IDS
+from selection_quality import selection_floor
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 
 def taste(ratings):return {value:weight for (kind,value),weight in profile(ratings).items() if kind=='genre'}
@@ -53,6 +54,7 @@ def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None,pre
   quality=(float(movie['vote_average'])*count+6.5*500)/(count+500)
   personal=match_score(movie,tastes)
   if not preliminary and informative>=20 and rejection_score(movie,tastes)<-.8:continue
+  if not preliminary and getattr(tastes,'selection_floor',None) is not None and personal<tastes.selection_floor:continue
   value=personal*5+quality*(.03 if tastes.predictive else .4)+min(8,math.log1p(max(0,float(movie.get('popularity',0)))))*(.01 if tastes.predictive else .1)
   categories=classify(movie)
   if 'horror' in categories or 'dystopian' in categories or movie.get('_discovery_category')=='dystopian':value+=5
@@ -266,6 +268,8 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
  uid=user['user_id'];ratings=read_rows(b,'ratings?user_id=eq.'+uid+'&select=*&order=tmdb_id');collection=read_rows(b,'collection?user_id=eq.'+uid+'&select=*&order=tmdb_id')
  enrich_history(b,uid,ratings,collection,config)
  tastes=profile(ratings)
+ tastes.selection_floor=selection_floor(ratings)
+ print('Personal selection floor:',round(tastes.selection_floor,4) if tastes.selection_floor is not None else 'insufficient chronological evidence')
  weights={value:weight for (kind,value),weight in tastes.items() if kind=='genre'}
  preferred=sorted((g for g,v in weights.items() if v>0 and g in (27,53,878)),key=lambda g:weights[g],reverse=True)[:3]
  seed_rotation=int(request_id.replace('-','')[-8:],16) if request_id else schedule_slot(now)
@@ -345,6 +349,8 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
   metadata.update(feature_metadata(detail))
   metadata.update(recommendationSearchVersion='feedback-search33',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
   metadata['recommendationMode']='manual' if manual else 'scheduled'
+  metadata['recommendationSelectionFloor']=tastes.selection_floor
+  metadata['recommendationSelectionVersion']='calibrated-admission35'
   if request_id:metadata['recommendationRequestId']=request_id
   if os.environ.get('OMDB_API_KEY') and detail.get('imdb_id'):
    try:
