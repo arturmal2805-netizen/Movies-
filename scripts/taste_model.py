@@ -2,12 +2,12 @@
 import math
 from collections import Counter
 
-MODEL_VERSION='reliability-aware38'
-SCALES={'genre':1,'category':.5,'keyword':1,'director':1,'language':.5,'period':.5,'quality':.5}
+MODEL_VERSION='synopsis-aware40'
+SCALES={'genre':1,'category':.5,'keyword':1,'director':1,'language':.5,'period':.5,'quality':.5,'reach':.5}
 
 def margin_features(vector):return {key:share*SCALES[key[0]] for key,share in vector.items()}
 
-def fit_margin(examples,iterations=240):
+def fit_margin(examples,iterations=240,regularization=1):
  """Balanced logistic loss + L2 on coefficients and intercept (C=1).
 
  Drop features occurring in fewer than three distinct rated films. Accelerated
@@ -18,7 +18,7 @@ def fit_margin(examples,iterations=240):
  index={key:i for i,key in enumerate(keys)};positive=sum(label for _,label in examples);negative=len(examples)-positive
  if not positive or not negative:return {},0
  rows=[([(index[key],value) for key,value in vector.items() if key in index],label,.5/(positive if label else negative)) for vector,label in examples]
- ridge=1/len(rows);rate=1/(.25*max(1+sum(v*v for _,v in vector) for vector,_,_ in rows)+ridge)
+ ridge=1/(regularization*len(rows));rate=1/(.25*max(1+sum(v*v for _,v in vector) for vector,_,_ in rows)+ridge)
  weights=[0.]*(len(keys)+1);look=weights[:];momentum=1.
  for _ in range(iterations):
   gradient=[ridge*w for w in look]

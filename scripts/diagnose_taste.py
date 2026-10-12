@@ -41,12 +41,12 @@ def prior_frequency_weights(rows):
   if label not in ('like','dislike'):continue
   if label=='like':p+=1;counts=positive
   else:n+=1;counts=negative
-  for key,share in predictive_features(row.get('metadata') or {},include_quality=False).items():counts[key]+=share
+  for key,share in predictive_features(row.get('metadata') or {},include_quality=False,include_reach=False).items():counts[key]+=share
  return {key:math.log((positive[key]+1)/(p+2))-math.log((negative[key]+1)/(n+2)) for key in positive.keys()|negative.keys()}
 
 def prior_frequency_score(movie,rows,weights=None):
  weights=prior_frequency_weights(rows) if weights is None else weights
- vector=predictive_features(movie,include_quality=False)
+ vector=predictive_features(movie,include_quality=False,include_reach=False)
  return 3*sum(weights.get(key,0)*share*importance(key) for key,share in vector.items())/max(1,sum(share*importance(key) for key,share in vector.items()))
 
 

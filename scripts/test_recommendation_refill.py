@@ -65,7 +65,7 @@ class RefillTests(unittest.TestCase):
   self.assertEqual(backend.collection[0]['metadata']['keywords'],['body horror'])
 
  def test_full_manual_pipeline_sends_the_positive_rating_as_search_seed(self):
-  backend=FakeBackend();backend.ratings=[{'tmdb_id':600001,'impression':'like','metadata':{'title':'Liked','year':2020,'genreIds':[27],'keywords':[],'productionCountries':['US'],'originalLanguage':'en','featureVersion':2}}]
+  backend=FakeBackend();backend.ratings=[{'tmdb_id':600001,'impression':'like','metadata':{'title':'Liked','year':2020,'genreIds':[27],'keywords':[],'productionCountries':['US'],'originalLanguage':'en','featureVersion':2,'description':'A horror plot','remoteMetrics':{'popularity':10}}}]
   with patch('recommend.discover',return_value=([],[])) as search:
    recommend_user(backend,{'user_id':'test'},NOW,load_config(),manual=True)
   self.assertEqual(search.call_args_list[0].args[2]['_preferred_movie_ids'],[600001])
@@ -84,7 +84,7 @@ class RefillTests(unittest.TestCase):
   self.assertEqual(training.call_count,1)
   self.assertEqual(search.call_count,2)
   self.assertTrue(all(row['tmdb_id']>=700000 for row in backend.collection))
-  self.assertTrue(all(row['metadata']['recommendationModel']=='reliability-aware38' for row in backend.collection))
+  self.assertTrue(all(row['metadata']['recommendationModel']=='synopsis-aware40' for row in backend.collection))
   self.assertTrue(all('recommendationScore' in row['metadata'] for row in backend.collection))
 
  def test_search_rotates_twelve_positive_anchors_before_deeper_pages(self):

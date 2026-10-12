@@ -7,6 +7,7 @@ from pathlib import Path
 from recommendation_sources import discover,hourly_limit,detail_path
 from movie_features import profile,match_score,rejection_score,genres,keywords,director,classify,normalize,feature_metadata,eligible_for_discovery,rating_signal,features,specific_feature,GENERIC
 from import_catalog import IDS
+from synopsis_model import synopsis_score
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 SEARCH_GENERIC=GENERIC|{'spin off','prequel','reboot','franchise','based on short film','based on play or musical'}
 
@@ -107,11 +108,12 @@ def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None,pre
  return sorted(ranked,key=lambda entry:(-entry[0],entry[1]['id']))
 
 def diverse_candidates(ranked):
- # Gentle batch diversity: do not fill the whole hour with the same main genre.
+ # Diversity breaks close matches. An accumulating penalty must not override
+ # personal evidence late in a batch or reward irrelevant mixed genres.
  remaining=list(ranked);used={};result=[]
  while remaining and len(result)<100:
   def priority(entry):
-   ids=genres(entry[1]);penalty=sum(used.get(g,0) for g in ids)/max(1,len(ids))*.12
+   ids=genres(entry[1]);penalty=min(.6,sum(used.get(g,0) for g in ids)/max(1,len(ids))*.12)
    return entry[0]-penalty,-entry[1]['id']
   index=max(range(len(remaining)),key=lambda i:priority(remaining[i]));entry=remaining.pop(index);result.append(entry)
   for genre in genres(entry[1]):used[genre]=used.get(genre,0)+1
@@ -311,7 +313,12 @@ def enrich_history(b,uid,ratings,collection,config):
  for table,rows in [('ratings',ratings),('collection',collection)]:
   for row in rows:
    metadata=row.get('metadata')
-   if not isinstance(metadata,dict) or not metadata.get('title') or metadata.get('featureVersion')==2 and all(key in metadata for key in ('keywords','productionCountries','originalLanguage')):continue
+   if not isinstance(metadata,dict) or not metadata.get('title'):continue
+   metrics=metadata.get('remoteMetrics') or {};metrics=metrics if isinstance(metrics,dict) else {}
+   pop=metadata.get('popularity');pop=metrics.get('popularity') if pop is None else pop
+   story=metadata.get('description') or metadata.get('overview')
+   context_complete=(isinstance(story,str) and bool(story.strip()) or metadata.get('synopsisChecked')) and (type(pop) in (int,float) and math.isfinite(pop) and pop>=0 or metadata.get('reachChecked'))
+   if metadata.get('featureVersion')==2 and all(key in metadata for key in ('keywords','productionCountries','originalLanguage')) and context_complete:continue
    mid=row.get('tmdb_id')
    if type(mid) is int and mid>0:pending.setdefault(mid,[]).append((table,row))
  selected=list(pending)[:config.get('history_enrichment_per_run',12)]
@@ -328,6 +335,16 @@ def enrich_history(b,uid,ratings,collection,config):
   extra=feature_metadata(detail)
   for table,row in pending[mid]:
    metadata=dict(row['metadata'],**extra)
+   if not (isinstance(metadata.get('description') or metadata.get('overview'),str) and (metadata.get('description') or metadata.get('overview')).strip()):
+    if isinstance(detail.get('overview'),str):metadata['description']=detail['overview']
+   metadata['synopsisChecked']=True;metadata['reachChecked']=True
+   metrics=metadata.get('remoteMetrics');metrics=dict(metrics) if isinstance(metrics,dict) else {}
+   pop=metadata.get('popularity');pop=metrics.get('popularity') if pop is None else pop
+   if not (type(pop) in (int,float) and math.isfinite(pop) and pop>=0):
+    canonical_pop=detail.get('popularity')
+    if type(canonical_pop) in (int,float) and math.isfinite(canonical_pop) and canonical_pop>=0:metrics['popularity']=canonical_pop
+   if type(detail.get('vote_count')) is int and detail['vote_count']>=0:metrics['voteCount']=detail['vote_count']
+   if metrics:metadata['remoteMetrics']=metrics
    if row['metadata'].get('director') and not metadata['director']:metadata['director']=row['metadata']['director']
    try:
     b.db(table+'?user_id=eq.'+uid+'&tmdb_id=eq.'+str(mid),'PATCH',{'metadata':metadata})
@@ -433,17 +450,19 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
   if added>=budget:break
   movie=detail
   fid=10000000+detail['id'];genre_ids=genres(detail)
-  metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':director(detail),'moods':classify(detail),'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity',0),'tmdbUpdatedAt':now.isoformat()}}
+  metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':director(detail),'moods':classify(detail),'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'synopsisChecked':True,'reachChecked':True,'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity'),'voteCount':detail.get('vote_count'),'tmdbUpdatedAt':now.isoformat()}}
   metadata['discoverySources']=movie.get('discovery_sources',[])
   metadata.update(feature_metadata(detail))
-  metadata.update(recommendationSearchVersion='personal-routes39',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
+  metadata.update(recommendationSearchVersion='story-search40',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
+  metadata['recommendationSynopsisScore']=round(.25*synopsis_score(detail,tastes.synopsis_model),6)
+  metadata['recommendationSynopsisDocuments']=tastes.synopsis_model.get('document_count',0)
   metadata['recommendationPersonalRoutes']=detail.get('_personal_routes',[])
   metadata['recommendationThemeGroups']=detail.get('_matched_theme_groups',[])
   metadata['recommendationAnchorCount']=len(preferred_movies)
   metadata['recommendationAnchorCoverage']=len(search_config['_anchor_coverage'])
   metadata['recommendationCandidateCount']=len(pool)
   metadata['recommendationMode']='manual' if manual else 'scheduled'
-  metadata['recommendationSelectionVersion']='reliability-aware38'
+  metadata['recommendationSelectionVersion']='synopsis-aware40'
   metadata['recommendationVerifiedPoolSize']=len(details)
   metadata['recommendationSearchPasses']=search_round+1
   metadata['recommendationFit']='positive' if match_score(detail,tastes)>0 else 'weak'
