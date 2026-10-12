@@ -84,15 +84,23 @@ def tmdb_candidates(backend, preferred, config):
                 {'sort_by':'popularity.desc','with_keywords':4565}]
     # Broad sci-fi/thriller lists waste the shortlist on unrelated family/adventure films.
     strategies.extend(dict(sort_by='popularity.desc',**({'with_genres':'27,53'} if genre==53 else {'with_genres':878,'with_keywords':4565})) for genre in preferred[:3] if genre in (53,878))
-    strategies=[{'sort_by':'popularity.desc','with_genres':27,'with_keywords':keyword} for keyword in config.get('_preferred_keywords',[])[:4]]+strategies
+    keyword_seeds=config.get('_preferred_keywords',[])[:12]
+    keyword_groups=max(1,(len(keyword_seeds)+3)//4)
+    keyword_start=4*(config.get('_search_round',0)%keyword_groups)
+    strategies=[{'sort_by':'popularity.desc','with_genres':27,'with_keywords':keyword} for keyword in keyword_seeds[keyword_start:keyword_start+4]]+strategies
     groups=[g for g in config.get('_preferred_keyword_groups',[])[:4] if isinstance(g,list) and len(g)==2 and len(set(g))==2 and all(type(k) is int and k>0 for k in g)]
     strategies=[{'sort_by':'popularity.desc','with_genres':27,'with_keywords':','.join(map(str,g))} for g in groups]+strategies
+    for year in config.get('_preferred_periods',[])[:2]:
+        if type(year) is int and RULES['selection']['minimum_year']<=year<=now.year:
+            strategies.append({'sort_by':'popularity.desc','with_genres':27,
+                               'primary_release_date.gte':str(year)+'-01-01',
+                               'primary_release_date.lte':min(now.date().isoformat(),str(year+4)+'-12-31')})
     count=config.get('pages',2);window=max(count,min(20,config.get('page_window',20)))
     slot=int((now.timestamp()-17*60)//3600)+config.get('_page_seed',0)
     # Probe every strategy before spending the request budget on deeper pages.
     # TMDB supplies the real page count: a fixed first-20-page window becomes
     # exhausted after hundreds of ratings. Keep a per-run ledger across refills.
-    probes=['discover/movie?'+urllib.parse.urlencode(dict(query,**strategy,page=1)) for strategy in strategies]
+    probes=['discover/movie?'+urllib.parse.urlencode({**query,**strategy,'page':1}) for strategy in strategies]
     ledger=config.get('_discovery_pages',{})
     def probe(path):
         try:
@@ -135,20 +143,32 @@ def tmdb_candidates(backend, preferred, config):
             if depth<len(options):
                 page=options[depth];ledger[path].add(page)
                 paths.append(path.rsplit('page=',1)[0]+'page='+str(page))
-    seeds=[mid for mid in config.get('_preferred_movie_ids',[])[:12] if type(mid) is int and mid>0]
-    groups=max(1,(len(seeds)+5)//6);search_round=config.get('_search_round',0);start=6*(search_round%groups)
-    paths.extend('movie/'+str(mid)+'/recommendations?language=ru-RU&page='+str(1+search_round//groups) for mid in seeds[start:start+6])
+    seeds=list(dict.fromkeys(mid for mid in config.get('_preferred_movie_ids',[])[:48] if type(mid) is int and mid>0))
+    batch=max(1,min(12,config.get('_anchor_batch_size',6)))
+    groups=max(1,(len(seeds)+batch-1)//batch);search_round=config.get('_search_round',0);start=batch*(search_round%groups)
+    anchors=seeds[start:start+batch];page=1+search_round//groups
+    paths.extend('movie/'+str(mid)+'/recommendations?language=ru-RU&page='+str(page) for mid in anchors)
+    # Similar is a distinct content route. Rotate through every positive anchor
+    # before deeper pages; broad popularity queries cannot replace these slots.
+    if config.get('_include_similar'):
+        paths.extend('movie/'+str(mid)+'/similar?language=ru-RU&page='+str(page) for mid in anchors)
     def fetch(path):
         try:
             data=backend.movie(path)
             if not isinstance(data,dict) or not isinstance(data.get('results'),list):return None
             rows=data['results']
             if path.startswith('movie/'):
-                anchor=int(path.split('/')[1]);rows=[dict(m,_liked_anchor_ids=[anchor]) if isinstance(m,dict) else m for m in rows]
+                anchor=int(path.split('/')[1]);route='similar' if '/similar?' in path else 'recommendations'
+                rows=[dict(m,_liked_anchor_ids=[anchor],_personal_routes=[route]) if isinstance(m,dict) else m for m in rows]
             return annotate_query(rows,path)
         except Exception:return None
     with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
-        results=initial+list(executor.map(fetch,paths))
+        fetched=list(executor.map(fetch,paths))
+    coverage=config.get('_anchor_coverage')
+    if isinstance(coverage,set):
+        coverage.update(int(path.split('/')[1]) for path,result in zip(paths,fetched)
+                        if path.startswith('movie/') and isinstance(result,list))
+    results=initial+fetched
     pool=[m for result in results if isinstance(result,list) for m in result
           if isinstance(m,dict) and not excluded(config,m.get('id'))]
     names=config.get('_preferred_directors',[])
@@ -224,13 +244,13 @@ def discover(backend, preferred, config):
             continue
         name = source['id']
         try:
-            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _search_round=config.get('_search_round',0), _preferred_movie_ids=config.get('_preferred_movie_ids',[]), _preferred_keywords=config.get('_preferred_keywords',[]), _preferred_keyword_groups=config.get('_preferred_keyword_groups',[]), _preferred_directors=config.get('_preferred_directors',[]), _director_anchor_ids=config.get('_director_anchor_ids',{}), _discovery_pages=config.get('_discovery_pages',{}), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
+            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _search_round=config.get('_search_round',0), _preferred_movie_ids=config.get('_preferred_movie_ids',[]), _include_similar=config.get('_include_similar',False), _anchor_batch_size=config.get('_anchor_batch_size',6), _preferred_keywords=config.get('_preferred_keywords',[]), _preferred_keyword_groups=config.get('_preferred_keyword_groups',[]), _preferred_periods=config.get('_preferred_periods',[]), _preferred_directors=config.get('_preferred_directors',[]), _director_anchor_ids=config.get('_director_anchor_ids',{}), _discovery_pages=config.get('_discovery_pages',{}), _anchor_coverage=config.get('_anchor_coverage',set()), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
             valid = [m for m in candidates if isinstance(m,dict) and type(m.get('id')) is int and m['id'] > 0 and not excluded(config,m['id'])]
             for movie in valid:
                 mid = movie['id']
                 if mid not in pool:
                     pool[mid] = dict(movie, discovery_sources=[])
-                for field in ('_liked_anchor_ids','_liked_directors','_matched_theme_groups'):
+                for field in ('_liked_anchor_ids','_liked_directors','_matched_theme_groups','_personal_routes'):
                     if movie.get(field):pool[mid][field]=list(dict.fromkeys(pool[mid].get(field,[])+movie[field]))
                 if movie.get('_director_alias_ids'):pool[mid].setdefault('_director_alias_ids',{}).update(movie['_director_alias_ids'])
                 if name not in pool[mid]['discovery_sources']:
