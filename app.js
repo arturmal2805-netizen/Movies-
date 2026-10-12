@@ -1,10 +1,10 @@
-import {ratingSummary} from './selection-quality.js?v=quality37';
-import {installMobileFeed} from './mobile-feed.js?v=quality37';
-import {categoryOptions,filmCategories,isEligibleForDiscovery} from './categories.js?v=quality37';
-import {buildTasteProfile,tasteScore} from './taste.js?v=quality37';
+import {ratingSummary} from './selection-quality.js?v=quality38';
+import {installMobileFeed} from './mobile-feed.js?v=quality38';
+import {categoryOptions,filmCategories,isEligibleForDiscovery} from './categories.js?v=quality38';
+import {buildTasteProfile,tasteScore} from './taste.js?v=quality38';
 import {ManualRecommendations} from './manual-recommendations.js';
 import {kyivTime,recentRecommendations,nextRecommendationRun} from './time.js';
-import {ServerStore} from './server.js?v=quality37';
+import {ServerStore} from './server.js?v=quality38';
 import {normalizeRating,isArchived,worstRating,bestRating,neutralRating,ratingLabel} from './ratings.js?v=swipe-touch24';
 import {cardRule,sourceDefinitions,sourceState,hasCompleteMetadata} from './sources.js';
 export const films = [
@@ -177,7 +177,7 @@ function startQualityCheck(){
  if(key===qualityReportKey&&(qualityReport&&qualityReport.status!=='error'||qualityWorker))return;
  qualityWorker?.terminate();qualityReport=null;qualityReportKey=key;
  try{
-  const worker=new Worker(new URL('./quality-worker.js?v=quality37',import.meta.url),{type:'module'});qualityWorker=worker;
+  const worker=new Worker(new URL('./quality-worker.js?v=quality38',import.meta.url),{type:'module'});qualityWorker=worker;
   let timer;
   const finish=report=>{clearTimeout(timer);worker.terminate();if(qualityWorker!==worker||server.session?.user?.id!==owner)return;qualityWorker=null;qualityReport=report;renderQuality();};
   timer=setTimeout(()=>finish({status:'error'}),20000);

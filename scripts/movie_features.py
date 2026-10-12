@@ -65,7 +65,7 @@ class TasteProfile(dict):
    for key in vector:
     if specific_feature(key):self.neighbor_index[key].append(i)
 
-def profile(ratings,include_quality=True,include_director_aliases=True):
+def profile(ratings,include_quality=True,include_director_aliases=True,include_public_quality=True):
  ratings=list(ratings)
  sums=defaultdict(float);counts=defaultdict(int);shares=defaultdict(float);anchors=[]
  for row in ratings:
@@ -102,8 +102,9 @@ def profile(ratings,include_quality=True,include_director_aliases=True):
  result.positive_support=dict(positive_support)
  result.include_quality=include_quality
  result.include_director_aliases=include_director_aliases
+ result.include_public_quality=include_public_quality and include_quality
  result.training_count=positive_count+negative_count;result.positive_count=positive_count;result.negative_count=negative_count
- result.model_version=(MODEL_VERSION if include_quality and include_director_aliases else 'quality-aware36' if include_quality else 'empirical-taste32') if result.predictive else 'contrast-fallback'
+ result.model_version=(MODEL_VERSION if include_quality and include_director_aliases and include_public_quality else 'director-aware37' if include_quality and include_director_aliases else 'quality-aware36' if include_quality else 'empirical-taste32') if result.predictive else 'contrast-fallback'
  return result
 
 def predictive_features(movie,include_quality=True,include_director_aliases=True):
@@ -154,9 +155,12 @@ def rejection_score(movie,taste):
 
 def match_score(movie,taste):
  if not getattr(taste,'predictive',False):return contrast_score(movie,taste)
- # Keep ranking and rejection distinct. Frequency evidence uses the empirical
- # prior, while the classifier controls acceptance and search seeds.
- return .25*rejection_score(movie,taste)+.75*balanced_score(movie,taste)
+ # Personal evidence dominates. A small continuous public-quality prior
+ # prevents unseen low-quality bands from outranking known mid-quality films
+ # merely because their personal band has no observations. Never a veto.
+ rating=movie.get('rating',movie.get('vote_average'))
+ quality=.2*(rating-6.5) if getattr(taste,'include_public_quality',False) and type(rating) in (int,float) and math.isfinite(rating) and 0<rating<=10 else 0
+ return .25*rejection_score(movie,taste)+.75*balanced_score(movie,taste)+quality
 
 
 def feature_metadata(detail):

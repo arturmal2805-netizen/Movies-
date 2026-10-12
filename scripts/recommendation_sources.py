@@ -110,11 +110,18 @@ def tmdb_candidates(backend, preferred, config):
             initial.append(rows);seen.add(1)
         total=data.get('total_pages',window) if data else window
         total=max(1,min(500,total)) if type(total) is int else window
+        # Preserve the provider's ranking before exploring the long tail.
+        # Randomly jumping from page 1 to page 400 can skip every promising
+        # unseen film. Reserve one page per strategy for sequential head search;
+        # remaining pages still rotate through the full available catalogue.
         options=[]
+        if count>1:
+            head=next((page for page in range(2,min(total,20)+1) if page not in seen),None)
+            if head is not None:options.append(head)
         for offset in range(max(0,total-1)):
-            page=2+(slot*max(1,count-1)+offset)%(total-1)
-            if page not in seen:options.append(page)
             if len(options)>=count-1:break
+            page=2+(slot*max(1,count-1)+offset)%(total-1)
+            if page not in seen and page not in options:options.append(page)
         page_options.append(options)
     # Round-robin allocation ensures learned keyword queries cannot crowd out
     # broad horror/dystopia discovery under the 24-request ceiling.

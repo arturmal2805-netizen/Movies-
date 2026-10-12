@@ -1,6 +1,6 @@
-import {filmCategories} from './categories.js?v=quality37';
+import {filmCategories} from './categories.js?v=quality38';
 import {normalizeRating} from './ratings.js';
-import {fitMargin,marginFeatures,tasteModelVersion} from './taste-model.js?v=quality37';
+import {fitMargin,marginFeatures,tasteModelVersion} from './taste-model.js?v=quality38';
 const generic=new Set(['based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','woman director']);
 const normalize=value=>String(value||'').toLocaleLowerCase('ru').replace(/[-_]/g,' ').replace(/\s+/g,' ').trim();
 export function tasteFeatures(film,includeDirectorAliases=true){
@@ -21,8 +21,8 @@ export function tasteSignal(value){
  return (({like:1,dislike:-1})[r.impression]||0)*.8+adjustment*.2;
 }
 const cachedProfiles=new WeakMap();
-export function buildTasteProfile(films,reactions,{includeQuality=true,includeDirectorAliases=true}={}){
- const signature=JSON.stringify([includeQuality,includeDirectorAliases,films.filter(f=>reactions[f.id]).map(f=>[f.id,normalizeRating(reactions[f.id]),f.genreIds,f.genre,f.keywords,f.director,f.originalLanguage,f.original_language,f.year,f.release_date,f.tmdbId,f.description||f.overview,f.rating,f.vote_average,f.directorAliases])]);
+export function buildTasteProfile(films,reactions,{includeQuality=true,includeDirectorAliases=true,includePublicQuality=true}={}){
+ const signature=JSON.stringify([includeQuality,includeDirectorAliases,includePublicQuality,films.filter(f=>reactions[f.id]).map(f=>[f.id,normalizeRating(reactions[f.id]),f.genreIds,f.genre,f.keywords,f.director,f.originalLanguage,f.original_language,f.year,f.release_date,f.tmdbId,f.description||f.overview,f.rating,f.vote_average,f.directorAliases])]);
  const cached=cachedProfiles.get(reactions);if(cached?.signature===signature)return cached.profile;
  const sums=new Map(),counts=new Map(),shares=new Map(),anchors=[];
  for(const film of films){if(!reactions[film.id])continue;const signal=tasteSignal(reactions[film.id]);if(!signal)continue;anchors.push([signal,new Map(tasteFeatures(film,includeDirectorAliases).map(([key,share,kind])=>[key,{share,kind}])),Date.parse(reactions[film.id].ratedAt)||0]);
@@ -34,7 +34,7 @@ export function buildTasteProfile(films,reactions,{includeQuality=true,includeDi
  for(const film of films){const label=normalizeRating(reactions[film.id])?.impression;if(label!=='like'&&label!=='dislike')continue;const counts=label==='like'?positive:negative;if(label==='like')positiveCount++;else negativeCount++;const vector=predictiveFeatures(film,includeQuality,includeDirectorAliases);examples.push([marginFeatures(vector),label==='like']);for(const [key,share] of vector)counts.set(key,(counts.get(key)||0)+share);}
  profile.predictive=positiveCount>=3&&negativeCount>=3&&positiveCount+negativeCount>=20;
  if(profile.predictive){const total=positiveCount+negativeCount,positivePrior=2*positiveCount/total,negativePrior=2*negativeCount/total;profile.balancedWeights=new Map([...new Set([...positive.keys(),...negative.keys()])].map(key=>[key,Math.log(((positive.get(key)||0)+positivePrior)/(positiveCount+positivePrior))-Math.log(((negative.get(key)||0)+negativePrior)/(negativeCount+negativePrior))]));const trained=fitMargin(examples);profile.clear();for(const [key,value] of trained.weights)profile.set(key,value);profile.bias=trained.bias;}
- profile.includeQuality=includeQuality;profile.includeDirectorAliases=includeDirectorAliases;profile.modelVersion=profile.predictive?(includeQuality?(includeDirectorAliases?tasteModelVersion:'quality-aware36'):'empirical-taste32'):'contrast-fallback';
+ profile.includeQuality=includeQuality;profile.includeDirectorAliases=includeDirectorAliases;profile.includePublicQuality=includeQuality&&includePublicQuality;profile.modelVersion=profile.predictive?(includeQuality?(includeDirectorAliases?(includePublicQuality?tasteModelVersion:'director-aware37'):'quality-aware36'):'empirical-taste32'):'contrast-fallback';
 
  cachedProfiles.set(reactions,{signature,profile});return profile;
 }
@@ -64,7 +64,7 @@ function predictiveFeatures(film,includeQuality=true,includeDirectorAliases=true
 }
 export function tasteScore(film,profile){
  const target=filmCategories(film).some(c=>c==='horror'||c==='dystopian');
- if(profile.predictive){const vector=predictiveFeatures(film,profile.includeQuality!==false,profile.includeDirectorAliases!==false),frequency=3*vector.reduce((sum,[key,share,kind])=>sum+(profile.balancedWeights.get(key)||0)*share*featureWeight(key,kind),0)/Math.max(1,vector.reduce((sum,[key,share,kind])=>sum+share*featureWeight(key,kind),0));return (target?1:0)+.25*tasteAcceptanceScore(film,profile)+.75*frequency;}
+ if(profile.predictive){const vector=predictiveFeatures(film,profile.includeQuality!==false,profile.includeDirectorAliases!==false),frequency=3*vector.reduce((sum,[key,share,kind])=>sum+(profile.balancedWeights.get(key)||0)*share*featureWeight(key,kind),0)/Math.max(1,vector.reduce((sum,[key,share,kind])=>sum+share*featureWeight(key,kind),0));const rating=film.rating??film.vote_average,quality=profile.includePublicQuality&&Number.isFinite(rating)&&rating>0&&rating<=10?.2*(rating-6.5):0;return (target?1:0)+.25*tasteAcceptanceScore(film,profile)+.75*frequency+quality;}
  const vector=tasteFeatures(film);return (target?1:0)+vector.reduce((value,[key,share,kind])=>value+(profile.get(key)||0)*share*featureWeight(key,kind),0)+nearbyScore(vector,profile.neighborIndex?[...new Set(vector.flatMap(([key])=>profile.neighborIndex.get(key)||[]))].sort((a,b)=>a-b).map(i=>profile.anchors[i]):profile.anchors||[])*2;
 }
 

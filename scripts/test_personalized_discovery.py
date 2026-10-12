@@ -6,6 +6,30 @@ from movie_features import profile
 from test_recommendation_pipeline import FakeBackend,movie,NOW
 
 class PersonalizedDiscoveryTests(unittest.TestCase):
+ def test_search_checks_next_ranked_page_and_still_explores_long_tail_without_repeating(self):
+  from urllib.parse import urlsplit,parse_qs
+  backend=Mock();backend.movie.return_value={'results':[],'total_pages':500}
+  config=dict(load_config(),sources=[{'id':'tmdb','adapter':'tmdb_discover','enabled':True,'pages':3}],_page_seed=177,_discovery_pages={})
+  for refill in range(3):
+   backend.movie.reset_mock();config['_search_round']=refill
+   discover(backend,[],config)
+   pages=[int(parse_qs(urlsplit(c.args[0]).query)['page'][0]) for c in backend.movie.call_args_list if c.args[0].startswith('discover/movie?')]
+   # Each broad strategy scans its highest remaining pages as well as deeper ones.
+   self.assertEqual(pages.count(2+refill),3)
+   self.assertTrue(any(page>20 for page in pages))
+   if refill:self.assertNotIn(2+refill-1,pages)
+
+ def test_one_page_and_short_catalogues_never_request_nonexistent_or_duplicate_pages(self):
+  from urllib.parse import urlsplit,parse_qs
+  for total,count in ((1,3),(2,3),(500,1)):
+   backend=Mock();backend.movie.return_value={'results':[],'total_pages':total}
+   config=dict(load_config(),sources=[{'id':'tmdb','adapter':'tmdb_discover','enabled':True,'pages':count}],_discovery_pages={})
+   discover(backend,[],config)
+   paths=[c.args[0] for c in backend.movie.call_args_list if c.args[0].startswith('discover/movie?')]
+   self.assertEqual(len(paths),len(set(paths)))
+   self.assertTrue(all(1<=int(parse_qs(urlsplit(path).query)['page'][0])<=total for path in paths))
+   if count==1:self.assertEqual(len(paths),3)
+
  def history(self):
   return [{'tmdb_id':600000+i,'impression':'like' if i<8 else 'dislike','metadata':{'year':2020,'genreIds':[27],'director':'Trusted' if i<4 else 'Rejected','keywords':['monster' if i<8 else 'ghost']}} for i in range(40)]
 
@@ -87,7 +111,7 @@ class PersonalizedDiscoveryTests(unittest.TestCase):
   with patch('recommend.discover',return_value=(pool,[])):
    self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,dict(load_config(),history_enrichment_per_run=0),manual=True),1)
   metadata=backend.collection[0]['metadata']
-  self.assertEqual(metadata['recommendationAnchorIds'],[600001]);self.assertEqual(metadata['recommendationDirectorSeeds'],['Trusted']);self.assertEqual(metadata['recommendationSearchVersion'],'feedback-search37')
+  self.assertEqual(metadata['recommendationAnchorIds'],[600001]);self.assertEqual(metadata['recommendationDirectorSeeds'],['Trusted']);self.assertEqual(metadata['recommendationSearchVersion'],'ranked-search38')
 
  def test_personal_keyword_queries_precede_broad_lists_and_require_horror(self):
   from urllib.parse import urlsplit,parse_qs

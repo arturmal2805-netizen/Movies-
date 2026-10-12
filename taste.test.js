@@ -1,6 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildTasteProfile,tasteScore,tasteSignal,tasteAcceptanceScore} from './taste.js';
+test('continuous public quality is secondary, cache-aware and does not change acceptance margin',()=>{
+ const films=Array.from({length:40},(_,i)=>({id:i+1,year:2020,genreIds:[27],keywords:[i<8?'monster':'ghost']}));
+ const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<8?'like':'dislike'}]));
+ const model=buildTasteProfile(films,reactions),previous=buildTasteProfile(films,reactions,{includePublicQuality:false});
+ assert.notEqual(model,previous);assert.equal(model.modelVersion,'reliability-aware38');assert.equal(previous.modelVersion,'director-aware37');
+ for(const rating of [2,6.5,9]){
+  const film={year:2020,genreIds:[27],rating};
+  assert.ok(Math.abs(tasteScore(film,model)-tasteScore(film,previous)-.2*(rating-6.5))<1e-12);
+  assert.equal(tasteAcceptanceScore(film,model),tasteAcceptanceScore(film,previous));
+ }
+});
 test('verified director translations influence taste and invalidate its cache',()=>{
  const films=Array.from({length:40},(_,i)=>({id:i+1,year:2020,genreIds:[27],director:i<8?'Зак Креггер':'Other',keywords:['monster']}));
  const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<8?'like':'dislike'}]));

@@ -8,6 +8,19 @@ def history():
 
 
 class PredictiveTasteTests(unittest.TestCase):
+ def test_public_quality_prior_is_bounded_secondary_and_never_an_acceptance_gate(self):
+  from movie_features import rejection_score
+  from recommend import rank_candidates
+  from test_recommendation_pipeline import movie,NOW
+  rows=history();model=profile(rows);previous=profile(rows,include_public_quality=False)
+  for rating in (2.,6.5,9.):
+   candidate=dict(movie(901),genres=[{'id':27}],genre_ids=[27],vote_average=rating)
+   self.assertAlmostEqual(match_score(candidate,model)-match_score(candidate,previous),.2*(rating-6.5))
+   self.assertAlmostEqual(rejection_score(candidate,model),rejection_score(candidate,previous))
+   self.assertEqual(len(rank_candidates([candidate],rows,[],now=NOW,tastes=model)),1)
+  self.assertEqual(model.model_version,'reliability-aware38')
+  self.assertEqual(previous.model_version,'director-aware37')
+
  def test_public_rating_bands_are_learned_personally_not_assumed_better_when_higher(self):
   for preferred,rejected in ((8,3),(3,8)):
    rows=[{'tmdb_id':i+1,'impression':'like' if i<10 else 'dislike','plot':1 if i<10 else 10,
