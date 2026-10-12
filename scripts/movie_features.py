@@ -63,7 +63,7 @@ class TasteProfile(dict):
    for key in vector:
     if specific_feature(key):self.neighbor_index[key].append(i)
 
-def profile(ratings):
+def profile(ratings,include_quality=True):
  ratings=list(ratings)
  sums=defaultdict(float);counts=defaultdict(int);shares=defaultdict(float);anchors=[]
  for row in ratings:
@@ -83,7 +83,7 @@ def profile(ratings):
   if label not in ('like','dislike'):continue
   if label=='like':positive_count+=1;counts_by_class=positive
   else:negative_count+=1;counts_by_class=negative
-  vector=predictive_features(row.get('metadata') or {})
+  vector=predictive_features(row.get('metadata') or {},include_quality=include_quality)
   examples.append((margin_features(vector),label=='like'))
   for key,share in vector.items():
    counts_by_class[key]+=share
@@ -98,22 +98,27 @@ def profile(ratings):
   result.balanced_weights={key:math.log((positive[key]+positive_prior)/(positive_count+positive_prior))-math.log((negative[key]+negative_prior)/(negative_count+negative_prior)) for key in positive.keys()|negative.keys()}
   learned,result.bias=fit_margin(examples);result.clear();result.update(learned)
  result.positive_support=dict(positive_support)
+ result.include_quality=include_quality
  result.training_count=positive_count+negative_count;result.positive_count=positive_count;result.negative_count=negative_count
- result.model_version=MODEL_VERSION if result.predictive else 'contrast-fallback'
+ result.model_version=(MODEL_VERSION if include_quality else 'empirical-taste32') if result.predictive else 'contrast-fallback'
  return result
 
-def predictive_features(movie):
+def predictive_features(movie,include_quality=True):
  vector=features(movie)
  language=movie.get('originalLanguage') or movie.get('original_language')
  if language:vector[('language',language)]=1
  try:year=int(movie.get('year') or str(movie.get('release_date',''))[:4])
  except (TypeError,ValueError):year=0
  if year:vector[('period',year//5)]=1
+ rating=movie.get('rating',movie.get('vote_average'))
+ # This is the public TMDB rating, never the user's plot/cinematography score.
+ # Learn each band's personal preference; do not assume higher is always better.
+ if include_quality and type(rating) in (int,float) and math.isfinite(rating) and 0<rating<=10:vector[('quality',min(9,int(rating)))]=1
  return vector
 
 def specific_feature(key):return key[0] in ('keyword','director') or key[0]=='category' and key[1]!='horror'
 
-IMPORTANCE={'genre':1,'category':5,'keyword':4,'director':2,'language':.75,'period':.75}
+IMPORTANCE={'genre':1,'category':5,'keyword':4,'director':2,'language':.75,'period':.75,'quality':.75}
 def importance(key):return .5 if key==('category','horror') else IMPORTANCE[key[0]]
 
 def nearby_score(vector,anchors):
@@ -137,12 +142,12 @@ def contrast_score(movie,taste):
 
 def balanced_score(movie,taste):
  if not getattr(taste,'predictive',False):return contrast_score(movie,taste)
- vector=predictive_features(movie);weights=taste.balanced_weights
+ vector=predictive_features(movie,include_quality=getattr(taste,'include_quality',True));weights=taste.balanced_weights
  return 3*sum(weights.get(key,0)*share*importance(key) for key,share in vector.items())/max(1,sum(share*importance(key) for key,share in vector.items()))
 
 def rejection_score(movie,taste):
  if not getattr(taste,'predictive',False):return contrast_score(movie,taste)
- return taste.bias+sum(taste.get(key,0)*share for key,share in margin_features(predictive_features(movie)).items())
+ return taste.bias+sum(taste.get(key,0)*share for key,share in margin_features(predictive_features(movie,include_quality=getattr(taste,'include_quality',True))).items())
 
 def match_score(movie,taste):
  if not getattr(taste,'predictive',False):return contrast_score(movie,taste)

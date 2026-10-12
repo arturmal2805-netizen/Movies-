@@ -27,5 +27,5 @@ test('validation labels cannot change the learned threshold or training count',(
  const changed=rows.map((r,i)=>i<320?r:{...r,impression:r.impression==='like'?'dislike':'like'});
  const after=evaluateSelection(changed);
  assert.equal(before.training,320);assert.equal(after.training,320);assert.equal(before.floor,after.floor);
- assert.ok(before.after.accepted<=before.before.accepted);
+ assert.equal(before.after.accepted,30);assert.equal(before.metric,'top_30');
 });

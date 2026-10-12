@@ -33,9 +33,11 @@ class PersonalizationAuditTests(unittest.TestCase):
   tmdb_candidates(backend,[],{'minimum_votes':100,'_now':NOW,'_preferred_movie_ids':list(range(1,20))})
   seeds=[c.args[0] for c in backend.movie.call_args_list if '/recommendations?' in c.args[0]]
   self.assertEqual(len(seeds),6);self.assertTrue(seeds[0].startswith('movie/1/'))
- def test_bad_theme_is_not_sent_just_to_fill_a_large_batch(self):
+ def test_weak_theme_remains_available_but_ranks_after_the_liked_theme(self):
   rows=self.history();bad=dict(movie(900),genre_ids=[27],genres=[{'id':27}],keywords=['ghost','haunted house'],director='Rejected director')
-  self.assertEqual(rank_candidates([bad],rows,[],now=NOW),[])
+  good=dict(movie(901),genre_ids=[27],genres=[{'id':27}],keywords=['body horror','mutation'],director='Old favorite')
+  ranked=rank_candidates([bad,good],rows,[],now=NOW)
+  self.assertEqual([r[1]['id'] for r in ranked],[901,900])
  def test_private_audit_never_combines_users_or_duplicates(self):
   for rows in [[{'user_id':'a','tmdb_id':1},{'user_id':'b','tmdb_id':2}],[{'tmdb_id':1},{'tmdb_id':1}]]:
    with self.assertRaises(ValueError):analyze(rows)

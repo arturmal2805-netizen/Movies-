@@ -41,12 +41,12 @@ def prior_frequency_weights(rows):
   if label not in ('like','dislike'):continue
   if label=='like':p+=1;counts=positive
   else:n+=1;counts=negative
-  for key,share in predictive_features(row.get('metadata') or {}).items():counts[key]+=share
+  for key,share in predictive_features(row.get('metadata') or {},include_quality=False).items():counts[key]+=share
  return {key:math.log((positive[key]+1)/(p+2))-math.log((negative[key]+1)/(n+2)) for key in positive.keys()|negative.keys()}
 
 def prior_frequency_score(movie,rows,weights=None):
  weights=prior_frequency_weights(rows) if weights is None else weights
- vector=predictive_features(movie)
+ vector=predictive_features(movie,include_quality=False)
  return 3*sum(weights.get(key,0)*share*importance(key) for key,share in vector.items())/max(1,sum(share*importance(key) for key,share in vector.items()))
 
 
@@ -98,7 +98,7 @@ def compare_exports(previous,current):
          'prior_pairwise_auc':sum((a>b)+.5*(a==b) for a in prior_pos for b in prior_neg)/(len(prior_pos)*len(prior_neg)) if prior_pos and prior_neg else None,
          'pairwise_auc':sum((a>b)+.5*(a==b) for a in positives for b in negatives)/(len(positives)*len(negatives)) if positives and negatives else None,
          'likes_at_10':sum(y for _,y,_ in ordered[:10]),'likes_at_30':sum(y for _,y,_ in ordered[:30]),
-         'gate_passed':sum(z>=-.8 for _,_,z in predictions),'gate_retained_likes':sum(y and z>=-.8 for _,y,z in predictions),
+         'gate_is_diagnostic_only':True,'gate_passed':sum(z>=-.8 for _,_,z in predictions),'gate_retained_likes':sum(y and z>=-.8 for _,y,z in predictions),
          'notes':['New IDs are held out; existing changed ratings are not used as fresh test examples.',
                   'Retrospective ordering of rated candidates is not live API batch validation.']}
 

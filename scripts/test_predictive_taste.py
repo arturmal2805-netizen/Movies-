@@ -8,6 +8,20 @@ def history():
 
 
 class PredictiveTasteTests(unittest.TestCase):
+ def test_public_rating_bands_are_learned_personally_not_assumed_better_when_higher(self):
+  for preferred,rejected in ((8,3),(3,8)):
+   rows=[{'tmdb_id':i+1,'impression':'like' if i<10 else 'dislike','plot':1 if i<10 else 10,
+          'metadata':{'year':2020,'genreIds':[27],'rating':preferred if i<10 else rejected}} for i in range(100)]
+   model=profile(rows)
+   self.assertGreater(match_score(rows[0]['metadata'],model),match_score(rows[-1]['metadata'],model))
+   old=profile(rows,include_quality=False)
+   self.assertAlmostEqual(match_score(rows[0]['metadata'],old),match_score(rows[-1]['metadata'],old))
+
+ def test_missing_invalid_or_user_rating_values_cannot_create_public_quality_features(self):
+  for value in (None,False,0,-1,11,float('nan'),'8'):
+   self.assertFalse(any(key[0]=='quality' for key in predictive_features({'rating':value,'plot':10,'cinematography':10})))
+  self.assertEqual(predictive_features({'rating':8.2}),predictive_features({'vote_average':8.2}))
+
  def test_imbalanced_rejections_do_not_erase_positive_themes(self):
   rows=history();model=profile(rows)
   self.assertTrue(model.predictive)
@@ -50,7 +64,7 @@ class PredictiveTasteTests(unittest.TestCase):
   for row in rows[-3:]:row['metadata']['keywords']=['rejected topic']
   self.assertLess(profile(rows)[('keyword','rejected topic')],0)
 
- def test_negative_only_rare_tags_are_penalties_and_cannot_override_rejection_gate(self):
+ def test_negative_only_rare_tags_lower_rank_without_erasing_the_candidate_pool(self):
   from movie_features import rejection_score
   from recommend import rank_candidates
   from test_recommendation_pipeline import movie,NOW
@@ -61,7 +75,7 @@ class PredictiveTasteTests(unittest.TestCase):
   self.assertLess(match_score(candidate,model),0)
   self.assertTrue(all(model.balanced_weights[('keyword',f'rare label {i}')]<0 for i in range(24)))
   self.assertLess(rejection_score(candidate,model),-.8)
-  self.assertEqual(rank_candidates([candidate],rows,[],now=NOW,tastes=model),[])
+  self.assertEqual([r[1]['id'] for r in rank_candidates([candidate],rows,[],now=NOW,tastes=model)],[901])
 
  def test_empirical_prior_handles_both_imbalance_directions(self):
   for like_count in (3,97):

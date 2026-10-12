@@ -1,6 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildTasteProfile,tasteScore,tasteSignal,tasteAcceptanceScore} from './taste.js';
+test('public rating preference is learned in both directions independently of user technical scores',()=>{
+ for(const [liked,rejected] of [[8,3],[3,8]]){
+  const films=Array.from({length:100},(_,i)=>({id:i+1,genreIds:[27],year:2020,rating:i<10?liked:rejected}));
+  const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<10?'like':'dislike',plot:i<10?1:10}]));
+  const current=buildTasteProfile(films,reactions),previous=buildTasteProfile(films,reactions,{includeQuality:false});
+  assert.ok(tasteScore(films[0],current)>tasteScore(films[99],current));
+  assert.ok(Math.abs(tasteScore(films[0],previous)-tasteScore(films[99],previous))<1e-12);
+ }
+});
+test('updating public ratings invalidates the browser taste cache',()=>{
+ const films=Array.from({length:100},(_,i)=>({id:i+1,genreIds:[27],year:2020,rating:6}));
+ const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<10?'like':'dislike'}]));
+ const previous=buildTasteProfile(films,reactions);films[0].rating=8;
+ assert.notEqual(buildTasteProfile(films,reactions),previous);
+});
 test('specific horror themes separate two films in the same genre',()=>{
  const rated={id:1,genreIds:[27],keywords:['body horror']};
  const profile=buildTasteProfile([rated],{1:{impression:'like',plot:9,cinematography:8}});

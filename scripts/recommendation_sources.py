@@ -78,6 +78,8 @@ def tmdb_candidates(backend, preferred, config):
     # Broad sci-fi/thriller lists waste the shortlist on unrelated family/adventure films.
     strategies.extend(dict(sort_by='popularity.desc',**({'with_genres':'27,53'} if genre==53 else {'with_genres':878,'with_keywords':4565})) for genre in preferred[:3] if genre in (53,878))
     strategies=[{'sort_by':'popularity.desc','with_genres':27,'with_keywords':keyword} for keyword in config.get('_preferred_keywords',[])[:4]]+strategies
+    groups=[g for g in config.get('_preferred_keyword_groups',[])[:4] if isinstance(g,list) and len(g)==2 and len(set(g))==2 and all(type(k) is int and k>0 for k in g)]
+    strategies=[{'sort_by':'popularity.desc','with_genres':27,'with_keywords':','.join(map(str,g))} for g in groups]+strategies
     count=config.get('pages',2);window=max(count,min(20,config.get('page_window',20)))
     slot=int((now.timestamp()-17*60)//3600)+config.get('_page_seed',0)
     # Probe every strategy before spending the request budget on deeper pages.
@@ -110,8 +112,12 @@ def tmdb_candidates(backend, preferred, config):
         page_options.append(options)
     # Round-robin allocation ensures learned keyword queries cannot crowd out
     # broad horror/dystopia discovery under the 24-request ceiling.
+    search_round=config.get('_search_round',0)
+    offset=search_round%len(probes)
+    order=list(range(offset,len(probes)))+list(range(offset))
     for depth in range(count-1):
-        for path,options in zip(probes,page_options):
+        for index in order:
+            path,options=probes[index],page_options[index]
             if len(probes)+len(paths)>=24:break
             if depth<len(options):
                 page=options[depth];ledger[path].add(page)
@@ -206,7 +212,7 @@ def discover(backend, preferred, config):
             continue
         name = source['id']
         try:
-            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _search_round=config.get('_search_round',0), _preferred_movie_ids=config.get('_preferred_movie_ids',[]), _preferred_keywords=config.get('_preferred_keywords',[]), _preferred_directors=config.get('_preferred_directors',[]), _director_anchor_ids=config.get('_director_anchor_ids',{}), _discovery_pages=config.get('_discovery_pages',{}), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
+            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _search_round=config.get('_search_round',0), _preferred_movie_ids=config.get('_preferred_movie_ids',[]), _preferred_keywords=config.get('_preferred_keywords',[]), _preferred_keyword_groups=config.get('_preferred_keyword_groups',[]), _preferred_directors=config.get('_preferred_directors',[]), _director_anchor_ids=config.get('_director_anchor_ids',{}), _discovery_pages=config.get('_discovery_pages',{}), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
             valid = [m for m in candidates if isinstance(m,dict) and type(m.get('id')) is int and m['id'] > 0 and not excluded(config,m['id'])]
             for movie in valid:
                 mid = movie['id']

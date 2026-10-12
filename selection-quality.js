@@ -1,5 +1,5 @@
-import {buildTasteProfile,tasteScore,tasteAcceptanceScore} from './taste.js?v=quality35';
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality35';
+import {buildTasteProfile,tasteScore,tasteAcceptanceScore} from './taste.js?v=quality36';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality36';
 
 export function ratingSummary(rows){
  const unique=new Map();
@@ -20,16 +20,16 @@ export function ratingSummary(rows){
 }
 
 function chronological(rows){return rows.filter(r=>['like','dislike'].includes(r.impression)).sort((a,b)=>String(a.updated_at||'').localeCompare(String(b.updated_at||''))||a.tmdb_id-b.tmdb_id);}
-function modelFor(rows){
+function modelFor(rows,includeQuality=true){
  const films=rows.map(r=>({...r.metadata,id:r.tmdb_id,tmdbId:r.tmdb_id}));
  const reactions=Object.fromEntries(rows.map(r=>[r.tmdb_id,{impression:r.impression,plot:r.plot,cinematography:r.cinematography,ratedAt:r.updated_at}]));
- return buildTasteProfile(films,reactions);
+ return buildTasteProfile(films,reactions,{includeQuality});
 }
 function score(film,model){return tasteScore(film,model)-(filmCategories(film).some(c=>c==='horror'||c==='dystopian')?1:0);}
-export function selectionFloor(rows){
+export function selectionFloor(rows,includeQuality=true){
  const decisive=chronological(rows);
  if(decisive.length<100||decisive.some(r=>!r.updated_at))return null;
- const split=Math.floor(decisive.length*.8),model=modelFor(decisive.slice(0,split));
+ const split=Math.floor(decisive.length*.8),model=modelFor(decisive.slice(0,split),includeQuality);
  const validation=decisive.slice(split).filter(r=>isEligibleForDiscovery(r.metadata||{}));
  const positives=validation.filter(r=>r.impression==='like').map(r=>score(r.metadata,model)).sort((a,b)=>a-b);
  if(!model.predictive||validation.length<20||positives.length<2)return null;
@@ -41,12 +41,14 @@ export function evaluateSelection(rows){
  const decisive=chronological(rows);
  if(decisive.length<100||decisive.some(r=>!r.updated_at))return {status:'insufficient'};
  const split=Math.floor(decisive.length*.8),train=decisive.slice(0,split);
- const test=decisive.slice(split).filter(r=>isEligibleForDiscovery(r.metadata||{})),model=modelFor(train),floor=selectionFloor(train);
- const predictions=test.map(r=>[score(r.metadata,model),tasteAcceptanceScore(r.metadata,model),r.impression==='like']);
- const measure=calibrated=>{
-  const kept=predictions.filter(([value,margin])=>margin>=-.8&&(!calibrated||floor===null||value>=floor));
+ const test=decisive.slice(split).filter(r=>isEligibleForDiscovery(r.metadata||{})),model=modelFor(train);
+ const previous=modelFor(train,false),previousFloor=selectionFloor(train,false);
+ const measure=(selectedModel,cutoff,legacyGate)=>{
+  const predictions=test.map(r=>[score(r.metadata,selectedModel),tasteAcceptanceScore(r.metadata,selectedModel),r.impression==='like']);
+  const ordered=[...predictions].sort((a,b)=>b[0]-a[0]);
+  const pool=ordered.filter(([value,margin])=>!legacyGate||margin>=-.8&&(cutoff===null||value>=cutoff)),kept=pool.slice(0,30);
   const liked=kept.filter(([, ,label])=>label).length;
-  return {accepted:kept.length,liked,precision:kept.length?liked/kept.length:null};
+  return {accepted:kept.length,liked,precision:kept.length?liked/kept.length:null,eligible_pool:pool.length,likes_at_10:kept.slice(0,10).filter(([, ,y])=>y).length};
  };
- return {status:'evaluated',training:train.length,tested:test.length,positives:predictions.filter(([, ,y])=>y).length,floor,before:measure(false),after:measure(true)};
+ return {status:'evaluated',training:train.length,tested:test.length,positives:test.filter(r=>r.impression==='like').length,floor:previousFloor,metric:'top_30',before:measure(previous,previousFloor,true),after:measure(model,null,false)};
 }
