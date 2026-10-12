@@ -8,6 +8,12 @@ from movie_features import genres,RULES,normalize
 
 def detail_path(mid):return f'movie/{mid}?language=ru-RU&append_to_response=keywords,credits'
 
+def annotate_query(rows,path):
+    words=urllib.parse.parse_qs(urllib.parse.urlsplit(path).query).get('with_keywords',[])
+    if words==['4565']:return [dict(m,_discovery_category='dystopian') if isinstance(m,dict) else m for m in rows]
+    if words and ',' in words[0]:return [dict(m,_matched_theme_groups=[words[0]]) if isinstance(m,dict) else m for m in rows]
+    return rows
+
 def excluded(config,mid):return mid in config.get('_excluded_ids',set())
 
 
@@ -50,11 +56,11 @@ def director_candidates(backend,names,config):
     def fetch(name):
         try:
             anchors=config.get('_director_anchor_ids',{}).get(name,[])[:2]
-            if len(anchors)==2:
-                # Imported display names may be translated. Two known liked films
-                # must share exactly one credited director; no name guessing.
+            if anchors:
+                # Imported names may be translated. Resolve one unambiguous
+                # director from a liked film, or the intersection of two films.
                 people=None
-                for mid in anchors:
+                for mid in anchors[:2]:
                     detail=backend.movie(detail_path(mid));crew=(detail.get('credits') or {}).get('crew',[])
                     credited={p['id'] for p in crew if isinstance(p,dict) and p.get('job')=='Director' and type(p.get('id')) is int and p['id']>0}
                     people=credited if people is None else people.intersection(credited)
@@ -62,11 +68,12 @@ def director_candidates(backend,names,config):
                 data=backend.movie('search/person?'+urllib.parse.urlencode({'query':name,'include_adult':'false','language':'ru-RU','page':1}))
                 people={p['id'] for p in data.get('results',[]) if isinstance(p,dict) and type(p.get('id')) is int and p['id']>0 and normalize(name) in {normalize(p.get('name')),normalize(p.get('original_name'))}}
             if len(people)!=1:return []
-            credits=backend.movie('person/'+str(next(iter(people)))+'/movie_credits?language=ru-RU')
-            return [dict(m,_liked_directors=[name]) for m in credits.get('crew',[]) if isinstance(m,dict) and m.get('job')=='Director' and type(m.get('id')) is int and m['id']>0 and not excluded(config,m['id'])][:80]
+            person_id=next(iter(people))
+            credits=backend.movie('person/'+str(person_id)+'/movie_credits?language=ru-RU')
+            return [dict(m,_liked_directors=[name],_director_alias_ids={name:person_id}) for m in credits.get('crew',[]) if isinstance(m,dict) and m.get('job')=='Director' and type(m.get('id')) is int and m['id']>0 and not excluded(config,m['id'])][:80]
         except Exception:return []
     with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
-        return [m for result in executor.map(fetch,names[:4]) for m in result]
+        return [m for result in executor.map(fetch,names[:8]) for m in result]
 
 
 def tmdb_candidates(backend, preferred, config):
@@ -99,8 +106,7 @@ def tmdb_candidates(backend, preferred, config):
         seen=ledger.setdefault(path,set())
         if 1 not in seen:
             rows=None if data is None else data['results']
-            if rows is not None and urllib.parse.parse_qs(urllib.parse.urlsplit(path).query).get('with_keywords')==['4565']:
-                rows=[dict(m,_discovery_category='dystopian') if isinstance(m,dict) else m for m in rows]
+            if rows is not None:rows=annotate_query(rows,path)
             initial.append(rows);seen.add(1)
         total=data.get('total_pages',window) if data else window
         total=max(1,min(500,total)) if type(total) is int else window
@@ -132,8 +138,7 @@ def tmdb_candidates(backend, preferred, config):
             rows=data['results']
             if path.startswith('movie/'):
                 anchor=int(path.split('/')[1]);rows=[dict(m,_liked_anchor_ids=[anchor]) if isinstance(m,dict) else m for m in rows]
-            if urllib.parse.parse_qs(urllib.parse.urlsplit(path).query).get('with_keywords')==['4565']:rows=[dict(m,_discovery_category='dystopian') if isinstance(m,dict) else m for m in rows]
-            return rows
+            return annotate_query(rows,path)
         except Exception:return None
     with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
         results=initial+list(executor.map(fetch,paths))
@@ -218,8 +223,9 @@ def discover(backend, preferred, config):
                 mid = movie['id']
                 if mid not in pool:
                     pool[mid] = dict(movie, discovery_sources=[])
-                for field in ('_liked_anchor_ids','_liked_directors'):
+                for field in ('_liked_anchor_ids','_liked_directors','_matched_theme_groups'):
                     if movie.get(field):pool[mid][field]=list(dict.fromkeys(pool[mid].get(field,[])+movie[field]))
+                if movie.get('_director_alias_ids'):pool[mid].setdefault('_director_alias_ids',{}).update(movie['_director_alias_ids'])
                 if name not in pool[mid]['discovery_sources']:
                     pool[mid]['discovery_sources'].append(name)
             statuses.append({'source': name, 'status': 'ok', 'candidates': len({m['id'] for m in valid})})

@@ -32,8 +32,8 @@ def selection_evaluation(rows):
     train, test = decisive[:split], decisive[split:]
     test = [r for r in test if eligible_for_discovery(r.get('metadata') or {})]
     model = profile(train)
-    previous = profile(train,include_quality=False)
-    previous_floor = selection_floor(train,include_quality=False)
+    previous = profile(train,include_director_aliases=False)
+    previous_floor = None
     def measure(selected_model,cutoff,legacy_gate):
         predictions = [(match_score(r['metadata'], selected_model), rejection_score(r['metadata'], selected_model), r['impression'] == 'like') for r in test]
         ordered=sorted(predictions,key=lambda p:p[0],reverse=True)
@@ -44,4 +44,4 @@ def selection_evaluation(rows):
                 'eligible_pool':len(pool),'likes_at_10': sum(label for _,_,label in kept[:10])}
     return {'status': 'evaluated', 'training': len(train), 'tested': len(test),
             'positives': sum(r['impression']=='like' for r in test),
-            'floor': previous_floor,'metric':'top_30', 'before': measure(previous,previous_floor,True), 'after': measure(model,None,False)}
+            'floor': previous_floor,'metric':'top_30', 'before': measure(previous,previous_floor,False), 'after': measure(model,None,False)}

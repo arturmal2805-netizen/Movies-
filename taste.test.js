@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildTasteProfile,tasteScore,tasteSignal,tasteAcceptanceScore} from './taste.js';
+test('verified director translations influence taste and invalidate its cache',()=>{
+ const films=Array.from({length:40},(_,i)=>({id:i+1,year:2020,genreIds:[27],director:i<8?'Зак Креггер':'Other',keywords:['monster']}));
+ const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<8?'like':'dislike'}]));
+ const before=buildTasteProfile(films,reactions);
+ const plain={year:2020,genreIds:[27],director:'Zach Cregger',keywords:['monster']};
+ assert.ok(tasteScore({...plain,directorAliases:['Зак Креггер']},before)>tasteScore(plain,before));
+ films[0].directorAliases=['Different alias'];assert.notEqual(buildTasteProfile(films,reactions),before);
+});
 test('public rating preference is learned in both directions independently of user technical scores',()=>{
  for(const [liked,rejected] of [[8,3],[3,8]]){
   const films=Array.from({length:100},(_,i)=>({id:i+1,genreIds:[27],year:2020,rating:i<10?liked:rejected}));

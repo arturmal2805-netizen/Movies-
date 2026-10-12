@@ -1,10 +1,10 @@
-import {ratingSummary} from './selection-quality.js?v=quality36';
-import {installMobileFeed} from './mobile-feed.js?v=quality36';
-import {categoryOptions,filmCategories,isEligibleForDiscovery} from './categories.js?v=quality36';
-import {buildTasteProfile,tasteScore} from './taste.js?v=quality36';
+import {ratingSummary} from './selection-quality.js?v=quality37';
+import {installMobileFeed} from './mobile-feed.js?v=quality37';
+import {categoryOptions,filmCategories,isEligibleForDiscovery} from './categories.js?v=quality37';
+import {buildTasteProfile,tasteScore} from './taste.js?v=quality37';
 import {ManualRecommendations} from './manual-recommendations.js';
 import {kyivTime,recentRecommendations,nextRecommendationRun} from './time.js';
-import {ServerStore} from './server.js?v=quality36';
+import {ServerStore} from './server.js?v=quality37';
 import {normalizeRating,isArchived,worstRating,bestRating,neutralRating,ratingLabel} from './ratings.js?v=swipe-touch24';
 import {cardRule,sourceDefinitions,sourceState,hasCompleteMetadata} from './sources.js';
 export const films = [
@@ -155,12 +155,17 @@ function updateQualityRating(film,rating){
 function renderQuality(){
  const logged=Boolean(server.session);$('selection-quality').hidden=!logged;
  if(!logged){accountRatingRows=[];qualityReport=null;qualityReportKey=null;qualityWorker?.terminate();qualityWorker=null;return;}
- const {all,recommended}=ratingSummary(accountRatingRows);
+ const {all,recommended,latest}=ratingSummary(accountRatingRows);
  $('quality-value').textContent=qualityPercent(recommended.precision);
  $('quality-counts').textContent=`Рекомендации: ${recommended.like} хороших · ${recommended.dislike} плохих · ${recommended.neutral} нейтральных`;
+ $('quality-latest').textContent=`Последние ${latest.total} оценённых рекомендаций: ${qualityPercent(latest.precision)} · ${latest.like} хороших / ${latest.dislike} плохих / ${latest.neutral} нейтральных.`;
  $('quality-all').textContent=`Все оценки: ${all.total} · ${all.like} хороших / ${all.dislike} плохих / ${all.neutral} нейтральных / ${all.watched} просмотрено. Доля хороших: ${qualityPercent(all.precision)}.`;
  if(!qualityReport){$('quality-comparison').textContent=accountRatingRows.length?'Проверяем на более поздних оценках…':'Пока нет оценок для проверки.';$('quality-evidence').textContent='';return;}
  if(qualityReport.status!=='evaluated'){$('quality-comparison').textContent=qualityReport.status==='error'?'Проверка временно недоступна.':'Пока недостаточно оценок с датами для проверки.';return;}
+ if(!qualityReport.positives){
+  $('quality-comparison').textContent=`В проверочной выборке: 0 понравившихся из ${qualityReport.tested}.`;
+  $('quality-evidence').textContent='В ней пока нет хороших примеров, поэтому улучшение порядка рекомендаций оценить нельзя. Фактические результаты последних рекомендаций показаны выше.';return;
+ }
  const {before,after}=qualityReport;
  $('quality-comparison').textContent=`В первых 30 — до: ${qualityPercent(before.precision)} (${before.liked}/${before.accepted}) → после: ${qualityPercent(after.precision)} (${after.liked}/${after.accepted}). В первых 10: ${before.likes_at_10} → ${after.likes_at_10} понравившихся.`;
  $('quality-evidence').textContent=`Проверка на ${qualityReport.tested} более поздних фильмах, понравились ${qualityReport.positives}. Это пересчёт отбора на прошлых оценках, не результат новой живой подборки.${qualityReport.positives<10?' Хороших примеров мало — результат предварительный.':''}`;
@@ -172,7 +177,7 @@ function startQualityCheck(){
  if(key===qualityReportKey&&(qualityReport&&qualityReport.status!=='error'||qualityWorker))return;
  qualityWorker?.terminate();qualityReport=null;qualityReportKey=key;
  try{
-  const worker=new Worker(new URL('./quality-worker.js?v=quality36',import.meta.url),{type:'module'});qualityWorker=worker;
+  const worker=new Worker(new URL('./quality-worker.js?v=quality37',import.meta.url),{type:'module'});qualityWorker=worker;
   let timer;
   const finish=report=>{clearTimeout(timer);worker.terminate();if(qualityWorker!==worker||server.session?.user?.id!==owner)return;qualityWorker=null;qualityReport=report;renderQuality();};
   timer=setTimeout(()=>finish({status:'error'}),20000);
@@ -191,7 +196,7 @@ $('export-ratings').onclick=async()=>{
   toast('Скачано оценок: '+rows.length);
  }catch(error){toast(error.message);}finally{button.disabled=false;}
 };
-function openAccount(){renderAccount();startQualityCheck();if(!$('account-dialog').open)$('account-dialog').showModal();}
+function openAccount(){renderAccount();startQualityCheck();if(server.session)syncAccount().catch(()=>{});if(!$('account-dialog').open)$('account-dialog').showModal();}
 $('account-code').addEventListener('keydown',e=>{if(e.key==='Enter'&&!$('verify-code').disabled)$('verify-code').click();});
 window.addEventListener('storage',async e=>{if(e.key!=='nightshift.session')return;if(!e.newValue){server.session=null;recommendationRows=[];collectionSyncedAt=null;reactions={};saved=[];films.splice(12);render();renderAccount();if($('sources-dialog').open)renderSources();}else try{if(await server.restore())await syncAccount();}catch{}});
 $('account-open').onclick=openAccount;$('account-close').onclick=()=>$('account-dialog').close();

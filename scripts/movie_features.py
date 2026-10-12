@@ -41,8 +41,10 @@ def classify(movie):
  if horror or any(c!='dystopian' for c in found):found.add('horror')
  return [c for c in ORDER if c in found]
 
-def features(movie):
- groups={'genre':genres(movie),'category':classify(movie),'keyword':list(dict.fromkeys(normalize(k if isinstance(k,str) else k.get('name')) for k in keywords(movie)))[:24], 'director':[normalize(director(movie))]}
+def features(movie,include_director_aliases=True):
+ aliases=movie.get('directorAliases') if include_director_aliases else None
+ aliases=list(dict.fromkeys(normalize(name) for name in aliases if isinstance(name,str) and name.strip())) if isinstance(aliases,list) else []
+ groups={'genre':genres(movie),'category':classify(movie),'keyword':list(dict.fromkeys(normalize(k if isinstance(k,str) else k.get('name')) for k in keywords(movie)))[:24], 'director':aliases or [normalize(director(movie))]}
  result={}
  for kind,values in groups.items():
   values=[v for v in values if v and (kind!='keyword' or v not in GENERIC)]
@@ -63,13 +65,13 @@ class TasteProfile(dict):
    for key in vector:
     if specific_feature(key):self.neighbor_index[key].append(i)
 
-def profile(ratings,include_quality=True):
+def profile(ratings,include_quality=True,include_director_aliases=True):
  ratings=list(ratings)
  sums=defaultdict(float);counts=defaultdict(int);shares=defaultdict(float);anchors=[]
  for row in ratings:
   signal=rating_signal(row)
   if not signal:continue
-  vector=features(row.get('metadata') or {})
+  vector=features(row.get('metadata') or {},include_director_aliases=include_director_aliases)
   anchors.append((signal,vector,row.get('updated_at') or row.get('ratedAt') or ''))
   for key,share in vector.items():sums[key]+=signal*share;shares[key]+=share;counts[key]+=1
  baseline=sum(a[0] for a in anchors)/len(anchors) if anchors else 0
@@ -83,7 +85,7 @@ def profile(ratings,include_quality=True):
   if label not in ('like','dislike'):continue
   if label=='like':positive_count+=1;counts_by_class=positive
   else:negative_count+=1;counts_by_class=negative
-  vector=predictive_features(row.get('metadata') or {},include_quality=include_quality)
+  vector=predictive_features(row.get('metadata') or {},include_quality=include_quality,include_director_aliases=include_director_aliases)
   examples.append((margin_features(vector),label=='like'))
   for key,share in vector.items():
    counts_by_class[key]+=share
@@ -99,12 +101,13 @@ def profile(ratings,include_quality=True):
   learned,result.bias=fit_margin(examples);result.clear();result.update(learned)
  result.positive_support=dict(positive_support)
  result.include_quality=include_quality
+ result.include_director_aliases=include_director_aliases
  result.training_count=positive_count+negative_count;result.positive_count=positive_count;result.negative_count=negative_count
- result.model_version=(MODEL_VERSION if include_quality else 'empirical-taste32') if result.predictive else 'contrast-fallback'
+ result.model_version=(MODEL_VERSION if include_quality and include_director_aliases else 'quality-aware36' if include_quality else 'empirical-taste32') if result.predictive else 'contrast-fallback'
  return result
 
-def predictive_features(movie,include_quality=True):
- vector=features(movie)
+def predictive_features(movie,include_quality=True,include_director_aliases=True):
+ vector=features(movie,include_director_aliases=include_director_aliases)
  language=movie.get('originalLanguage') or movie.get('original_language')
  if language:vector[('language',language)]=1
  try:year=int(movie.get('year') or str(movie.get('release_date',''))[:4])
@@ -142,12 +145,12 @@ def contrast_score(movie,taste):
 
 def balanced_score(movie,taste):
  if not getattr(taste,'predictive',False):return contrast_score(movie,taste)
- vector=predictive_features(movie,include_quality=getattr(taste,'include_quality',True));weights=taste.balanced_weights
+ vector=predictive_features(movie,include_quality=getattr(taste,'include_quality',True),include_director_aliases=getattr(taste,'include_director_aliases',True));weights=taste.balanced_weights
  return 3*sum(weights.get(key,0)*share*importance(key) for key,share in vector.items())/max(1,sum(share*importance(key) for key,share in vector.items()))
 
 def rejection_score(movie,taste):
  if not getattr(taste,'predictive',False):return contrast_score(movie,taste)
- return taste.bias+sum(taste.get(key,0)*share for key,share in margin_features(predictive_features(movie,include_quality=getattr(taste,'include_quality',True))).items())
+ return taste.bias+sum(taste.get(key,0)*share for key,share in margin_features(predictive_features(movie,include_quality=getattr(taste,'include_quality',True),include_director_aliases=getattr(taste,'include_director_aliases',True))).items())
 
 def match_score(movie,taste):
  if not getattr(taste,'predictive',False):return contrast_score(movie,taste)
@@ -158,10 +161,12 @@ def match_score(movie,taste):
 
 def feature_metadata(detail):
  rows=[k for k in keywords(detail) if isinstance(k,dict) and isinstance(k.get('name'),str) and type(k.get('id')) is int]
- return {'genreIds':genres(detail),'keywords':[k['name'] for k in rows],'keywordIds':[k['id'] for k in rows],
+ result={'genreIds':genres(detail),'keywords':[k['name'] for k in rows],'keywordIds':[k['id'] for k in rows],
          'director':director(detail),'originalLanguage':detail.get('original_language',''),
          'productionCountries':[c['iso_3166_1'] for c in detail.get('production_countries') or [] if isinstance(c,dict) and isinstance(c.get('iso_3166_1'),str)],
          'moods':classify(detail),'featureVersion':2}
+ if detail.get('directorAliases'):result['directorAliases']=detail['directorAliases']
+ return result
 
 
 def eligible_for_discovery(movie,require_target=None):

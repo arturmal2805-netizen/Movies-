@@ -125,12 +125,26 @@ export const categoryRules = {
     "excluded_countries": [
       "CN",
       "HK",
-      "TW"
+      "TW",
+      "JP",
+      "KR",
+      "IN"
     ],
     "excluded_languages": [
       "zh",
       "cn",
-      "yue"
+      "yue",
+      "ja",
+      "ko",
+      "hi",
+      "te",
+      "ta",
+      "ml",
+      "kn",
+      "bn",
+      "mr",
+      "gu",
+      "pa"
     ],
     "require_target": true
   },

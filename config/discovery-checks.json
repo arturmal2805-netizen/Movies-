@@ -177,7 +177,7 @@
     "expected": false
   },
   {
-    "name": "Korean horror remains eligible",
+    "name": "Korean horror excluded by user preference",
     "movie": {
       "year": 2020,
       "genreIds": [
@@ -188,7 +188,7 @@
       ],
       "originalLanguage": "ko"
     },
-    "expected": true
+    "expected": false
   },
   {
     "name": "family horror excluded",
@@ -208,6 +208,48 @@
       "genreIds": [
         12
       ]
+    },
+    "expected": false
+  },
+  {
+    "name": "JP ja horror excluded",
+    "movie": {
+      "year": 2023,
+      "genreIds": [
+        27
+      ],
+      "productionCountries": [
+        "JP"
+      ],
+      "originalLanguage": "ja"
+    },
+    "expected": false
+  },
+  {
+    "name": "IN hi horror excluded",
+    "movie": {
+      "year": 2023,
+      "genreIds": [
+        27
+      ],
+      "productionCountries": [
+        "IN"
+      ],
+      "originalLanguage": "hi"
+    },
+    "expected": false
+  },
+  {
+    "name": "IN te horror excluded",
+    "movie": {
+      "year": 2023,
+      "genreIds": [
+        27
+      ],
+      "productionCountries": [
+        "IN"
+      ],
+      "originalLanguage": "te"
     },
     "expected": false
   }

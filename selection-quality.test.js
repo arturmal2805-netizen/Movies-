@@ -16,6 +16,12 @@ test('no decisive recommendations yields an unavailable percentage, never a fabr
  assert.equal(ratingSummary([]).recommended.precision,null);
  assert.equal(ratingSummary([{tmdb_id:1,impression:'neutral',metadata:{recommendationMode:'manual'}}]).recommended.precision,null);
 });
+test('recent failed recommendations are visible even when lifetime precision is higher',()=>{
+ const rows=Array.from({length:60},(_,i)=>({tmdb_id:i+1,updated_at:new Date(Date.UTC(2026,0,i+1)).toISOString(),impression:i<30?'like':'dislike',metadata:{recommendationMode:'manual'}}));
+ const result=ratingSummary(rows);
+ assert.equal(result.recommended.precision,.5);assert.equal(result.latest.total,30);assert.equal(result.latest.precision,0);
+ assert.equal(result.latest.dislike,30);
+});
 test('admission calibration requires dated chronological evidence and enough positive validation films',()=>{
  assert.equal(selectionFloor([]),null);
  assert.equal(selectionFloor(Array.from({length:120},(_,i)=>({tmdb_id:i+1,impression:'dislike',metadata:{}}))),null);

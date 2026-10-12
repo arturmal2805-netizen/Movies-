@@ -1,5 +1,5 @@
-import {buildTasteProfile,tasteScore,tasteAcceptanceScore} from './taste.js?v=quality36';
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality36';
+import {buildTasteProfile,tasteScore,tasteAcceptanceScore} from './taste.js?v=quality37';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality37';
 
 export function ratingSummary(rows){
  const unique=new Map();
@@ -16,14 +16,16 @@ export function ratingSummary(rows){
   result.total=list.length;return result;
  };
  const all=[...unique.values()];
- return {all:count(all),recommended:count(all.filter(r=>['manual','scheduled'].includes(r.metadata?.recommendationMode)))};
+ const recommendations=all.filter(r=>['manual','scheduled'].includes(r.metadata?.recommendationMode));
+ const latest=recommendations.filter(r=>r.updated_at).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))||b.tmdb_id-a.tmdb_id).slice(0,30);
+ return {all:count(all),recommended:count(recommendations),latest:count(latest)};
 }
 
 function chronological(rows){return rows.filter(r=>['like','dislike'].includes(r.impression)).sort((a,b)=>String(a.updated_at||'').localeCompare(String(b.updated_at||''))||a.tmdb_id-b.tmdb_id);}
-function modelFor(rows,includeQuality=true){
+function modelFor(rows,includeQuality=true,includeDirectorAliases=true){
  const films=rows.map(r=>({...r.metadata,id:r.tmdb_id,tmdbId:r.tmdb_id}));
  const reactions=Object.fromEntries(rows.map(r=>[r.tmdb_id,{impression:r.impression,plot:r.plot,cinematography:r.cinematography,ratedAt:r.updated_at}]));
- return buildTasteProfile(films,reactions,{includeQuality});
+ return buildTasteProfile(films,reactions,{includeQuality,includeDirectorAliases});
 }
 function score(film,model){return tasteScore(film,model)-(filmCategories(film).some(c=>c==='horror'||c==='dystopian')?1:0);}
 export function selectionFloor(rows,includeQuality=true){
@@ -42,7 +44,7 @@ export function evaluateSelection(rows){
  if(decisive.length<100||decisive.some(r=>!r.updated_at))return {status:'insufficient'};
  const split=Math.floor(decisive.length*.8),train=decisive.slice(0,split);
  const test=decisive.slice(split).filter(r=>isEligibleForDiscovery(r.metadata||{})),model=modelFor(train);
- const previous=modelFor(train,false),previousFloor=selectionFloor(train,false);
+ const previous=modelFor(train,true,false),previousFloor=null;
  const measure=(selectedModel,cutoff,legacyGate)=>{
   const predictions=test.map(r=>[score(r.metadata,selectedModel),tasteAcceptanceScore(r.metadata,selectedModel),r.impression==='like']);
   const ordered=[...predictions].sort((a,b)=>b[0]-a[0]);
@@ -50,5 +52,5 @@ export function evaluateSelection(rows){
   const liked=kept.filter(([, ,label])=>label).length;
   return {accepted:kept.length,liked,precision:kept.length?liked/kept.length:null,eligible_pool:pool.length,likes_at_10:kept.slice(0,10).filter(([, ,y])=>y).length};
  };
- return {status:'evaluated',training:train.length,tested:test.length,positives:test.filter(r=>r.impression==='like').length,floor:previousFloor,metric:'top_30',before:measure(previous,previousFloor,true),after:measure(model,null,false)};
+ return {status:'evaluated',training:train.length,tested:test.length,positives:test.filter(r=>r.impression==='like').length,floor:previousFloor,metric:'top_30',before:measure(previous,previousFloor,false),after:measure(model,null,false)};
 }

@@ -27,6 +27,7 @@ on:
       - 'scripts/taste_model.py'
       - 'scripts/selection_quality.py'
       - 'scripts/test_selection_quality.py'
+      - 'scripts/test_search_evidence.py'
       - 'scripts/test_predictive_taste.py'
       - 'scripts/finish_manual_job.py'
       - 'config/category-rules.json'
