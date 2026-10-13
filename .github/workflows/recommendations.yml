@@ -55,7 +55,7 @@ permissions:
   contents: read
 concurrency:
   group: movie-recommendations-${{ github.event_name == 'workflow_dispatch' && (inputs.request_id || 'manual') || 'scheduled' }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 jobs:
   recommendations:
     name: Hourly personalized recommendations
