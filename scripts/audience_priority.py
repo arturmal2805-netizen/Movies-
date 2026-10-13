@@ -2,7 +2,7 @@
 import math
 from production_policy import POLICY,style_affinity
 
-SELECTION_VERSION='audience-first50'
+SELECTION_VERSION='audience-first51'
 
 def public_quality_tier(movie):
     rating=movie.get('rating',movie.get('vote_average'))
@@ -81,4 +81,4 @@ def selection_priority_score(movie,personal=0.,style_model=None):
     # Continuous ordering: personal evidence must affect every comparison,
     # rather than a tie that almost never occurs. It never vetoes a candidate.
     fit=7*math.tanh(personal/3) if type(personal) in (int,float) and math.isfinite(personal) else 0.
-    return audience_production_score(movie,legacy=True)+10*(confidence_quality(movie)-6)+fit+6*style_affinity(movie,style_model)
+    return audience_production_score(movie,legacy=True)+12*(confidence_quality(movie)-6)+fit+6*style_affinity(movie,style_model)

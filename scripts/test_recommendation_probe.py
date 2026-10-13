@@ -14,6 +14,11 @@ class ProbeCommandTests(unittest.TestCase):
   self.assertEqual(b.collection,[]);self.assertEqual(b.patched,[])
 
 class ReadOnlySearchTests(unittest.TestCase):
+ def test_no_profiles_cannot_be_reported_as_successful_real_validation(self):
+  import runpy
+  from pathlib import Path
+  with patch('builtins.print'),patch.dict('os.environ',{},clear=True),patch('recommend.Backend',return_value=FakeBackend()),patch('recommend.read_rows',return_value=[]):
+   with self.assertRaisesRegex(RuntimeError,'No private profile'):runpy.run_path(str(Path(__file__).with_name('probe_recommendations.py')),run_name='__main__')
  def test_real_pipeline_dry_run_selects_thirty_without_writing_or_budget_fetches(self):
   b=FakeBackend();candidates=[dict(movie(5000000+i),budget=None)for i in range(30)]
   b.movie=lambda path:candidates[int(path.split('/')[1].split('?')[0])-5000000]

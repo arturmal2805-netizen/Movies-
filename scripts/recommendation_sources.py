@@ -113,6 +113,22 @@ def tmdb_candidates(backend, preferred, config):
                     'primary_release_date.lte':min(now.date().isoformat(),str(year)+'-12-31')})
     # Broad sci-fi/thriller lists waste the shortlist on unrelated family/adventure films.
     strategies.extend(dict(sort_by='popularity.desc',**({'with_genres':'27,53'} if genre==53 else {'with_genres':878,'with_keywords':4565})) for genre in preferred[:3] if genre in (53,878))
+    # Separate established audiences in the user's liked language from crowded
+    # global lists. These are additional routes; the 100-vote fallback remains.
+    audience_languages=[lang for lang in config.get('_preferred_languages',[])[:2]
+                        if isinstance(lang,str)and len(lang)==2 and lang.isascii()and lang.isalpha()]
+    market=[]
+    without_comedy=','.join(map(str,[*RULES['selection']['always_excluded_genres'],35]))
+    for lang in audience_languages:
+        for order in ('vote_count.desc','popularity.desc','vote_average.desc'):
+            market.append({'sort_by':order,'with_genres':27,'with_original_language':lang,
+                           'vote_count.gte':1000,'without_genres':without_comedy})
+        for year in range(RULES['selection']['minimum_year'],now.year+1,5):
+            market.append({'sort_by':'vote_count.desc','with_genres':27,'with_original_language':lang,
+                           'vote_count.gte':1000,'without_genres':without_comedy,
+                           'primary_release_date.gte':str(year)+'-01-01',
+                           'primary_release_date.lte':min(now.date().isoformat(),str(year+4)+'-12-31')})
+    strategies=market+strategies
     broad_keys={tuple(sorted(strategy.items())) for strategy in strategies}
     companies=list(dict.fromkeys(c for c in config.get('_preferred_companies',[])[:6] if type(c) is int and c>0))
     actors=list(dict.fromkeys(c for c in config.get('_preferred_cast',[])[:4] if type(c) is int and c>0))
@@ -141,7 +157,7 @@ def tmdb_candidates(backend, preferred, config):
     personal=[i for i in range(len(probes)) if i not in broad]
     # Protect the ranked global audience lists from decade/theme proliferation.
     # They expose well-known unseen films before niche lists spend the budget.
-    headline=[i for i in broad if strategies[i] in
+    headline=[i for i in broad if strategies[i] in market or strategies[i] in
               [{'sort_by':order,**target} for order in ('popularity.desc','vote_count.desc')
                for target in ({'with_genres':27},{'with_keywords':4565},{'with_keywords':4458})]]
     secondary=[i for i in broad if i not in headline]

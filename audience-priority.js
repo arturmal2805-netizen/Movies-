@@ -1,14 +1,14 @@
 // Match the server's audience prior; missing values are neutral, never a veto.
-import {normalizeInterests,buildStyleModel} from './interests.js?v=quality50';
-import {tasteScore,buildTasteProfile} from './taste.js?v=quality50';
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality50';
-import {productionPolicy,productionExclusion,styleAffinity} from './production-policy.js?v=quality50';
+import {normalizeInterests,buildStyleModel} from './interests.js?v=quality51';
+import {tasteScore,buildTasteProfile} from './taste.js?v=quality51';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality51';
+import {productionPolicy,productionExclusion,styleAffinity} from './production-policy.js?v=quality51';
 export function buildSelectionProfile(films,reactions,interests){
  const profile=buildTasteProfile(films,reactions),preferences=normalizeInterests(interests),key=JSON.stringify(preferences);
  if(profile.styleKey!==key){profile.interests=preferences;profile.styleModel=buildStyleModel(films,reactions,preferences);profile.styleKey=key;}
  return profile;
 }
-export const selectionVersion='audience-first50';
+export const selectionVersion='audience-first51';
 export function isEligibleForSelection(film,interests){return isEligibleForDiscovery(film)&&!productionExclusion(film,{interests});}
 export function publicQualityTier(film){
  const rating=film.rating??film.vote_average,votes=film.vote_count??film.remoteMetrics?.voteCount;
@@ -46,7 +46,7 @@ export function confidenceQuality(film){
  return Number.isFinite(rating)&&rating>0&&rating<=10&&Number.isFinite(votes)&&votes>0?5+(rating-5)*(votes/(votes+300)):5;
 }
 export function selectionPriorityScore(film,personal=0,styleModel=null){
- return audienceProductionScore(film,{legacy:true})+10*(confidenceQuality(film)-6)+(Number.isFinite(personal)?7*Math.tanh(personal/3):0)+6*styleAffinity(film,styleModel);
+ return audienceProductionScore(film,{legacy:true})+12*(confidenceQuality(film)-6)+(Number.isFinite(personal)?7*Math.tanh(personal/3):0)+6*styleAffinity(film,styleModel);
 }
 export function selectionScore(film,profile,options={}){
  return options.legacy||options.legacyVersion==='45'?tasteScore(film,profile)+audiencePriorityScore(film,profile.predictive,options):options.legacyVersion==='46'?audienceFirstScore(film):options.legacyVersion==='48'?audienceProductionScore(film,{styleModel:profile.styleModel}):selectionPriorityScore(film,personalFitScore(film,profile),profile.styleModel);

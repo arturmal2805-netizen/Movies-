@@ -160,7 +160,7 @@ export const categoryRules = {
         "so bad it's good"
       ],
       "popularity_weight": 6,
-      "votes_weight": 2.5,
+      "votes_weight": 7,
       "excluded_genre_combinations": [
         [
           27,

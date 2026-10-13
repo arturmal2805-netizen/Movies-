@@ -6,7 +6,7 @@ test('public reach gives a material soft priority and both metadata shapes agree
  assert.ok(audienceScore({popularity:30})-audienceScore({popularity:2})>.8);
  assert.ok(audienceScore({vote_count:20000})>audienceScore({vote_count:200}));
  assert.equal(audienceScore({remoteMetrics:{popularity:30,voteCount:2000}}),audienceScore({popularity:30,vote_count:2000}));
- assert.equal(selectionVersion,'audience-first50');
+ assert.equal(selectionVersion,'audience-first51');
 });
 test('unknown public reach is neutral and extreme data cannot drown out personal evidence',()=>{
  for(const value of [undefined,null,0,-1,NaN,Infinity,true,'100'])assert.equal(audienceScore({popularity:value,vote_count:value}),0);
@@ -53,4 +53,10 @@ test('personal evidence changes every comparison without removing negative candi
  assert.ok(selectionPriorityScore(movie,2)>selectionPriorityScore(movie,-2));
  assert.ok(Number.isFinite(selectionPriorityScore(movie,-10000)));
  assert.ok(Number.isFinite(selectionPriorityScore({...movie,vote_count:1e308})));
+});
+
+test('established audience outweighs a noisy niche review without a cutoff',()=>{
+ const known={popularity:2,vote_count:5000,vote_average:6},niche={popularity:10,vote_count:150,vote_average:8};
+ assert.ok(selectionPriorityScore(known,-2)>selectionPriorityScore(niche,2));
+ for(const votes of [100,300,1000,5000])assert.ok(Number.isFinite(selectionPriorityScore({...known,vote_count:votes},-100)));
 });

@@ -84,6 +84,7 @@ jobs:
         if: ${{ github.event_name == 'push' }}
         run: python3 scripts/probe_recommendations.py
       - name: Add private personalized films
+        if: ${{ github.event_name != 'push' }}
         env:
           TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
           TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
