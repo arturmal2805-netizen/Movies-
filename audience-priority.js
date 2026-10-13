@@ -1,6 +1,12 @@
 // Match the server's audience prior; missing values are neutral, never a veto.
-import {tasteScore} from './taste.js?v=quality43';
-export const selectionVersion='audience-priority45';
+import {tasteScore,buildTasteProfile} from './taste.js?v=quality43';
+import {filmCategories} from './categories.js?v=quality43';
+export {buildTasteProfile as buildSelectionProfile};
+export const selectionVersion='audience-first46';
+export function audienceFirstScore(film){
+ const popularity=film.popularity??film.remoteMetrics?.popularity,votes=film.vote_count??film.remoteMetrics?.voteCount;
+ return (Number.isFinite(popularity)&&popularity>0?3*Math.log2(1+popularity):0)+(Number.isFinite(votes)&&votes>0?Math.log2(1+votes):0);
+}
 export function audienceScore(film,{legacy=false}={}){
  const popularity=film.popularity??film.remoteMetrics?.popularity;
  const votes=film.vote_count??film.remoteMetrics?.voteCount;
@@ -19,4 +25,12 @@ export function audiencePriorityScore(film,predictive=false,{legacy=false}={}){
  const value=audienceScore(film,{legacy})+publicQualityScore(film,predictive,{legacy});
  return legacy?value:Math.max(-3,Math.min(3,value));
 }
-export function selectionScore(film,profile,options={}){return tasteScore(film,profile)+audiencePriorityScore(film,profile.predictive,options);}
+export function selectionScore(film,profile,options={}){
+ return options.legacy||options.legacyVersion==='45'?tasteScore(film,profile)+audiencePriorityScore(film,profile.predictive,options):audienceFirstScore(film);
+}
+export function selectionSecondaryScore(film,profile){return tasteScore(film,profile)-(filmCategories(film).some(c=>c==='horror'||c==='dystopian')?1:0)+publicQualityScore(film,profile.predictive);}
+export function compareSelection(a,b,profile,scores=null,secondary=null){
+ const primary=film=>scores?.get(film.id)??selectionScore(film,profile);
+ const tie=film=>secondary?.get(film.id)??selectionSecondaryScore(film,profile);
+ return primary(b)-primary(a)||tie(b)-tie(a)||(a.tmdbId??a.id)-(b.tmdbId??b.id);
+}

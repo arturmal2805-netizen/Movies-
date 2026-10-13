@@ -1,7 +1,7 @@
 """Read-only comparison against the former gate; production uses ranked batches."""
 from movie_features import profile, match_score, rejection_score, eligible_for_discovery
 from statistics import median
-from audience_priority import audience_priority_score
+from audience_priority import audience_priority_score,audience_first_score,public_quality_score
 
 
 def chronological(rows):
@@ -36,13 +36,18 @@ def selection_evaluation(rows):
     previous = model
     previous_floor = None
     def measure(selected_model,cutoff,legacy_gate,legacy_audience=False):
-        predictions = [(match_score(r['metadata'], selected_model)+audience_priority_score(r['metadata'],selected_model.predictive,legacy=legacy_audience), rejection_score(r['metadata'], selected_model), r['impression'] == 'like') for r in test]
-        ordered=sorted(predictions,key=lambda p:p[0],reverse=True)
+        predictions=[]
+        for row in test:
+            m=row['metadata'];personal=match_score(m,selected_model)
+            primary=personal+audience_priority_score(m,selected_model.predictive) if legacy_audience else audience_first_score(m)
+            secondary=personal if legacy_audience else personal+public_quality_score(m,selected_model.predictive)
+            predictions.append((primary,secondary,row['impression']=='like',row['tmdb_id']))
+        ordered=sorted(predictions,key=lambda p:(-p[0],-p[1],p[3]))
         pool=[item for item in ordered if not legacy_gate or item[1]>=-.8 and (cutoff is None or item[0]>=cutoff)]
         kept=pool[:30]
-        liked=sum(label for _,_,label in kept)
+        liked=sum(item[2] for item in kept)
         return {'accepted': len(kept), 'liked': liked, 'precision': liked / len(kept) if kept else None,
-                'eligible_pool':len(pool),'likes_at_10': sum(label for _,_,label in kept[:10])}
+                'eligible_pool':len(pool),'likes_at_10': sum(item[2] for item in kept[:10])}
     return {'status': 'evaluated', 'training': len(train), 'tested': len(test),
             'positives': sum(r['impression']=='like' for r in test),
             'floor': previous_floor,'metric':'top_30', 'before': measure(previous,previous_floor,False,True), 'after': measure(model,None,False)}

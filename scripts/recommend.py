@@ -10,7 +10,7 @@ from movie_features import profile,match_score,rejection_score,genres,keywords,d
 from import_catalog import IDS
 from synopsis_model import synopsis_score
 from production_model import production_score
-from audience_priority import audience_score,audience_priority_score,SELECTION_VERSION
+from audience_priority import audience_first_score,public_quality_score,SELECTION_VERSION
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 SEARCH_GENERIC=GENERIC|{'spin off','prequel','reboot','franchise','based on short film','based on play or musical'}
 
@@ -91,31 +91,32 @@ def valid_candidate(movie,minimum_votes,today,require_target=None):
 def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None,preliminary=False,tastes=None):
  excluded={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values())
  if tastes is None:tastes=profile(ratings)
- ranked=[];seen=set();today=(now.date() if now else datetime.datetime.now(datetime.timezone.utc).date())
+ ranked=[];seen=set();tie_scores={};today=(now.date() if now else datetime.datetime.now(datetime.timezone.utc).date())
  for movie in candidates:
   if not valid_candidate(movie,minimum_votes,today,require_target=False if preliminary else None) or movie['id'] in seen or movie['id'] in excluded:continue
   seen.add(movie['id'])
   personal=match_score(movie,tastes)
-  # Personal scores order the admissible pool; they never turn a fresh manual
-  # search into an empty batch. Explicit content policies above remain hard.
-  value=(personal+audience_priority_score(movie,tastes.predictive))*5
+  # Public audience is the first key; personal evidence breaks equal-audience
+  # ties. Neither score is an eligibility threshold.
+  value=audience_first_score(movie)
+  tie_scores[movie['id']]=personal+public_quality_score(movie,tastes.predictive)
   # Sparse lists omit director/keywords; prioritize verifying personalized
   # routes. The final ranking uses canonical evidence rather than route bonuses.
-  if preliminary:value+=2*bool(movie.get('_liked_directors'))+bool(movie.get('_matched_theme_groups'))+.4*bool(movie.get('_liked_anchor_ids'))
+  if preliminary:tie_scores[movie['id']]+=.4*bool(movie.get('_liked_directors'))+.2*bool(movie.get('_matched_theme_groups'))+.08*bool(movie.get('_liked_anchor_ids'))
   categories=classify(movie)
-  if 'horror' in categories or 'dystopian' in categories or movie.get('_discovery_category')=='dystopian':value+=5
   favorite=sorted((g for g in genres(movie) if tastes.get(('genre',g),0)>0),key=lambda g:tastes[('genre',g)],reverse=True)
   themes=sorted((normalize(k if isinstance(k,str) else k.get('name')) for k in keywords(movie) if supported_preference(tastes,('keyword',normalize(k if isinstance(k,str) else k.get('name'))))),key=lambda name:tastes[('keyword',name)],reverse=True)
   reason='Совпадает с вашими оценками: '+', '.join(GENRES.get(g,'Жанр') for g in favorite[:2])+'.' if favorite else 'Для знакомства с новым жанром; учтены оценки и популярность TMDB.'
   if themes:reason='По вашим оценкам подходят темы: '+', '.join(themes[:2])+'.'
-  elif personal<=0 and ratings:reason='Слабое совпадение с оценками; кандидат для изучения вкуса.'
+  elif personal<=0 and ratings:reason='Выбран по популярности TMDB и размеру аудитории; личное совпадение пока слабое.'
   if not ratings:reason='Стартовая рекомендация по оценкам TMDB. После ваших оценок подбор станет персональным.'
   if 'horror' in categories:reason='Приоритет хоррорам. '+reason
   elif 'dystopian' in categories:reason='Приоритет антиутопиям. '+reason
   ranked.append((value,movie,reason))
- return sorted(ranked,key=lambda entry:(-entry[0],entry[1]['id']))
+ return sorted(ranked,key=lambda entry:(-entry[0],-tie_scores[entry[1]['id']],entry[1]['id']))
 
-def diverse_candidates(ranked):
+def diverse_candidates(ranked,strict_audience=False):
+ if strict_audience:return list(ranked)
  # Diversity breaks close matches. An accumulating penalty must not override
  # personal evidence late in a batch or reward irrelevant mixed genres.
  remaining=list(ranked);used={};result=[]
@@ -131,7 +132,7 @@ def audience_diagnostics(ranked,budget,predictive=False):
  # Export aggregate pool evidence so a weak future batch can be diagnosed
  # against the audience options that were actually available in that run.
  proposed=[entry[1] for entry in ranked[:budget]]
- strongest=sorted((entry[1] for entry in ranked),key=lambda m:(-audience_priority_score(m,predictive),-audience_score(m),m['id']))[:budget]
+ strongest=sorted((entry[1] for entry in ranked),key=lambda m:(-audience_first_score(m),m['id']))[:budget]
  def center(movies,key):
   values=[m[key] for m in movies if type(m.get(key)) in (int,float) and math.isfinite(m[key])]
   return round(median(values),3) if values else None
@@ -485,7 +486,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
    print('Refill discovery:',json.dumps(statuses))
   pending=rank_candidates(list(pool.values()),ratings,collection,config['minimum_votes'],now,preliminary=True,tastes=tastes)
   pending=[entry for entry in pending if entry[1]['id'] not in attempted]
-  while pending and len(attempted)<detail_limit and (len(final)<budget or len(attempted)<quality_pool or needs_personal_search() or (manual or personal_search) and pending[0][0]>min(entry[0] for entry in final[:budget])):
+  while pending and len(attempted)<detail_limit and (len(final)<budget or len(attempted)<quality_pool or needs_personal_search() or (manual or personal_search) and pending[0][0]>=min(entry[0] for entry in final[:budget])):
    chunk=pending[:min(60,max(20,(budget-len(final))*2),detail_limit-len(attempted))]
    pending=pending[len(chunk):]
    attempted.update(entry[1]['id'] for entry in chunk)
@@ -493,7 +494,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
    metadata_failures+=sum(not fetched for _,fetched in hydrated)
    fetched_any=fetched_any or any(fetched for _,fetched in hydrated)
    details.update((detail['id'],detail) for detail,_ in hydrated if detail)
-   final=diverse_candidates(rank_candidates(list(details.values()),ratings,collection,config['minimum_votes'],now,tastes=tastes))
+   final=diverse_candidates(rank_candidates(list(details.values()),ratings,collection,config['minimum_votes'],now,tastes=tastes),strict_audience=True)
   print('Search pass:',search_round+1,'unique pool:',len(pool),'discovery requests:',search_config['_discovery_stats'].get('requests',0),'details attempted:',len(attempted),'metadata failures:',metadata_failures,'canonical eligible:',len(details),'personalized eligible:',len(final),'target:',budget)
   good_fit=sum(match_score(entry[1],tastes)>0 for entry in final[:budget])
   print('Search fit:',good_fit,'positive personal scores in top',min(budget,len(final)))
@@ -512,11 +513,12 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
   metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':director(detail),'moods':classify(detail),'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'synopsisChecked':True,'reachChecked':True,'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity'),'voteCount':detail.get('vote_count'),'tmdbUpdatedAt':now.isoformat()}}
   metadata['discoverySources']=movie.get('discovery_sources',[])
   metadata.update(feature_metadata(detail))
-  metadata.update(recommendationSearchVersion='audience-search45',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
-  metadata['recommendationAudienceScore']=round(audience_score(detail),6)
-  metadata['recommendationAudiencePriority']=round(audience_priority_score(detail,tastes.predictive),6)
+  metadata.update(recommendationSearchVersion='audience-search46',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
+  metadata['recommendationAudienceScore']=round(audience_first_score(detail),6)
+  metadata['recommendationAudiencePriority']=round(audience_first_score(detail),6)
   metadata.update(audience_summary)
-  metadata['recommendationOrderingScore']=round(match_score(detail,tastes)+audience_priority_score(detail,tastes.predictive),6)
+  metadata['recommendationOrderingScore']=round(audience_first_score(detail),6)
+  metadata['recommendationOrderingSecondaryScore']=round(match_score(detail,tastes)+public_quality_score(detail,tastes.predictive),6)
   metadata['recommendationDiscoveryRequests']=search_config['_discovery_stats'].get('requests',0)
   metadata['recommendationSynopsisScore']=round(.25*synopsis_score(detail,tastes.synopsis_model),6)
   metadata['recommendationSynopsisDocuments']=tastes.synopsis_model.get('document_count',0)

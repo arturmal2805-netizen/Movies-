@@ -1,7 +1,21 @@
-"""Shared, bounded public-audience prior; never an eligibility threshold."""
+"""Public-first ordering and frozen audience priors; never eligibility thresholds."""
 import math
 
-SELECTION_VERSION='audience-priority45'
+SELECTION_VERSION='audience-first46'
+
+def audience_first_score(movie):
+    """First sorting key, not a cutoff: trending reach plus audience breadth."""
+    remote=movie.get('remoteMetrics')
+    remote=remote if isinstance(remote,dict) else {}
+    popularity=movie.get('popularity')
+    votes=movie.get('vote_count')
+    if popularity is None:popularity=remote.get('popularity')
+    if votes is None:votes=remote.get('voteCount')
+    score=0
+    for value,weight in ((popularity,3),(votes,1)):
+        if type(value) in (int,float) and math.isfinite(value) and value>0:
+            score+=weight*math.log2(1+value)
+    return score
 
 def audience_score(movie,legacy=False):
     remote=movie.get('remoteMetrics')

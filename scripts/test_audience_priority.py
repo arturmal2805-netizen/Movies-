@@ -2,15 +2,33 @@
 import datetime,math,unittest
 from unittest.mock import Mock,patch
 from urllib.parse import parse_qs,urlsplit
-from audience_priority import audience_score,audience_priority_score,public_quality_score
+from audience_priority import audience_score,audience_priority_score,audience_first_score,public_quality_score
 from recommendation_sources import tmdb_candidates
-from recommend import recommend_user,load_config,rank_candidates,audience_diagnostics
+from recommend import recommend_user,load_config,rank_candidates,audience_diagnostics,diverse_candidates
 from movie_features import profile
 from test_recommendation_pipeline import FakeBackend,movie
 NOW=datetime.datetime(2026,10,13,18,30,tzinfo=datetime.timezone.utc)
 def horror(mid,**kwargs):return dict(movie(mid),genre_ids=[27],genres=[{'id':27}],**kwargs)
 
 class AudiencePriorityTests(unittest.TestCase):
+ def test_strict_public_order_cannot_be_overridden_by_personal_or_route_bonuses(self):
+  low=dict(horror(2501001),popularity=2,vote_count=100,_liked_directors=['A director'],_matched_theme_groups=['1,2'])
+  high=dict(horror(2501002),popularity=30,vote_count=5000)
+  with patch('recommend.match_score',side_effect=lambda m,t:100 if m['id']==low['id'] else -100):
+   for preliminary in (False,True):
+    ranked=rank_candidates([low,high],[],[],now=NOW,preliminary=preliminary)
+    self.assertEqual([r[1]['id'] for r in ranked],[high['id'],low['id']])
+    self.assertEqual(diverse_candidates(ranked,strict_audience=True),ranked)
+ def test_personal_preferences_break_equal_public_audience_ties(self):
+  low=horror(2501001);high=horror(2501002)
+  with patch('recommend.match_score',side_effect=lambda m,t:-3 if m['id']==low['id'] else 3):
+   self.assertEqual(rank_candidates([low,high],[],[],now=NOW)[0][1]['id'],high['id'])
+ def test_public_first_score_has_no_saturation_and_invalid_numbers_are_neutral(self):
+  a={'popularity':40,'vote_count':20000};b={'popularity':400,'vote_count':200000}
+  self.assertGreater(audience_first_score(b),audience_first_score(a))
+  self.assertTrue(math.isfinite(audience_first_score({'popularity':1e308,'vote_count':1e308})))
+  for value in (None,0,-1,True,'100',float('nan'),float('inf')):
+   self.assertEqual(audience_first_score({'popularity':value,'vote_count':value}),0)
  def test_pool_diagnostics_distinguish_proposed_and_available_audiences(self):
   a=dict(horror(2501001),popularity=2,vote_count=100)
   b=dict(horror(2501002),popularity=20,vote_count=5000)
@@ -55,10 +73,10 @@ class AudiencePriorityTests(unittest.TestCase):
    ordered=rank_candidates([obscure,popular],rows,[],now=NOW,tastes=profile(rows))
   self.assertEqual(ordered[0][1]['id'],2500002)
   self.assertGreater(ordered[0][0]-ordered[1][0],3)
- def test_strong_personal_match_wins_over_unrelated_trending_film(self):
+ def test_strict_audience_order_precedes_personal_advantage_for_admissible_films(self):
   a=horror(2500001);b=dict(a,id=2500002,popularity=1000000)
   with patch('recommend.match_score',side_effect=lambda m,t:2 if m['id']==a['id'] else -2):
-   self.assertEqual(rank_candidates([b,a],[],[],now=NOW)[0][1]['id'],a['id'])
+   self.assertEqual(rank_candidates([b,a],[],[],now=NOW)[0][1]['id'],b['id'])
  def test_votes_are_soft_and_missing_numbers_are_neutral(self):
   self.assertGreater(audience_score({'vote_count':20000}),audience_score({'vote_count':200}))
   for value in (None,0,-1,float('nan'),float('inf'),True,'100'):
