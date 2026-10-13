@@ -92,11 +92,11 @@ class PersonalizedDiscoveryTests(unittest.TestCase):
    self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,dict(load_config(),history_enrichment_per_run=0),manual=True),0)
   self.assertEqual(backend.collection,[])
 
- def test_manual_search_passes_learned_directors_into_adapter(self):
+ def test_manual_search_uses_style_references_without_filmography_routes(self):
   backend=FakeBackend();backend.ratings=self.history()
   with patch('recommend.discover',return_value=([],[])) as search:
    recommend_user(backend,{'user_id':'test'},NOW,dict(load_config(),history_enrichment_per_run=0),manual=True)
-  self.assertEqual(search.call_args.args[2]['_preferred_directors'],['Trusted'])
+  self.assertEqual(search.call_args.args[2]['_preferred_directors'],[])
 
  def test_route_attribution_survives_duplicate_sources_and_canonical_enrichment(self):
   backend=Mock()
@@ -114,7 +114,7 @@ class PersonalizedDiscoveryTests(unittest.TestCase):
   with patch('recommend.discover',return_value=(pool,[])):
    self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,dict(load_config(),history_enrichment_per_run=0),manual=True),1)
   metadata=backend.collection[0]['metadata']
-  self.assertEqual(metadata['recommendationAnchorIds'],[600001]);self.assertEqual(metadata['recommendationDirectorSeeds'],['Trusted']);self.assertEqual(metadata['recommendationSearchVersion'],'audience-search47')
+  self.assertEqual(metadata['recommendationAnchorIds'],[600001]);self.assertEqual(metadata['recommendationDirectorSeeds'],['Trusted']);self.assertEqual(metadata['recommendationSearchVersion'],'audience-search48')
 
  def test_personal_keyword_queries_have_reserved_budget_and_require_horror(self):
   from urllib.parse import urlsplit,parse_qs

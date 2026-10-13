@@ -11,7 +11,7 @@ NOW = datetime.datetime.now(datetime.timezone.utc)
 def movie(mid):
     return {'id': mid, 'title': 'Test film', 'genre_ids': [878], 'genres': [{'id': 878}],
             'keywords': ['dystopia'], 'poster_path': '/poster.jpg', 'runtime': 100, 'release_date': '2020-01-01',
-            'vote_count': 200, 'vote_average': 7, 'popularity': 10}
+            'vote_count': 200, 'vote_average': 7, 'popularity': 10, 'budget': 15000000}
 
 
 class FakeBackend:

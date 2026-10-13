@@ -59,7 +59,10 @@
     "dystopian": [
       "dystopia",
       "dystopian",
-      "totalitarian regime"
+      "totalitarian regime",
+      "post-apocalyptic future",
+      "post-apocalyptic society",
+      "post-apocalyptic world"
     ],
     "psychological-horror": [
       "psychological horror",
@@ -147,17 +150,126 @@
     ],
     "require_target": true,
     "production": {
-      "minimum_known_budget_usd": 10000000,
+      "minimum_known_budget_usd": 3000000,
       "excluded_keywords": [
         "independent film",
         "low budget",
         "microbudget",
-        "micro budget"
+        "micro budget",
+        "mockbuster",
+        "campy",
+        "parody",
+        "spoof",
+        "horror spoof",
+        "so bad it's good"
       ],
       "popularity_weight": 4,
       "votes_weight": 1,
       "budget_weight": 2,
-      "budget_scale_usd": 5000000
+      "budget_scale_usd": 5000000,
+      "require_known_budget": true,
+      "excluded_genre_combinations": [
+        [
+          27,
+          35
+        ]
+      ],
+      "focus_reference_titles": [
+        {
+          "title": "The Witch",
+          "year": 2015,
+          "director": "Robert Eggers"
+        },
+        {
+          "title": "The Lighthouse",
+          "year": 2019,
+          "director": "Robert Eggers"
+        },
+        {
+          "title": "Nosferatu",
+          "year": 2024,
+          "director": "Robert Eggers"
+        },
+        {
+          "title": "The Last Voyage of the Demeter",
+          "year": 2023,
+          "director": "André Øvredal"
+        }
+      ],
+      "style_groups": [
+        [
+          "gothic",
+          "gothic horror",
+          "folk horror",
+          "folklore horror",
+          "paganism",
+          "pagan cult"
+        ],
+        [
+          "period piece",
+          "17th century",
+          "18th century",
+          "19th century",
+          "1830s",
+          "1890s",
+          "puritan",
+          "english colony"
+        ],
+        [
+          "isolation",
+          "paranoia",
+          "hallucination",
+          "psychological horror",
+          "psychological thriller",
+          "religion",
+          "religious fanaticism",
+          "claustrophobia"
+        ]
+      ],
+      "default_interests": {
+        "version": 1,
+        "genrePriority": [
+          "horror",
+          "dystopian"
+        ],
+        "directors": [
+          {
+            "name": "Роберт Эггерс",
+            "aliases": [
+              "Robert Eggers",
+              "Роберт Эггерс"
+            ]
+          },
+          {
+            "name": "Зак Креггер",
+            "aliases": [
+              "Zach Cregger",
+              "Зак Креггер"
+            ]
+          },
+          {
+            "name": "Дэвид Роберт Митчелл",
+            "aliases": [
+              "David Robert Mitchell",
+              "Дэвид Роберт Митчелл"
+            ]
+          },
+          {
+            "name": "Корали Фаржа",
+            "aliases": [
+              "Coralie Fargeat",
+              "Корали Фаржа"
+            ]
+          },
+          {
+            "name": "Андре Эвредал",
+            "aliases": [
+              "André Øvredal",
+              "Андре Эвредал"
+            ]
+          }
+        ]
+      }
     }
   },
   "keyword_groups": {

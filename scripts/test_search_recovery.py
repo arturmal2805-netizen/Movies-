@@ -44,7 +44,7 @@ class SearchRecoveryTests(unittest.TestCase):
   cfg=dict(load_config(),sources=[{'id':'tmdb','adapter':'tmdb_discover','enabled':True,'pages':1}],
            _preferred_movie_ids=[900000],_include_similar=True)
   pool,_=discover(backend,[],cfg)
-  self.assertEqual(len(pool),1);self.assertEqual(set(pool[0]['_personal_routes']),{'audience-popularity','recommendations'})
+  self.assertEqual(len(pool),1);self.assertEqual(set(pool[0]['_personal_routes']),{'audience-popularity','audience-quality','recommendations'})
   backend.movie.side_effect=lambda path:{'results':[horror(700000)]}
   pool,_=discover(backend,[],cfg)
   self.assertEqual(set(pool[0]['_personal_routes']),{'recommendations','similar'})

@@ -29,6 +29,9 @@ on:
       - 'scripts/production_model.py'
       - 'scripts/audience_priority.py'
       - 'scripts/production_policy.py'
+      - 'scripts/interests.py'
+      - 'scripts/check_interests_access.py'
+      - 'scripts/test_interests.py'
       - 'scripts/test_production_policy.py'
       - 'scripts/test_audience_priority.py'
       - 'scripts/test_production_model.py'
@@ -70,6 +73,8 @@ jobs:
           ref: main
       - name: Test recommendation logic
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Verify private interests access
+        run: python3 scripts/check_interests_access.py
       - name: Refresh personal history for the new model
         if: ${{ github.event_name == 'push' }}
         run: python3 scripts/warm_personal_history.py

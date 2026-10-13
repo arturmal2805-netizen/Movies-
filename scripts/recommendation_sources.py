@@ -14,10 +14,12 @@ def annotate_query(rows,path):
         rows=[dict(m,_personal_routes=['audience-popularity']) if isinstance(m,dict) else m for m in rows]
     if query.get('sort_by')==['vote_count.desc']:
         rows=[dict(m,_personal_routes=['audience-votes']) if isinstance(m,dict) else m for m in rows]
+    if query.get('sort_by')==['vote_average.desc']:
+        rows=[dict(m,_personal_routes=['audience-quality']) if isinstance(m,dict) else m for m in rows]
     for parameter,label in [('with_companies','liked-studio'),('with_cast','liked-cast')]:
         if query.get(parameter):rows=[dict(m,_personal_routes=list(dict.fromkeys(m.get('_personal_routes',[])+[label]))) if isinstance(m,dict) else m for m in rows]
     words=query.get('with_keywords',[])
-    if words==['4565']:return [dict(m,_discovery_category='dystopian') if isinstance(m,dict) else m for m in rows]
+    if words in (['4565'],['4458']):return [dict(m,_discovery_category='dystopian') if isinstance(m,dict) else m for m in rows]
     if words and ',' in words[0]:return [dict(m,_matched_theme_groups=[words[0]]) if isinstance(m,dict) else m for m in rows]
     return rows
 
@@ -90,6 +92,9 @@ def tmdb_candidates(backend, preferred, config):
     strategies=[{'sort_by':'popularity.desc','with_genres':27},{'sort_by':'vote_average.desc','with_genres':27},
                 {'sort_by':'popularity.desc','with_keywords':4565}]
     if config.get('_evidence_routes'):
+        strategies.extend([{'sort_by':'popularity.desc','with_keywords':4458},{'sort_by':'vote_count.desc','with_keywords':4458},
+                           {'sort_by':'vote_average.desc','with_genres':27,'vote_count.gte':1000},
+                           {'sort_by':'vote_average.desc','with_keywords':'4565|4458','vote_count.gte':1000}])
         # Audience count is a separate discovery route, not a higher minimum
         # or a ranking override. Decades expose unseen films behind the head
         # of the global lists while every existing route remains available.
@@ -132,7 +137,7 @@ def tmdb_candidates(backend, preferred, config):
     # They expose well-known unseen films before niche lists spend the budget.
     headline=[i for i in broad if strategies[i] in
               [{'sort_by':order,**target} for order in ('popularity.desc','vote_count.desc')
-               for target in ({'with_genres':27},{'with_keywords':4565})]]
+               for target in ({'with_genres':27},{'with_keywords':4565},{'with_keywords':4458})]]
     secondary=[i for i in broad if i not in headline]
     count=config.get('pages',2);window=max(count,min(20,config.get('page_window',20)))
     limit=max(1,min(64,config.get('discovery_request_limit',24)))
@@ -191,6 +196,7 @@ def tmdb_candidates(backend, preferred, config):
     # Probe new routes once. Previously every refill charged the budget for
     # the same first pages even though the backend returned cached responses.
     new_routes=[i for i in broad+personal if totals.get(probes[i]) is None]
+    new_routes.sort(key=lambda i:0 if 'with_companies' in strategies[i] or 'with_cast' in strategies[i] else 1 if i in headline else 2)
     if new_routes:
         with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
             items=[(i,1) for i in new_routes[:limit]]
@@ -208,7 +214,13 @@ def tmdb_candidates(backend, preferred, config):
     remaining=sequential-request_count
     broad_budget=remaining if not personal else int(remaining*.65)
     before=request_count
-    scan(headline,int(broad_budget*.75))
+    headline_budget=int(broad_budget*.75)
+    horror_headline=[i for i in headline if strategies[i].get('with_genres')==27]
+    dystopia_headline=[i for i in headline if i not in horror_headline]
+    first,second=(dystopia_headline,horror_headline) if config.get('_genre_priority',['horror'])[0]=='dystopian' else (horror_headline,dystopia_headline)
+    scan(first,(headline_budget*3+3)//4)
+    scan(second,headline_budget-(request_count-before))
+    scan(first,headline_budget-(request_count-before))
     scan(secondary,broad_budget-(request_count-before))
     scan(headline,broad_budget-(request_count-before))
     scan(personal,sequential-request_count)
@@ -334,7 +346,8 @@ def discover(backend, preferred, config):
                                 ('_anchor_batch_size',6),('_preferred_keywords',[]),('_preferred_keyword_groups',[]),
                                 ('_preferred_periods',[]),('_preferred_directors',[]),('_preferred_companies',[]),
                                 ('_preferred_cast',[]),('_director_anchor_ids',{}),('_discovery_pages',{}),
-                                ('_discovery_totals',{}),('_discovery_stats',{}),('_anchor_coverage',set())]:
+                                ('_discovery_totals',{}),('_discovery_stats',{}),('_anchor_coverage',set()),
+                                ('_genre_priority',['horror','dystopian'])]:
                 options[key]=config.get(key,default)
             candidates=ADAPTERS[source['adapter']](backend,preferred,options)
             valid = [m for m in candidates if isinstance(m,dict) and type(m.get('id')) is int and m['id'] > 0 and not excluded(config,m['id'])]

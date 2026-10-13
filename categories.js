@@ -1,4 +1,4 @@
-import {categoryRules} from './category-rules.js?v=quality43';
+import {categoryRules} from './category-rules.js?v=quality48';
 export const categoryOptions = [
  ['all','✦','Все фильмы'],
  ['horror','☠','Horror'],

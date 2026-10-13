@@ -28,7 +28,7 @@ test('admission calibration requires dated chronological evidence and enough pos
  assert.equal(evaluateSelection([]).status,'insufficient');
 });
 test('validation labels cannot change the learned threshold or training count',()=>{
- const rows=Array.from({length:400},(_,i)=>({tmdb_id:i+1,updated_at:new Date(Date.UTC(2025,0,1+i)).toISOString(),impression:i%5?'dislike':'like',metadata:{year:2021,genreIds:[27],keywords:[i%5?'haunted house':'body horror'],originalLanguage:'en'}}));
+ const rows=Array.from({length:400},(_,i)=>({tmdb_id:i+1,updated_at:new Date(Date.UTC(2025,0,1+i)).toISOString(),impression:i%5?'dislike':'like',metadata:{productionBudget:15000000,year:2021,genreIds:[27],keywords:[i%5?'haunted house':'body horror'],originalLanguage:'en'}}));
  const before=evaluateSelection(rows);
  const changed=rows.map((r,i)=>i<320?r:{...r,impression:r.impression==='like'?'dislike':'like'});
  const after=evaluateSelection(changed);

@@ -1,7 +1,9 @@
-import {audienceFirstScore,audienceProductionScore,publicQualityScore} from './audience-priority.js?v=quality47';
-import {productionExclusion} from './production-policy.js?v=quality47';
-import {buildTasteProfile,tasteScore} from './taste.js?v=quality43';
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality43';
+import {audienceProductionScore,publicQualityScore,publicQualityTier} from './audience-priority.js?v=quality48';
+import {normalizeInterests} from './interests.js?v=quality48';
+import {buildSelectionProfile} from './audience-priority.js?v=quality48';
+import {productionExclusion} from './production-policy.js?v=quality48';
+import {buildTasteProfile,tasteScore} from './taste.js?v=quality48';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality48';
 
 export function ratingSummary(rows){
  const unique=new Map();
@@ -41,15 +43,15 @@ export function selectionFloor(rows,includeQuality=true){
  const median=positives.length%2?positives[middle]:(positives[middle-1]+positives[middle])/2;
  return Math.min(scores[Math.floor((scores.length-1)*.85)],median);
 }
-export function evaluateSelection(rows){
+export function evaluateSelection(rows,interests){
  const decisive=chronological(rows);
  if(decisive.length<100||decisive.some(r=>!r.updated_at))return {status:'insufficient'};
  const split=Math.floor(decisive.length*.8),train=decisive.slice(0,split);
- const test=decisive.slice(split).filter(r=>isEligibleForDiscovery(r.metadata||{})),model=modelFor(train);
+ const test=decisive.slice(split).filter(r=>isEligibleForDiscovery(r.metadata||{})),model=buildSelectionProfile(train.map(r=>({...r.metadata,id:r.tmdb_id,tmdbId:r.tmdb_id})),Object.fromEntries(train.map(r=>[r.tmdb_id,{impression:r.impression,plot:r.plot,cinematography:r.cinematography,ratedAt:r.updated_at,feedbackStage:r.metadata?.ratingFeedbackStage||'unknown'}])),normalizeInterests(interests));
  const previous=model,previousFloor=null;
  const measure=(selectedModel,cutoff,legacyGate,legacyAudience=false)=>{
-  const predictions=test.filter(r=>legacyAudience||!productionExclusion(r.metadata)).map(r=>{const personal=score(r.metadata,selectedModel);return [legacyAudience?audienceFirstScore(r.metadata):audienceProductionScore(r.metadata),personal+publicQualityScore(r.metadata,selectedModel.predictive),r.impression==='like',r.tmdb_id];});
-  const ordered=[...predictions].sort((a,b)=>b[0]-a[0]||b[1]-a[1]||a[3]-b[3]);
+  const predictions=test.filter(r=>!productionExclusion(r.metadata,{legacy:legacyAudience,interests:model.interests})).map(r=>{const personal=score(r.metadata,selectedModel);return [audienceProductionScore(r.metadata,{legacy:legacyAudience,styleModel:model.styleModel}),personal+publicQualityScore(r.metadata,selectedModel.predictive),r.impression==='like',r.tmdb_id,legacyAudience?0:publicQualityTier(r.metadata)];});
+  const ordered=[...predictions].sort((a,b)=>b[4]-a[4]||b[0]-a[0]||b[1]-a[1]||a[3]-b[3]);
   const pool=ordered.filter(([value,margin])=>!legacyGate||margin>=-.8&&(cutoff===null||value>=cutoff)),kept=pool.slice(0,30);
   const liked=kept.filter(([, ,label])=>label).length;
   return {accepted:kept.length,liked,precision:kept.length?liked/kept.length:null,eligible_pool:pool.length,likes_at_10:kept.slice(0,10).filter(([, ,y])=>y).length};

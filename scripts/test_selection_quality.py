@@ -9,7 +9,7 @@ def history():
     import datetime
     return [{'tmdb_id':i+1,'updated_at':(datetime.datetime(2025,1,1)+datetime.timedelta(days=i)).isoformat(),
              'impression':'like' if i%5==0 else 'dislike',
-             'metadata':{'year':2021,'genreIds':[27],'keywords':['body horror' if i%5==0 else 'haunted house'],'originalLanguage':'en'}} for i in range(400)]
+             'metadata':{'productionBudget':15000000,'year':2021,'genreIds':[27],'keywords':['body horror' if i%5==0 else 'haunted house'],'originalLanguage':'en'}} for i in range(400)]
 
 
 class SelectionTests(unittest.TestCase):

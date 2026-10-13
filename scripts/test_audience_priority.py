@@ -61,7 +61,7 @@ class AudiencePriorityTests(unittest.TestCase):
   headline=[q for q in deep if q['sort_by'][0] in ('popularity.desc','vote_count.desc') and
             q['primary_release_date.gte']==['2000-01-01'] and q['primary_release_date.lte']==[NOW.date().isoformat()] and
             ((q.get('with_genres')==['27'] and 'with_keywords' not in q) or
-             (q.get('with_keywords')==['4565'] and 'with_genres' not in q))]
+             (q.get('with_keywords') in (['4565'],['4458']) and 'with_genres' not in q))]
   self.assertGreater(len(headline),len(deep)*.4)
   self.assertTrue(any(q.get('with_keywords')==['201,202'] for q in queries))
   self.assertEqual(len(queries),192)
@@ -144,7 +144,7 @@ class AudiencePriorityTests(unittest.TestCase):
   saved=backend.collection[400:]
   self.assertTrue(all(r['tmdb_id']>=2700000 for r in saved))
   self.assertTrue(all(r['metadata']['recommendationAudienceScore']>0 for r in saved))
-  self.assertTrue(all(r['metadata']['recommendationDiscoveryRequests']<=64*8 for r in saved))
+  self.assertTrue(all(r['metadata']['recommendationDiscoveryRequests']<=cfg['discovery_request_limit']*cfg['search_rounds'] for r in saved))
   self.assertEqual(len(set(r['tmdb_id'] for r in saved)),30)
  def test_refill_failure_does_not_finish_an_empty_scheduled_hour(self):
   backend=FakeBackend()

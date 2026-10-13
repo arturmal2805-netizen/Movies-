@@ -1,12 +1,20 @@
 """Public-first ordering and frozen audience priors; never eligibility thresholds."""
 import math
-from production_policy import POLICY,budget_priority_score
+from production_policy import POLICY,budget_priority_score,style_affinity
 
-SELECTION_VERSION='audience-first47'
+SELECTION_VERSION='audience-first48'
 
-def audience_production_score(movie):
+def public_quality_tier(movie):
+    rating=movie.get('rating',movie.get('vote_average'))
     remote=movie.get('remoteMetrics');remote=remote if isinstance(remote,dict) else {}
-    score=budget_priority_score(movie)
+    votes=movie.get('vote_count');votes=remote.get('voteCount') if votes is None else votes
+    if type(rating) not in (int,float) or not math.isfinite(rating) or not 0<rating<=10 or type(votes) not in (int,float) or not math.isfinite(votes) or votes<=0:return 0
+    estimate=6+(rating-6)*(votes/(votes+500))
+    return 2 if estimate>=6.25 else 1 if estimate>=5.5 else 0
+
+def audience_production_score(movie,legacy=False,style_model=None):
+    remote=movie.get('remoteMetrics');remote=remote if isinstance(remote,dict) else {}
+    score=budget_priority_score(movie)+(0 if legacy else 6*style_affinity(movie,style_model))
     for field,remote_field,weight in (('popularity','popularity',POLICY['popularity_weight']),('vote_count','voteCount',POLICY['votes_weight'])):
         raw=movie.get(field)
         if raw is None:raw=remote.get(remote_field)

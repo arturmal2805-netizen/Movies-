@@ -643,3 +643,102 @@ also export their eligibility policy; the release monitor rejects incomplete
 modules. A tab with the old application requires one normal refresh to gain
 this new filtering hook; later complete ranking updates preserve the active
 mobile card and postpone changes while review fields are open.
+
+
+## Strict budget and director/style focus48
+
+The previous47 policy admitted absent budgets. This was a real admission path,
+not a stale UI issue: a movie without a positive canonical TMDB budget could
+be stored and displayed without proving the requested minimum. The previous
+unknown-budget tests explicitly permitted that behavior and did not establish
+that every recommendation met the minimum.
+
+The user has now selected USD 3,000,000 and approved low-budget exceptions for
+their explicitly selected directors. Discovery summaries may omit budget, so
+preliminary checks postpone its proof. Canonical detail validation and browser
+discovery admission require a positive finite budget. Null, zero, strings,
+booleans and nonfinite amounts cannot pass, including during refills. Known
+budgets below the minimum are excluded unless the canonical director is one
+of the configured favorites. The exception requires an actual Director credit
+when credits are present, or imported canonical director metadata; a retrieval
+route claiming a director, an actor credit, or a matching title is insufficient.
+Even favorite directors cannot bypass a missing budget, Horror+Comedy, or
+explicit mockbuster/camp/parody tags. Archives, favorites and real ratings stay
+intact; the discovery tab also hides formerly admitted collection rows.
+
+The interactive “Мои интересы” dialog starts with Horror first and dystopia
+second, and Robert Eggers, Zach Cregger, David Robert Mitchell, Coralie Fargeat
+and André Øvredal. Genres can be reordered; directors can be added, removed and
+reordered. Confirmed changes are stored only in the authenticated user's
+`user_metadata.nightshift_interests`, through Supabase Auth's own-user endpoint.
+The recommendation worker reads that exact account via the admin user endpoint.
+Explicitly clearing the director list is respected. Preferences are never used
+for authorization, and saving them does not rewrite ratings or other metadata.
+
+The explicit references are The Witch (2015), The Lighthouse (2019), Nosferatu
+(2024), and The Last Voyage of the Demeter (2023). They are resolved from actual
+positive history or an unambiguous original-title/year lookup and seed TMDB
+similar/recommendations routes across authors. They never fabricate positive
+rating rows. Removing a selected director removes their declared references and
+budget exception. Favorite-director filmography routes are deliberately disabled.
+
+The production ranker and browser learn thematic patterns from actual positive
+ratings of the selected directors, contrasted with all negative ratings. Sparse
+keyword weights use class-normalized log lift, capped at three. A candidate needs
+two supported non-generic themes that occur together in one positive reference;
+the strongest such pattern supplies affinity, capped at two, and adds six times
+that value within its public-review tier. Isolated vampire/monster/zombie words
+and a favorite name alone provide no bonus. This allows another filmmaker's
+movie to match the user's thematic references. Static multi-group themes are
+used only for standalone no-profile scoring; both live ranking paths supply the
+private learned style model, including an empty model when there are no positive
+references. Themes are proxies for atmosphere, not a measurement of photography.
+
+Ranking now compares a confidence-adjusted public-review tier first: the
+estimate is 6 + (rating - 6) * votes/(votes+500), with tiers at 5.5 and 6.25.
+Missing or invalid ratings/counts supply tier0. Tiers order permitted movies;
+they do not introduce another admission cutoff. Within a tier, popularity,
+audience breadth, budget and style order the batch, with learned personal fit
+breaking remaining ties. Large budgets cannot push weak public reviews above
+convincing public reviews simply through production spending.
+
+Horror remains the main search direction. Three quarters of protected deep
+headline requests go to horror, while dystopia/post-apocalypse is secondary;
+exhausted routes return unused slots. Canonical post-apocalyptic-future keyword
+4458 expands the secondary route. Public-review discovery with at least 1,000
+votes complements popularity routes; the admission vote minimum remains 100.
+The search can use 12 passes and 2,400 canonical detail checks with four workers,
+retaining a manual target of 30 and no forbidden fallback filler.
+
+Regression checks cover missing-budget preliminary versus canonical stages,
+Horror+Comedy, route/actor claims, favorite-director exceptions, exact reference
+resolution, style combinations, review-tier ordering, broader horror-first
+retrieval, and refilling to thirty genuinely permitted films. Browser checks
+exercise the new eligibility hook, retained archive/export, and hot-update
+card/input stability. Server/browser scores, exclusions and order are compared
+on private uploaded records outside the checkout. Updated ranking imports its
+own versioned taste/classifier modules, so a previously open47 tab cannot reuse
+an old cached model/classifier after a48 module update.
+
+Before/after validation freezes47 admission (missing budgets permitted and a
+known-budget USD10M minimum) and47 ordering without style or review tiers,
+compared with current48 on the shared thematic universe. Actual account
+precision retains every historical negative: no filtered retrospective metric
+is presented as real positive conversion.
+
+
+Release validation: 223 Python and 148 JavaScript tests passed. The private
+2016-row export produced identical backend/browser exclusions and full ordering,
+with maximum score difference below 1.5e-14. Mobile browser checks covered
+preference persistence through reload, genre and director editing, rejected
+preference saves, unchanged rating export, and the actual previously admitted
+Zombeavers metadata being hidden on a47-to48 update without reloading. The open
+review and active card stayed stable. The eight actual positive selected-director
+references train the additional pattern model; no new ratings are synthesized.
+New private recommendation metadata includes reference count and genre priority
+so subsequent batches can be checked against the settings used for that run.
+
+The current historical recommendation precision is 3.5%; the latest thirty are
+0%. The chronological validation tail has zero positives among388 films, so it
+cannot establish a measured improvement in preference ranking. These real values
+remain visible; passing code checks is not described as improved live conversion.

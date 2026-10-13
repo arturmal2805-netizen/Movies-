@@ -1,4 +1,4 @@
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality43';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality48';
 import {normalizeRating} from './ratings.js?v=quality43';
 import {fitMargin,marginFeatures,tasteModelVersion} from './taste-model.js?v=quality43';
 import {fitSynopsis,synopsisScore} from './synopsis-model.js?v=quality43';

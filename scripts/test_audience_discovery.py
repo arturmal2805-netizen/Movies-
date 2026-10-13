@@ -19,7 +19,8 @@ class AudienceDiscoveryTests(unittest.TestCase):
   tmdb_candidates(backend,[53,878],config)
   queries=[parse_qs(urlsplit(c.args[0]).query) for c in backend.movie.call_args_list]
   self.assertLessEqual(len(queries),24)
-  self.assertTrue(all(q['vote_count.gte']==['100'] for q in queries))
+  self.assertTrue(all(q['vote_count.gte'] in (['100'],['1000']) for q in queries))
+  self.assertTrue(any(q['vote_count.gte']==['1000'] and q['sort_by']==['vote_average.desc'] for q in queries))
   audience=[q for q in queries if q['sort_by']==['vote_count.desc']]
   self.assertTrue(any(q.get('with_keywords')==['4565'] for q in audience))
   self.assertEqual({q['primary_release_date.gte'][0] for q in audience if q.get('with_genres')==['27']},
@@ -47,7 +48,20 @@ class AudienceDiscoveryTests(unittest.TestCase):
    with patch('recommend.match_score',return_value=-1):
     self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,cfg,manual=manual),3)
    self.assertTrue(all('audience-votes' in r['metadata']['recommendationPersonalRoutes'] for r in backend.collection))
-   self.assertTrue(all(r['metadata']['recommendationSearchVersion']=='audience-search47' for r in backend.collection))
+   self.assertTrue(all(r['metadata']['recommendationSearchVersion']=='audience-search48' for r in backend.collection))
 
 
 if __name__=='__main__':unittest.main()
+
+class HorrorFirstExpansionTests(unittest.TestCase):
+ def test_horror_owns_the_majority_of_deep_requests_and_post_apocalypse_remains_available(self):
+  backend=Mock();backend.movie.return_value={'results':[],'total_pages':500}
+  config=dict(load_config(),_now=NOW,_evidence_routes=True,_discovery_pages={},_discovery_totals={},_discovery_stats={})
+  for i in range(3):tmdb_candidates(backend,[],dict(config,_search_round=i))
+  queries=[parse_qs(urlsplit(c.args[0]).query) for c in backend.movie.call_args_list]
+  deep=[q for q in queries if int(q['page'][0])>1]
+  horror=sum(q.get('with_genres')==['27'] for q in deep)
+  dystopia=sum('with_keywords'in q for q in deep)
+  self.assertGreater(horror,2*dystopia)
+  self.assertTrue(any(q.get('with_keywords')==['4458'] for q in queries))
+  self.assertEqual(len(queries),192)

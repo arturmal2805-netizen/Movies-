@@ -1,3 +1,4 @@
+import {normalizeInterests} from './interests.js?v=quality48';
 import {serverConfig} from './server-config.js';
 export function ratingFeedbackMetadata(r){return {ratingFeedbackStage:r.feedbackStage||'unknown',ratingInterestLevel:r.feedbackStage==='interest'?r.interestLevel:null,ratingPresentationModel:typeof r.presentationModel==='string'?r.presentationModel:null,ratingPresentationSort:r.presentationSort||null,ratingPresentationTab:r.presentationTab||null,ratingPresentationScore:Number.isFinite(r.presentationScore)?r.presentationScore:null,ratingUiVersion:r.uiVersion||null};}
 export class ServerStore {
@@ -57,6 +58,22 @@ export class ServerStore {
   return rows;
  }
  async load(){return await Promise.all([this.readAll('ratings'),this.readAll('collection')]);}
+
+ async loadInterests(){
+  const uid=this.session?.user?.id;if(!uid)throw new Error('Войдите, чтобы открыть интересы аккаунта.');
+  const user=await this.api('/auth/v1/user');
+  if(this.session?.user?.id!==uid||user?.id!==uid)throw new Error('Аккаунт изменился. Повторите загрузку интересов.');
+  this.remember({...this.session,user});
+  const raw=user.user_metadata?.nightshift_interests;
+  return raw?normalizeInterests(raw):await this.saveInterests(normalizeInterests());
+ }
+ async saveInterests(interests){
+  const uid=this.session?.user?.id;if(!uid)throw new Error('Войдите, чтобы сохранить интересы.');
+  const preferences=normalizeInterests(interests),user=await this.api('/auth/v1/user',{method:'PUT',body:{data:{nightshift_interests:preferences}}});
+  const stored=user?.user_metadata?.nightshift_interests;
+  if(this.session?.user?.id!==uid||user?.id!==uid||!Array.isArray(stored?.directors)||!Array.isArray(stored?.genrePriority)||JSON.stringify(normalizeInterests(stored))!==JSON.stringify(preferences))throw new Error('Сервер не подтвердил сохранение интересов.');
+  this.remember({...this.session,user});return normalizeInterests(stored);
+ }
  async saveRating(f,r){if(!this.session)throw new Error('Войдите, чтобы сохранить оценку на сервере.');return this.api('/rest/v1/ratings?on_conflict=user_id,tmdb_id',{method:'POST',body:{user_id:this.session.user.id,tmdb_id:f.tmdbId,cinematography:r.feedbackStage==='interest'?null:r.cinematography??null,plot:r.feedbackStage==='interest'?null:r.plot??null,impression:r.impression,metadata:{...f,...ratingFeedbackMetadata(r)},updated_at:r.ratedAt||new Date().toISOString()},headers:{Prefer:'resolution=merge-duplicates,return=representation'}});}
  async deleteRating(f){await this.api('/rest/v1/ratings?tmdb_id=eq.'+f.tmdbId,{method:'DELETE'});}
  async clearRatings(){await this.api('/rest/v1/ratings?user_id=eq.'+this.session.user.id,{method:'DELETE'});}
