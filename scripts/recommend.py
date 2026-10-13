@@ -12,7 +12,7 @@ from synopsis_model import synopsis_score
 from production_model import production_score
 from audience_priority import audience_production_score,public_quality_score,public_quality_tier,selection_priority_score,confidence_quality,SELECTION_VERSION
 from interests import normalize_interests,build_style_model,style_key
-from imdb_audience import enrich_audience,validated_imdb_metrics
+from imdb_audience import enrich_audience,validated_imdb_metrics,validated_critics_score
 from production_policy import production_exclusion,POLICY,director_focus,style_affinity
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 SEARCH_GENERIC=GENERIC|{'spin off','prequel','reboot','franchise','based on short film','based on play or musical'}
@@ -149,7 +149,7 @@ def audience_votes(movie):
  if value is None:value=(movie.get('remoteMetrics')or{}).get('voteCount')if isinstance(movie.get('remoteMetrics'),dict)else None
  return value if type(value)in(int,float)and math.isfinite(value)and value>0 else 0
 
-def selection53_diagnostics(final,target,tastes,ratings,collection):
+def selection54_diagnostics(final,target,tastes,ratings,collection):
  chosen=[e[1]for e in final[:target]];pool=[e[1]for e in final]
  def previous(m):
   remote=m.get('remoteMetrics');remote=remote if isinstance(remote,dict)else{}
@@ -526,7 +526,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
  if not budget:
   print('Private batch skipped: scheduled-hour budget or rolling 60-minute maximum reached.')
   return 0
- production_rejections=set();detail_rejections=Counter();rejection_lock=threading.Lock()
+ production_rejections=set();detail_rejections=Counter();rejection_lock=threading.Lock();potential={}
  def hydrate(entry):
   movie=entry[1]
   def reject(reason,fetched=True):
@@ -539,13 +539,16 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
    if exclusion:
     production_rejections.add(movie['id']);return reject(exclusion)
    if not eligible_for_discovery(detail,require_target=False):return reject('year_country_or_excluded_genre')
-   if not eligible_for_discovery(detail):return reject('outside_horror_or_dystopia')
    if not valid_candidate(detail,config['minimum_votes'],now.date(),require_target=False,interests=tastes.interests):return reject('release_poster_or_public_metadata')
    if not detail.get('title')or type(detail.get('runtime'))not in(int,float)or detail['runtime']<=0:return reject('missing_title_or_runtime')
    crew=(detail.get('credits')or {}).get('crew',[])
    director_ids={person['id']for person in crew if isinstance(person,dict)and person.get('job')=='Director'and type(person.get('id'))is int}
    aliases=[name for name,pid in movie.get('_director_alias_ids',{}).items()if type(pid)is int and pid in director_ids]
-   return dict(detail,genre_ids=genres(detail),directorAliases=aliases,discovery_sources=movie.get('discovery_sources',[]),_liked_anchor_ids=movie.get('_liked_anchor_ids',[]),_liked_directors=movie.get('_liked_directors',[]),_personal_routes=movie.get('_personal_routes',[]),_matched_theme_groups=movie.get('_matched_theme_groups',[])),True
+   shaped=dict(detail,genre_ids=genres(detail),directorAliases=aliases,discovery_sources=movie.get('discovery_sources',[]),_liked_anchor_ids=movie.get('_liked_anchor_ids',[]),_liked_directors=movie.get('_liked_directors',[]),_personal_routes=movie.get('_personal_routes',[]),_matched_theme_groups=movie.get('_matched_theme_groups',[]))
+   if not eligible_for_discovery(shaped):
+    with rejection_lock:potential[shaped['id']]=shaped
+    return reject('outside_horror_or_dystopia')
+   return shaped,True
   except Exception as error:return reject(error_summary(error),False)
  # Coarse discover results lack keywords/countries: filter taste only after canonical enrichment.
  # Exhaust the current pool before rotating pages; never fill a batch with rejected movies.
@@ -597,10 +600,20 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
  # not sufficient evidence of obscurity. No guessed IDs, no second budget gate.
  ordered=[];seen_imdb=set()
  by_votes=sorted(final,key=lambda e:(-audience_votes(e[1]),-e[0],e[1]['id']))
- for a,c in zip(final,by_votes):
-  for e in (a,c):
-   if e[1]['id']not in seen_imdb:ordered.append(e[1]);seen_imdb.add(e[1]['id'])
- imdb_stats=enrich_audience(b,ordered,80 if manual else 12)
+ alternative=sorted(potential.values(),key=lambda m:(-audience_votes(m),-selection_priority_score(m,match_score(m,tastes),tastes.style_model),m['id']))
+ for i in range(max(len(final),len(alternative))):
+  lanes=[final[i][1],by_votes[i][1]]if i<len(final)else[]
+  if i<len(alternative):lanes.append(alternative[i])
+  for m in lanes:
+   if m['id']not in seen_imdb:ordered.append(m);seen_imdb.add(m['id'])
+ imdb_stats=enrich_audience(b,ordered,320 if manual else 12,eligible=lambda m:eligible_for_discovery(m)and not production_exclusion(m),good_target=min(15,budget))
+ rescued=0
+ for mid,m in potential.items():
+  if eligible_for_discovery(m)and not production_exclusion(m):details[mid]=m;rescued+=1
+ if rescued:detail_rejections['outside_horror_or_dystopia']-=rescued
+ for mid,m in list(details.items()):
+  rejection=production_exclusion(m)
+  if rejection:detail_rejections[rejection]+=1;production_rejections.add(mid);del details[mid]
  final=rank_candidates(list(details.values()),ratings,collection,config['minimum_votes'],now,tastes=tastes)
  b.search_report={'candidateCount':len(pool),'verifiedCount':len(details),'accepted':min(budget,len(final)),
   'positivePersonal':sum(match_score(e[1],tastes)>0 for e in final[:budget]),
@@ -612,11 +625,14 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
  evidence=[validated_imdb_metrics(e[1])for e in final[:budget]]
  evidence=[m for m in evidence if m]
  b.search_report.update(imdb_stats)
+ critics=[validated_critics_score(e[1])for e in final[:budget]];critics=[v for v in critics if v is not None]
+ b.search_report.update(imdbGenreRescued=rescued,selectedCritics70=sum(v>=70 for v in critics),selectedEstablishedGood=sum(m['rating']>=6.5 and m['votes']>=10000 for m in evidence),medianMetascore=median(critics)if critics else None,
+  selectedImdb6_5=sum(m['rating']>=6.5 for m in evidence),poolImdb6_5=sum(bool(validated_imdb_metrics(m))and validated_imdb_metrics(m)['rating']>=6.5 for m in details.values()))
  b.search_report.update(selectedImdb10000=sum(m['votes']>=10000 for m in evidence),selectedImdbVerified=len(evidence),
   medianImdbVoteCount=median([m['votes']for m in evidence])if evidence else None,
   medianImdbRating=median([m['rating']for m in evidence])if evidence else None,
   knownImdbPool10000=sum(bool(validated_imdb_metrics(m))and validated_imdb_metrics(m)['votes']>=10000 for m in details.values()))
- b.search_report.update(selection53_diagnostics(final,budget,tastes,ratings,collection))
+ b.search_report.update(selection54_diagnostics(final,budget,tastes,ratings,collection))
  if attempted and not fetched_any:raise RequestFailure('Candidate metadata unavailable; retry next run')
  if not final and (search_unavailable or metadata_failures):raise RequestFailure('Search incomplete: provider requests failed; retry the manual request')
  if len(final)<budget:print('Batch below target:',len(final),'of',budget,'after bounded search; excluded films are not used as filler.')
@@ -630,9 +646,10 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   fid=10000000+detail['id'];genre_ids=genres(detail)
   metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':director(detail),'moods':classify(detail),'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'synopsisChecked':True,'reachChecked':True,'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity'),'voteCount':detail.get('vote_count'),'tmdbUpdatedAt':now.isoformat()}}
   metadata['discoverySources']=movie.get('discovery_sources',[])
-  if validated_imdb_metrics(detail):metadata['remoteMetrics'].update(detail['remoteMetrics'])
+  if detail.get('remoteMetrics',{}).get('imdbVerified')is True:metadata['remoteMetrics'].update(detail['remoteMetrics'])
+  if 'horror'in classify(detail):metadata['genre']='Ужасы'
   metadata.update(feature_metadata(detail))
-  metadata.update(recommendationSearchVersion='audience-search53',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
+  metadata.update(recommendationSearchVersion='audience-search54',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
   metadata['recommendationAudienceScore']=round(audience_production_score(detail,style_model=tastes.style_model),6)
   metadata['recommendationAudiencePriority']=round(audience_production_score(detail,style_model=tastes.style_model),6)
   metadata.update(audience_summary)
@@ -717,7 +734,7 @@ def run():
    except Exception as error:
     failures+=1;print('Private batch failed:',error_summary(error),'; existing collection retained. Retry on next run.')
   print('Profiles processed:',len(users),'failed:',failures)
-  if not failures and os.environ.get('GITHUB_ACTIONS')=='true':print('::notice title=Recommendation batch53::'+json.dumps({'added':added,'manual':manual,'profiles':len(users)},separators=(',',':')))
+  if not failures and os.environ.get('GITHUB_ACTIONS')=='true':print('::notice title=Recommendation batch54::'+json.dumps({'added':added,'manual':manual,'profiles':len(users)},separators=(',',':')))
   if failures:raise RuntimeError('Some private batches failed')
   if request_id:finish_manual_job(b,request_id,target,'completed',added)
  except Exception:

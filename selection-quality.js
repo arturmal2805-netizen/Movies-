@@ -1,9 +1,9 @@
-import {audienceProductionScore,publicQualityScore,publicQualityTier,selectionPriorityScore} from './audience-priority.js?v=quality53';
-import {normalizeInterests,buildStyleModel} from './interests.js?v=quality53';
-import {buildSelectionProfile} from './audience-priority.js?v=quality53';
-import {productionExclusion} from './production-policy.js?v=quality53';
-import {buildTasteProfile,tasteScore} from './taste.js?v=quality53';
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality53';
+import {audienceProductionScore,publicQualityScore,publicQualityTier,selectionPriorityScore} from './audience-priority.js?v=quality54';
+import {normalizeInterests,buildStyleModel} from './interests.js?v=quality54';
+import {buildSelectionProfile} from './audience-priority.js?v=quality54';
+import {productionExclusion} from './production-policy.js?v=quality54';
+import {buildTasteProfile,tasteScore} from './taste.js?v=quality54';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality54';
 
 export function ratingSummary(rows){
  const unique=new Map();

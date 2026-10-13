@@ -1,4 +1,5 @@
-import {categoryRules} from './category-rules.js?v=quality53';
+import {hasVerifiedGenre} from './imdb-audience.js?v=quality54';
+import {categoryRules} from './category-rules.js?v=quality54';
 export const categoryOptions = [
  ['all','✦','Все фильмы'],
  ['horror','☠','Horror'],
@@ -14,7 +15,7 @@ export function filmCategories(film) {
  const ids=Array.isArray(film.genreIds)?film.genreIds:[];
  const words=(Array.isArray(film.keywords)?film.keywords:[]).map(k=>normalize(typeof k==='string'?k:k?.name)).filter(Boolean);
  const description=normalize(film.description||film.overview);
- const horror=ids.includes(27)||film.genre==='Ужасы';
+ const horror=ids.includes(27)||film.genre==='Ужасы'||hasVerifiedGenre(film,'Horror');
  const found=new Set();
  for(const [category,known] of Object.entries(categoryRules.known)) {
   if(known.includes(film.tmdbId)){found.add(category);continue;}

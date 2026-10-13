@@ -5,6 +5,7 @@ from collections import defaultdict
 from taste_model import fit_margin,margin_features,MODEL_VERSION
 from synopsis_model import fit_synopsis,synopsis_score
 from production_model import fit_production,production_score
+from imdb_audience import has_verified_genre
 RULES=json.loads((Path(__file__).resolve().parents[1]/'config/category-rules.json').read_text())
 ORDER=['horror',*RULES['known']]
 GENERIC={'based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','low budget','microbudget','micro budget','woman director'}
@@ -31,7 +32,7 @@ def director(movie):
 def classify(movie):
  ids=genres(movie); words={normalize(k if isinstance(k,str) else k.get('name')) for k in keywords(movie)}
  description=normalize(movie.get('description') or movie.get('overview')); found=set()
- horror=27 in ids or movie.get('genre')=='Ужасы'
+ horror=27 in ids or movie.get('genre')=='Ужасы' or has_verified_genre(movie,'Horror')
  for category,known in RULES['known'].items():
   if movie.get('tmdbId',movie.get('id')) in known:found.add(category);continue
   if category!='dystopian' and not horror:continue

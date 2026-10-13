@@ -36,7 +36,7 @@ class ScheduledPersonalizationTests(unittest.TestCase):
   self.assertEqual(len(first_config['_preferred_movie_ids']),36)
   self.assertTrue(first_config['_include_similar']);self.assertEqual(first_config['_anchor_batch_size'],12)
   self.assertTrue(all(row['metadata']['recommendationMode']=='scheduled' for row in backend.collection))
-  self.assertTrue(all(row['metadata']['recommendationSearchVersion']=='audience-search53' for row in backend.collection))
+  self.assertTrue(all(row['metadata']['recommendationSearchVersion']=='audience-search54' for row in backend.collection))
 
  def test_hourly_checks_quality_pool_even_when_the_first_fifteen_are_positive(self):
   candidates=[horror(2000000+i) for i in range(150)];backend=self.backend(candidates)

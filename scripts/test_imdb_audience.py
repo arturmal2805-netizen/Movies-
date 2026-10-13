@@ -47,3 +47,57 @@ class ImdbAudienceTests(unittest.TestCase):
   self.assertEqual(b.search_report['selectedImdb10000'],20)
   self.assertTrue(all(row['metadata']['remoteMetrics']['voteCount']==200 for row in b.collection))
   self.assertTrue(all('productionBudget'not in row['metadata']for row in b.collection))
+
+class ImdbEvidenceExpansionTests(unittest.TestCase):
+ def test_verified_critics_and_genres_work_without_inventing_missing_audience(self):
+  from imdb_audience import validated_critics_score,has_verified_genre
+  from audience_priority import critics_bonus
+  proof=parse_metrics(response(imdbRating='N/A',imdbVotes='N/A',Metascore='78',Genre='Horror, Mystery',Year='2020'),'tt1234567')
+  film={'imdb_id':'tt1234567','remoteMetrics':proof}
+  self.assertIsNone(validated_imdb_metrics(film));self.assertEqual(validated_critics_score(film),78)
+  self.assertTrue(has_verified_genre(film,'Horror'));self.assertGreater(critics_bonus(film),0)
+  for change in ({'imdbVerified':False},{'imdbId':'tt9999999'},{'metascore':'78'},{'metascore':True},{'metascore':101}):
+   self.assertEqual(critics_bonus(dict(film,remoteMetrics={**proof,**change})),0)
+  for change in ({'Type':'series'},{'imdbID':'tt9999999'}):
+   self.assertIsNone(parse_metrics(response(imdbRating='N/A',imdbVotes='N/A',Metascore='99',**change),'tt1234567'))
+ def test_explicit_horror_evidence_preserves_all_negative_genres_and_years(self):
+  from movie_features import classify,eligible_for_discovery
+  from production_policy import production_exclusion
+  base=dict(movie(901),genre_ids=[53],genres=[{'id':53}],keywords=[])
+  def checked(**kwargs):return dict(base,remoteMetrics=parse_metrics(response(Genre='Horror',Year='2020',**kwargs),'tt1234567'))
+  self.assertNotIn('horror',classify(base));self.assertIn('horror',classify(checked()))
+  for genre in ('Horror, Comedy','Horror, Documentary','Horror, Animation','Horror, Family','Horror, Adult'):
+   film=dict(base,remoteMetrics=parse_metrics(response(Genre=genre,Year='2020'),'tt1234567'))
+   self.assertIsNotNone(production_exclusion(film))
+  self.assertEqual(production_exclusion(dict(base,remoteMetrics=parse_metrics(response(Genre='Horror',Year='1990'),'tt1234567'))),'imdb_release_year')
+  for change in ({'release_date':'1999-01-01'},{'original_language':'ja'},{'production_countries':[{'iso_3166_1':'JP'}]}):
+   self.assertFalse(eligible_for_discovery({**checked(),**change}))
+ def test_pipeline_recovers_only_explicit_horror_and_never_repeats_history(self):
+  from urllib.parse import urlsplit,parse_qs
+  b=FakeBackend();base=lambda mid:dict(movie(mid),imdb_id='tt'+str(mid+1000000),genre_ids=[53],genres=[{'id':53}],keywords=[])
+  films=[base(901+i)for i in range(40)]+[base(900)]
+  b.movie=lambda path:base(int(path.split('/')[1].split('?')[0]))
+  b.request=lambda url,headers:response(parse_qs(urlsplit(url).query)['i'][0],Genre='Horror',Year='2020',Metascore='75')
+  with patch.dict(os.environ,{'OMDB_API_KEY':'fake-for-test'}),patch('recommend.discover',return_value=(films,[])):
+   self.assertEqual(recommend_user(b,{'user_id':'test'},NOW,dict(load_config(),history_enrichment_per_run=0),manual=True),30)
+  self.assertEqual(b.search_report['imdbGenreRescued'],40)
+  self.assertTrue(all(r['tmdb_id']!=900 and r['metadata']['genreIds']==[53]and r['metadata']['genre']=='Ужасы'for r in b.collection))
+  self.assertEqual(b.search_report['selectedCritics70'],30)
+ def test_extended_check_reaches_good_later_candidates_and_stops_after_enough(self):
+  from urllib.parse import urlsplit,parse_qs
+  films=[{'id':i,'imdb_id':'tt'+str(1000000+i)}for i in range(200)]
+  b=Mock()
+  def request(url,headers):
+   identity=parse_qs(urlsplit(url).query)['i'][0];i=int(identity[2:])-1000000
+   return response(identity,imdbRating='6.8'if i>=80 else'5.0')
+  b.request.side_effect=request
+  with patch.dict(os.environ,{'OMDB_API_KEY':'fake-for-test'}):s=enrich_audience(b,films,160,eligible=lambda m:m['id']>=80,good_target=15)
+  self.assertEqual(s['imdbRequests'],120);self.assertEqual(s['imdbResolved'],120)
+  self.assertTrue(all('remoteMetrics'not in m for m in films[120:]))
+ def test_provider_negative_genres_are_not_counted_as_a_successful_search(self):
+  from urllib.parse import urlsplit,parse_qs
+  from production_policy import production_exclusion
+  films=[{'id':i,'genre_ids':[27],'imdb_id':'tt'+str(1000000+i)}for i in range(100)]
+  b=Mock();b.request.side_effect=lambda url,headers:response(parse_qs(urlsplit(url).query)['i'][0],Genre='Horror, Comedy')
+  with patch.dict(os.environ,{'OMDB_API_KEY':'fake-for-test'}):s=enrich_audience(b,films,100,eligible=lambda m:not production_exclusion(m))
+  self.assertEqual(s['imdbRequests'],100)

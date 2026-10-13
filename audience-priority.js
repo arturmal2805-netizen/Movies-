@@ -1,14 +1,16 @@
+import {validatedImdbMetrics,validatedCriticsScore} from './imdb-audience.js?v=quality54';
+export {validatedImdbMetrics} from './imdb-audience.js?v=quality54';
 // Match the server's audience prior; missing values are neutral, never a veto.
-import {normalizeInterests,buildStyleModel} from './interests.js?v=quality53';
-import {tasteScore,buildTasteProfile} from './taste.js?v=quality53';
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality53';
-import {productionPolicy,productionExclusion,styleAffinity} from './production-policy.js?v=quality53';
+import {normalizeInterests,buildStyleModel} from './interests.js?v=quality54';
+import {tasteScore,buildTasteProfile} from './taste.js?v=quality54';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality54';
+import {productionPolicy,productionExclusion,styleAffinity} from './production-policy.js?v=quality54';
 export function buildSelectionProfile(films,reactions,interests){
  const profile=buildTasteProfile(films,reactions),preferences=normalizeInterests(interests),key=JSON.stringify(preferences);
  if(profile.styleKey!==key){profile.interests=preferences;profile.styleModel=buildStyleModel(films,reactions,preferences);profile.styleKey=key;}
  return profile;
 }
-export const selectionVersion='audience-first53';
+export const selectionVersion='audience-first54';
 export function isEligibleForSelection(film,interests){return isEligibleForDiscovery(film)&&!productionExclusion(film,{interests});}
 export function publicQualityTier(film){
  const rating=film.rating??film.vote_average,votes=film.vote_count??film.remoteMetrics?.voteCount;
@@ -17,7 +19,7 @@ export function publicQualityTier(film){
 }
 export function audienceProductionScore(film,{legacy=false,styleModel=null}={}){
  const popularity=film.popularity??film.remoteMetrics?.popularity,votes=film.vote_count??film.remoteMetrics?.voteCount;
- return (Number.isFinite(popularity)&&popularity>0?productionPolicy.popularity_weight*Math.log2(1+popularity):0)+(Number.isFinite(votes)&&votes>0?productionPolicy.votes_weight*Math.log2(1+votes):0)+imdbAudienceBonus(film)+(legacy?0:6*styleAffinity(film,styleModel));
+ return (Number.isFinite(popularity)&&popularity>0?productionPolicy.popularity_weight*Math.log2(1+popularity):0)+(Number.isFinite(votes)&&votes>0?productionPolicy.votes_weight*Math.log2(1+votes):0)+imdbAudienceBonus(film)+criticsBonus(film)+(legacy?0:6*styleAffinity(film,styleModel));
 }
 export function audienceFirstScore(film){
  const popularity=film.popularity??film.remoteMetrics?.popularity,votes=film.vote_count??film.remoteMetrics?.voteCount;
@@ -40,11 +42,6 @@ export function publicQualityScore(film,predictive=false,{legacy=false}={}){
 export function audiencePriorityScore(film,predictive=false,{legacy=false}={}){
  const value=audienceScore(film,{legacy})+publicQualityScore(film,predictive,{legacy});
  return legacy?value:Math.max(-3,Math.min(3,value));
-}
-export function validatedImdbMetrics(film){
- const r=film.remoteMetrics;if(!r||r.imdbVerified!==true||typeof r.imdbId!=='string'||!/^tt[0-9]{7,12}$/.test(r.imdbId))return null;
- const canonical=film.imdb_id??film.imdbId;if(canonical&&canonical!==r.imdbId)return null;
- return Number.isFinite(r.imdb)&&r.imdb>0&&r.imdb<=10&&Number.isSafeInteger(r.imdbVoteCount)&&r.imdbVoteCount>0&&r.imdbVoteCount<=1e10?{rating:r.imdb,votes:r.imdbVoteCount}:null;
 }
 export function confidenceQuality(film){
  const rating=film.rating??film.vote_average,votes=film.vote_count??film.remoteMetrics?.voteCount;
@@ -73,3 +70,5 @@ export function imdbAudienceBonus(film){
  const quality=Math.max(0,Math.min(1,(evidence.rating-6)*2)),support=Math.min(1,evidence.votes/floor);
  return quality*support*(productionPolicy.imdb_audience_weight+6*Math.log2(1+evidence.votes/floor));
 }
+
+export function criticsBonus(film){const score=validatedCriticsScore(film);return score===null?0:productionPolicy.critics_weight*Math.max(0,Math.min(2,(score-60)/10));}
