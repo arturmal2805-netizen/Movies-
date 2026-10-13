@@ -78,3 +78,59 @@ class BudgetVerifier:
    evidence=self.resolved.get(movie.get('id'))
    if evidence and production_budget(movie)is None:movie.update(budget=evidence['amountUSD'],budgetEvidence=evidence)
   return sum('budgetEvidence'in m for m in movies)
+
+
+def request_entity(qid):
+ if not re.fullmatch(r'Q[1-9]\d*',qid):raise ValueError('Invalid public entity identifier')
+ req=urllib.request.Request('https://www.wikidata.org/wiki/Special:EntityData/'+qid+'.json',headers={'Accept':'application/json','User-Agent':'NightshiftFilms/1.0 (https://github.com/arturmal2805-netizen/Movies-; movie budget verification)'})
+ with urllib.request.urlopen(req,timeout=10)as response:return json.load(response)
+
+def entity_bindings(data,qid,movie):
+ entities=data.get('entities',{})if isinstance(data,dict)else {};entity=entities.get(qid,{})if isinstance(entities,dict)else {}
+ if not isinstance(entity,dict)or entity.get('id')!=qid:return []
+ claims=entity.get('claims',{});claims=claims if isinstance(claims,dict)else {}
+ def values(prop):
+  return [c.get('mainsnak',{}).get('datavalue',{}).get('value')for c in claims.get(prop,[])if isinstance(c,dict)and c.get('rank')!='deprecated']
+ if str(movie['id'])not in values('P4947'):return []
+ imdb=(movie.get('external_ids')or {}).get('imdb_id')or movie.get('imdb_id')
+ if imdb and imdb not in values('P345'):return []
+ article=(entity.get('sitelinks')or {}).get('enwiki')or {};title=article.get('title')if isinstance(article,dict)else None
+ rows=[]
+ for claim in claims.get('P2130',[]):
+  if not isinstance(claim,dict)or claim.get('rank')=='deprecated':continue
+  quantity=claim.get('mainsnak',{}).get('datavalue',{}).get('value')
+  if not isinstance(quantity,dict)or quantity.get('unit')!=USD:continue
+  for reference in claim.get('references',[]):
+   snaks=reference.get('snaks',{})if isinstance(reference,dict)else {}
+   urls=[s.get('datavalue',{}).get('value')for s in snaks.get('P854',[])if isinstance(s,dict)]
+   imported=any(isinstance(s,dict)and s.get('datavalue',{}).get('value',{}).get('id')=='Q328'for s in snaks.get('P143',[]))
+   if imported and isinstance(title,str):urls.append('https://en.wikipedia.org/wiki/'+urllib.parse.quote(title.replace(' ','_')))
+   for url in urls:
+    raw={'tmdb':str(movie['id']),'imdb':imdb or'','movie':'http://www.wikidata.org/entity/'+qid,'currency':USD,'amount':quantity.get('amount'),'lower':quantity.get('lowerBound')or'','reference':url}
+    rows.append({key:{'value':value}for key,value in raw.items()})
+ return rows
+
+class BudgetResolver:
+ """Entity JSON is a fast independent route when the query service is down."""
+ def __init__(self,movie_fetch,entity_fetch=request_entity,query_fetch=request):
+  self.movie_fetch=movie_fetch;self.entity_fetch=entity_fetch;self.query_fetch=query_fetch;self.query_failed=False;self.entities={}
+ def __call__(self,ids):
+  from recommendation_sources import detail_path
+  from concurrent.futures import ThreadPoolExecutor
+  movies=[self.movie_fetch(detail_path(mid))for mid in ids]
+  def fetch(movie):
+   qid=(movie.get('external_ids')or {}).get('wikidata_id')
+   if not isinstance(qid,str)or not re.fullmatch(r'Q[1-9]\d*',qid):return [],False
+   try:
+    if qid not in self.entities:self.entities[qid]=self.entity_fetch(qid)
+    return entity_bindings(self.entities[qid],qid,movie),True
+   except Exception:return [],False
+  with ThreadPoolExecutor(max_workers=4)as executor:results=list(executor.map(fetch,movies))
+  rows=[row for result,_ in results for row in result];resolved=parse_evidence({'results':{'bindings':rows}},movies)
+  missing=[mid for mid in ids if mid not in resolved]
+  if missing and not self.query_failed:
+   try:
+    extra=self.query_fetch(missing);rows.extend(extra.get('results',{}).get('bindings',[]))
+   except Exception:self.query_failed=True
+  if not rows and self.query_failed and not any(ok for _,ok in results):raise RuntimeError('Referenced budget sources unavailable')
+  return {'results':{'bindings':rows}}

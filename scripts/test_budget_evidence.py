@@ -71,7 +71,27 @@ class ProbeCommandTests(unittest.TestCase):
   import runpy
   from pathlib import Path
   b=FakeBackend();b.search_report={'accepted':30}
-  with patch.dict('os.environ',{},clear=True),patch('recommend.Backend',return_value=b),patch('recommend.read_rows',return_value=[{'user_id':'test'}]),patch('recommend.recommend_user',return_value=30)as run:
+  with patch('builtins.print'),patch.dict('os.environ',{},clear=True),patch('recommend.Backend',return_value=b),patch('recommend.read_rows',return_value=[{'user_id':'test'}]),patch('recommend.recommend_user',return_value=30)as run:
    runpy.run_path(str(Path(__file__).with_name('probe_recommendations.py')),run_name='__main__')
   self.assertTrue(run.call_args.kwargs['manual']);self.assertTrue(run.call_args.kwargs['dry_run'])
   self.assertEqual(b.collection,[]);self.assertEqual(b.patched,[])
+
+class EntityBudgetTests(unittest.TestCase):
+ def entity(self):
+  return {'entities':{'Q123':{'id':'Q123','claims':{
+   'P4947':[{'mainsnak':{'datavalue':{'value':'5000001'}}}],
+   'P345':[{'mainsnak':{'datavalue':{'value':'tt1234567'}}}],
+   'P2130':[{'mainsnak':{'datavalue':{'value':{'amount':'+4000000','unit':USD}}},'references':[{'snaks':{'P143':[{'datavalue':{'value':{'id':'Q328'}}}]}}]}]},'sitelinks':{'enwiki':{'title':'Film (2020 film)'}}}}}
+ def test_entity_route_requires_provider_identity_and_reference_and_preserves_proof(self):
+  from budget_evidence import entity_bindings
+  m={'id':5000001,'external_ids':{'imdb_id':'tt1234567','wikidata_id':'Q123'}}
+  proof=parse_evidence(data(entity_bindings(self.entity(),'Q123',m)),[m])
+  self.assertEqual(proof[m['id']]['amountUSD'],4000000)
+  self.assertEqual(parse_evidence(data(entity_bindings(self.entity(),'Q123',dict(m,id=5000002))),[m]),{})
+  self.assertEqual(entity_bindings(self.entity(),'Q123',dict(m,imdb_id='bad',external_ids={'imdb_id':'bad'})),[])
+ def test_entity_data_can_supply_verified_budgets_when_sparql_is_unavailable(self):
+  from budget_evidence import BudgetResolver
+  m={'id':5000001,'external_ids':{'imdb_id':'tt1234567','wikidata_id':'Q123'}}
+  def fail(ids):raise RuntimeError('query service down')
+  resolver=BudgetResolver(lambda path:m,entity_fetch=lambda qid:self.entity(),query_fetch=fail)
+  self.assertEqual(parse_evidence(resolver([m['id']]),[m])[m['id']]['amountUSD'],4000000)

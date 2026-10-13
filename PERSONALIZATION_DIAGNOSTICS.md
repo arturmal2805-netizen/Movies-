@@ -811,3 +811,14 @@ from a later verified group after60 earlier candidates prove below the minimum.
 234 Python and150 JavaScript tests passed before publication. The cloud draft
 preserves existing network destinations and adds the public TMDB and Wikidata
 hosts for future development checks; production verification uses GitHub Actions.
+
+
+Live probing remained failing after initial publication, so that run is not
+reported as proof of an available full batch. Aggregate diagnostic annotations
+cover initialization as well as search errors. Probe-command regression tests
+execute the actual published entry point in manual/read-only mode, with fixture
+outputs suppressed to avoid presenting mock search counts as live evidence.
+Direct Wikidata EntityData JSON is an additional independent budget route when
+a canonical TMDB detail supplies a valid Wikidata ID. Both provider IDs and the
+referenced quantity are revalidated. This avoids depending solely on the SPARQL
+service; existing budgets are still never overridden.

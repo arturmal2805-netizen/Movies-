@@ -12,7 +12,7 @@ from synopsis_model import synopsis_score
 from production_model import production_score
 from audience_priority import audience_production_score,public_quality_score,public_quality_tier,selection_priority_score,SELECTION_VERSION
 from interests import normalize_interests,build_style_model,style_key
-from budget_evidence import BudgetVerifier,request as request_budgets
+from budget_evidence import BudgetVerifier,BudgetResolver
 from production_policy import production_exclusion,production_budget,POLICY,director_focus,style_affinity
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 SEARCH_GENERIC=GENERIC|{'spin off','prequel','reboot','franchise','based on short film','based on play or musical'}
@@ -205,7 +205,9 @@ class Backend:
   if not self.key.startswith('sb_secret_'):headers['Authorization']='Bearer '+self.key
   if prefer:headers['Prefer']=prefer
   return self.request(self.url+'/rest/v1/'+path,headers,method,body)
- def budget_claims(self,ids):return request_budgets(ids)
+ def budget_claims(self,ids):
+  if not hasattr(self,'_budget_resolver'):self._budget_resolver=BudgetResolver(self.movie)
+  return self._budget_resolver(ids)
  def load_interests(self,uid):
   uid=validated_uuid(uid,'User ID')
   user=self.request(self.url+'/auth/v1/admin/users/'+uid,{'apikey':self.key,'Authorization':'Bearer '+self.key})
@@ -486,18 +488,27 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
  if not budget:
   print('Private batch skipped: scheduled-hour budget or rolling 60-minute maximum reached.')
   return 0
- production_rejections=set();budget_verifier=BudgetVerifier(limit=config.get('budget_verification_limit',400),fetch=getattr(b,'budget_claims',lambda ids:{}))
+ production_rejections=set();detail_rejections=Counter();rejection_lock=threading.Lock();budget_verifier=BudgetVerifier(limit=config.get('budget_verification_limit',400),fetch=getattr(b,'budget_claims',lambda ids:{}))
  def hydrate(entry):
   movie=entry[1]
+  def reject(reason,fetched=True):
+   with rejection_lock:detail_rejections[reason]+=1
+   return None,fetched
   try:
    detail=b.movie(detail_path(movie['id']))
-   if isinstance(detail,dict) and production_exclusion(detail,require_budget=False,interests=tastes.interests):production_rejections.add(movie['id'])
-   if not valid_candidate(detail,config['minimum_votes'],now.date(),require_target=False,interests=tastes.interests) or not eligible_for_discovery(detail) or detail['id']!=movie['id'] or not detail.get('title') or type(detail.get('runtime')) not in (int,float) or detail['runtime']<=0:return None,True
-   crew=(detail.get('credits') or {}).get('crew',[])
-   director_ids={person['id'] for person in crew if isinstance(person,dict) and person.get('job')=='Director' and type(person.get('id')) is int}
-   aliases=[name for name,pid in movie.get('_director_alias_ids',{}).items() if type(pid) is int and pid in director_ids]
+   if not isinstance(detail,dict)or detail.get('id')!=movie['id']:return reject('identity_mismatch')
+   exclusion=production_exclusion(detail,require_budget=False,interests=tastes.interests)
+   if exclusion:
+    production_rejections.add(movie['id']);return reject(exclusion)
+   if not eligible_for_discovery(detail,require_target=False):return reject('year_country_or_excluded_genre')
+   if not eligible_for_discovery(detail):return reject('outside_horror_or_dystopia')
+   if not valid_candidate(detail,config['minimum_votes'],now.date(),require_target=False,interests=tastes.interests):return reject('release_poster_or_public_metadata')
+   if not detail.get('title')or type(detail.get('runtime'))not in(int,float)or detail['runtime']<=0:return reject('missing_title_or_runtime')
+   crew=(detail.get('credits')or {}).get('crew',[])
+   director_ids={person['id']for person in crew if isinstance(person,dict)and person.get('job')=='Director'and type(person.get('id'))is int}
+   aliases=[name for name,pid in movie.get('_director_alias_ids',{}).items()if type(pid)is int and pid in director_ids]
    return dict(detail,genre_ids=genres(detail),directorAliases=aliases,discovery_sources=movie.get('discovery_sources',[]),_liked_anchor_ids=movie.get('_liked_anchor_ids',[]),_liked_directors=movie.get('_liked_directors',[]),_personal_routes=movie.get('_personal_routes',[]),_matched_theme_groups=movie.get('_matched_theme_groups',[])),True
-  except Exception:return None,False
+  except Exception as error:return reject(error_summary(error),False)
  # Coarse discover results lack keywords/countries: filter taste only after canonical enrichment.
  # Exhaust the current pool before rotating pages; never fill a batch with rejected movies.
  attempted=set();details={};unverified={};fetched_any=False;final=[]
@@ -559,7 +570,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   'positivePersonal':sum(match_score(e[1],tastes)>0 for e in final[:budget]),
   'styleMatches':sum(style_affinity(e[1],tastes.style_model)>0 for e in final[:budget]),
   'budgetRecovered':sum(bool(e[1].get('budgetEvidence'))for e in final[:budget]),
-  'budgetLookupFailures':budget_verifier.failures,
+  'budgetLookupFailures':budget_verifier.failures,'budgetVerifications':len(budget_verifier.attempted),'detailsAttempted':len(attempted),'detailRejections':dict(detail_rejections),
   'medianVoteCount':median([e[1].get('vote_count',0)for e in final[:budget]])if final else 0,
   'medianPublicRating':median([e[1].get('vote_average',0)for e in final[:budget]])if final else 0}
  if attempted and not fetched_any:raise RequestFailure('Candidate metadata unavailable; retry next run')
