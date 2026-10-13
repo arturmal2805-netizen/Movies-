@@ -95,3 +95,12 @@ class EntityBudgetTests(unittest.TestCase):
   def fail(ids):raise RuntimeError('query service down')
   resolver=BudgetResolver(lambda path:m,entity_fetch=lambda qid:self.entity(),query_fetch=fail)
   self.assertEqual(parse_evidence(resolver([m['id']]),[m])[m['id']]['amountUSD'],4000000)
+
+class TransitiveBudgetIdentityTests(unittest.TestCase):
+ def test_matching_canonical_imdb_can_resolve_an_entity_without_a_tmdb_claim(self):
+  from budget_evidence import entity_bindings,query_for
+  entity=EntityBudgetTests().entity();entity['entities']['Q123']['claims'].pop('P4947')
+  m={'id':5000001,'external_ids':{'imdb_id':'tt1234567'}}
+  self.assertEqual(parse_evidence(data(entity_bindings(entity,'Q123',m)),[m])[m['id']]['amountUSD'],4000000)
+  self.assertEqual(entity_bindings(entity,'Q123',{'id':5000001}),[])
+  self.assertIn('tt1234567',query_for([m]));self.assertNotIn('unsafe',query_for([dict(m,external_ids={'imdb_id':'unsafe'})]))

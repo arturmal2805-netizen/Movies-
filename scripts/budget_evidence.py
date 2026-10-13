@@ -7,7 +7,14 @@ ENDPOINT='https://query.wikidata.org/sparql'
 USD='http://www.wikidata.org/entity/Q4917'
 
 def query_for(ids):
- values=' '.join('"'+str(mid)+'"' for mid in ids if type(mid)is int and mid>0)
+ values=[]
+ for item in ids:
+  mid=item.get('id')if isinstance(item,dict)else item
+  if type(mid)is not int or mid<=0:continue
+  imdb=((item.get('external_ids')or {}).get('imdb_id')or item.get('imdb_id')or'')if isinstance(item,dict)else''
+  imdb=imdb if isinstance(imdb,str)and re.fullmatch(r'tt[0-9]{7,10}',imdb)else''
+  values.append('("'+str(mid)+'" "'+imdb+'")')
+ values=' '.join(values)
  return '''PREFIX wd: <http://www.wikidata.org/entity/>
 PREFIX wdt: <http://www.wikidata.org/prop/direct/>
 PREFIX p: <http://www.wikidata.org/prop/>
@@ -17,8 +24,11 @@ PREFIX schema: <http://schema.org/>
 PREFIX prov: <http://www.w3.org/ns/prov#>
 PREFIX wikibase: <http://wikiba.se/ontology#>
 SELECT ?movie ?tmdb ?imdb ?amount ?lower ?currency ?reference WHERE {
- VALUES ?tmdb { '''+values+''' }
- ?movie wdt:P4947 ?tmdb; p:P2130 ?statement.
+ VALUES (?tmdb ?canonicalImdb) { '''+values+''' }
+ { ?movie wdt:P4947 ?tmdb }
+ UNION { ?movie wdt:P345 ?canonicalImdb. FILTER(?canonicalImdb != "") }
+ FILTER NOT EXISTS { ?movie wdt:P4947 ?otherTmdb. FILTER(?otherTmdb != ?tmdb) }
+ ?movie p:P2130 ?statement.
  ?statement psv:P2130 ?value; prov:wasDerivedFrom ?source.
  { ?source pr:P854 ?reference }
  UNION { ?source pr:P143 wd:Q328. ?reference schema:about ?movie; schema:isPartOf <https://en.wikipedia.org/>. }
@@ -27,6 +37,7 @@ SELECT ?movie ?tmdb ?imdb ?amount ?lower ?currency ?reference WHERE {
  FILTER(?currency = wd:Q4917)
  OPTIONAL { ?value wikibase:quantityLowerBound ?lower }
  OPTIONAL { ?movie wdt:P345 ?imdb }
+ FILTER(?canonicalImdb = "" || ?imdb = ?canonicalImdb)
 }'''
 
 def request(ids):
@@ -91,9 +102,11 @@ def entity_bindings(data,qid,movie):
  claims=entity.get('claims',{});claims=claims if isinstance(claims,dict)else {}
  def values(prop):
   return [c.get('mainsnak',{}).get('datavalue',{}).get('value')for c in claims.get(prop,[])if isinstance(c,dict)and c.get('rank')!='deprecated']
- if str(movie['id'])not in values('P4947'):return []
+ tmdb=values('P4947')
+ if tmdb and str(movie['id'])not in tmdb:return []
  imdb=(movie.get('external_ids')or {}).get('imdb_id')or movie.get('imdb_id')
  if imdb and imdb not in values('P345'):return []
+ if not tmdb and not imdb:return []
  article=(entity.get('sitelinks')or {}).get('enwiki')or {};title=article.get('title')if isinstance(article,dict)else None
  rows=[]
  for claim in claims.get('P2130',[]):
@@ -130,7 +143,7 @@ class BudgetResolver:
   missing=[mid for mid in ids if mid not in resolved]
   if missing and not self.query_failed:
    try:
-    extra=self.query_fetch(missing);rows.extend(extra.get('results',{}).get('bindings',[]))
+    extra=self.query_fetch([m for m in movies if m['id']in missing]);rows.extend(extra.get('results',{}).get('bindings',[]))
    except Exception:self.query_failed=True
   if not rows and self.query_failed and not any(ok for _,ok in results):raise RuntimeError('Referenced budget sources unavailable')
   return {'results':{'bindings':rows}}
