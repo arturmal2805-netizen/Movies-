@@ -94,7 +94,7 @@ class ProductionTests(unittest.TestCase):
 
  def test_new_studio_and_cast_paths_survive_dispatch_and_preserve_budget_and_broad_routes(self):
   backend=Mock();backend.movie.return_value={'results':[movie(2500000)],'total_pages':20}
-  cfg=dict(load_config(),sources=[{'id':'tmdb','adapter':'tmdb_discover','enabled':True,'pages':3}],
+  cfg=dict(load_config(),discovery_request_limit=24,sources=[{'id':'tmdb','adapter':'tmdb_discover','enabled':True,'pages':3}],
            _now=datetime.datetime(2026,10,13,tzinfo=datetime.timezone.utc),_evidence_routes=True,
            _preferred_companies=[101,102,103,104,105,106],_preferred_cast=[201,202,203,204],
            _preferred_keywords=[1,2,3,4],_preferred_keyword_groups=[[5,6],[7,8],[9,10],[11,12]],_preferred_periods=[2010,2020])

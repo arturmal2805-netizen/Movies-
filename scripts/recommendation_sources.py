@@ -10,6 +10,8 @@ def detail_path(mid):return f'movie/{mid}?language=ru-RU&append_to_response=keyw
 
 def annotate_query(rows,path):
     query=urllib.parse.parse_qs(urllib.parse.urlsplit(path).query)
+    if query.get('sort_by')==['popularity.desc']:
+        rows=[dict(m,_personal_routes=['audience-popularity']) if isinstance(m,dict) else m for m in rows]
     if query.get('sort_by')==['vote_count.desc']:
         rows=[dict(m,_personal_routes=['audience-votes']) if isinstance(m,dict) else m for m in rows]
     for parameter,label in [('with_companies','liked-studio'),('with_cast','liked-cast')]:
@@ -100,6 +102,7 @@ def tmdb_candidates(backend, preferred, config):
                                'primary_release_date.lte':min(now.date().isoformat(),str(year+9)+'-12-31')})
     # Broad sci-fi/thriller lists waste the shortlist on unrelated family/adventure films.
     strategies.extend(dict(sort_by='popularity.desc',**({'with_genres':'27,53'} if genre==53 else {'with_genres':878,'with_keywords':4565})) for genre in preferred[:3] if genre in (53,878))
+    broad_keys={tuple(sorted(strategy.items())) for strategy in strategies}
     companies=list(dict.fromkeys(c for c in config.get('_preferred_companies',[])[:6] if type(c) is int and c>0))
     actors=list(dict.fromkeys(c for c in config.get('_preferred_cast',[])[:4] if type(c) is int and c>0))
     round_number=config.get('_search_round',0)
@@ -118,54 +121,97 @@ def tmdb_candidates(backend, preferred, config):
             strategies.append({'sort_by':'popularity.desc','with_genres':27,
                                'primary_release_date.gte':str(year)+'-01-01',
                                'primary_release_date.lte':min(now.date().isoformat(),str(year+4)+'-12-31')})
-    count=config.get('pages',2);window=max(count,min(20,config.get('page_window',20)))
-    slot=int((now.timestamp()-17*60)//3600)+config.get('_page_seed',0)
-    # Probe every strategy before spending the request budget on deeper pages.
-    # TMDB supplies the real page count: a fixed first-20-page window becomes
-    # exhausted after hundreds of ratings. Keep a per-run ledger across refills.
+    # Budget actual new requests, not cached page-one probes. Broad popularity
+    # and audience lists own a lane that narrow keyword routes cannot consume.
+    unique={tuple(sorted(strategy.items())):strategy for strategy in strategies}
+    strategies=list(unique.values())
     probes=['discover/movie?'+urllib.parse.urlencode({**query,**strategy,'page':1}) for strategy in strategies]
+    broad=[i for i,s in enumerate(strategies) if tuple(sorted(s.items())) in broad_keys]
+    personal=[i for i in range(len(probes)) if i not in broad]
+    count=config.get('pages',2);window=max(count,min(20,config.get('page_window',20)))
+    limit=max(1,min(64,config.get('discovery_request_limit',24)))
+    if count==1:limit=min(limit,len(probes))
+    elif 'discovery_request_limit' not in config:limit=min(limit,len(probes)*count)
     ledger=config.get('_discovery_pages',{})
-    def probe(path):
+    totals=config.get('_discovery_totals')
+    if totals is None:totals=ledger.setdefault('_totals',{})
+    initial=[];requested=set();failed=set();request_count=0
+    search_round=config.get('_search_round',0)
+    slot=int((now.timestamp()-17*60)//3600)+config.get('_page_seed',0)
+    def lookup(item):
+        index,page=item;path=probes[index].rsplit('page=',1)[0]+'page='+str(page)
         try:
             data=backend.movie(path)
-            return data if isinstance(data,dict) and isinstance(data.get('results'),list) else None
-        except Exception:return None
-    with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
-        probed=list(executor.map(probe,probes))
-    paths=[];initial=[];page_options=[]
-    for path,data in zip(probes,probed):
-        seen=ledger.setdefault(path,set())
-        if 1 not in seen:
-            rows=None if data is None else data['results']
-            if rows is not None:rows=annotate_query(rows,path)
-            initial.append(rows);seen.add(1)
-        total=data.get('total_pages',window) if data else window
-        total=max(1,min(500,total)) if type(total) is int else window
-        # Preserve the provider's ranking before exploring the long tail.
-        # Randomly jumping from page 1 to page 400 can skip every promising
-        # unseen film. Reserve one page per strategy for sequential head search;
-        # remaining pages still rotate through the full available catalogue.
-        options=[]
-        if count>1:
-            head=next((page for page in range(2,min(total,20)+1) if page not in seen),None)
-            if head is not None:options.append(head)
-        for offset in range(max(0,total-1)):
-            if len(options)>=count-1:break
-            page=2+(slot*max(1,count-1)+offset)%(total-1)
-            if page not in seen and page not in options:options.append(page)
-        page_options.append(options)
-    # Round-robin allocation ensures learned keyword queries cannot crowd out
-    # broad horror/dystopia discovery under the 24-request ceiling.
-    search_round=config.get('_search_round',0)
-    offset=search_round%len(probes)
-    order=list(range(offset,len(probes)))+list(range(offset))
-    for depth in range(count-1):
-        for index in order:
-            path,options=probes[index],page_options[index]
-            if len(probes)+len(paths)>=24:break
-            if depth<len(options):
-                page=options[depth];ledger[path].add(page)
-                paths.append(path.rsplit('page=',1)[0]+'page='+str(page))
+            if not isinstance(data,dict) or not isinstance(data.get('results'),list):return item,None
+            return item,data
+        except Exception:return item,None
+    def page_for(index,explore=False):
+        path=probes[index];seen=ledger.setdefault(path,set())
+        total=totals.get(path)
+        if total is None:
+            return None if (index,1) in requested else 1
+        if count==1:total=min(1,total)
+        if explore and total>1:
+            start=2+(slot*max(1,count-1))%(total-1)
+            pages=list(range(start,total+1))+list(range(2,start))
+        else:pages=range(1,total+1)
+        return next((page for page in pages if page not in seen and (index,page) not in requested),None)
+    def scan(indices,allowance,explore=False):
+        nonlocal request_count
+        if not indices:return
+        # Several waves let page one's total_pages constrain every next request.
+        # Successful pages only enter the ledger; a failed page is retried on a
+        # later pass, without an infinite retry loop within the current pass.
+        cursor=0;spent=0
+        with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
+            while spent<allowance and request_count<limit:
+                batch=[]
+                for _ in range(len(indices)):
+                    index=indices[cursor%len(indices)];cursor+=1
+                    if index in failed:continue
+                    page=page_for(index,explore)
+                    if page is not None:
+                        batch.append((index,page));requested.add((index,page))
+                    if len(batch)>=min(4,allowance-spent,limit-request_count):break
+                if not batch:break
+                for (index,page),data in executor.map(lookup,batch):
+                    spent+=1;request_count+=1
+                    if data is None:
+                        failed.add(index);initial.append(None);continue
+                    total=data.get('total_pages',window)
+                    totals[probes[index]]=max(1,min(500,total)) if type(total) is int else window
+                    ledger[probes[index]].add(page)
+                    initial.append(annotate_query(data['results'],probes[index]))
+    # Probe new routes once. Previously every refill charged the budget for
+    # the same first pages even though the backend returned cached responses.
+    new_routes=[i for i in broad+personal if totals.get(probes[i]) is None]
+    if new_routes:
+        with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4)) as executor:
+            items=[(i,1) for i in new_routes[:limit]]
+            requested.update(items)
+            for (index,page),data in executor.map(lookup,items):
+                request_count+=1
+                if data is None:
+                    failed.add(index);initial.append(None);continue
+                total=data.get('total_pages',window)
+                totals[probes[index]]=max(1,min(500,total)) if type(total) is int else window
+                ledger.setdefault(probes[index],set()).add(page)
+                initial.append(annotate_query(data['results'],probes[index]))
+    exploration=min(len(probes),max(1,limit//8)) if count>2 else 0
+    sequential=max(request_count,limit-exploration)
+    remaining=sequential-request_count
+    broad_budget=remaining if not personal else int(remaining*.65)
+    scan(broad,broad_budget)
+    scan(personal,sequential-request_count)
+    # Short/exhausted personal lists return their unused slots to broad search.
+    scan(broad,sequential-request_count)
+    order=broad+personal
+    if order:
+        offset=search_round%len(order);order=order[offset:]+order[:offset]
+    scan(order,limit-request_count,explore=True)
+    stats=config.get('_discovery_stats')
+    if isinstance(stats,dict):stats['requests']=stats.get('requests',0)+request_count
+    paths=[]
     seeds=list(dict.fromkeys(mid for mid in config.get('_preferred_movie_ids',[])[:48] if type(mid) is int and mid>0))
     batch=max(1,min(12,config.get('_anchor_batch_size',6)))
     groups=max(1,(len(seeds)+batch-1)//batch);search_round=config.get('_search_round',0);start=batch*(search_round%groups)
@@ -196,7 +242,7 @@ def tmdb_candidates(backend, preferred, config):
           if isinstance(m,dict) and not excluded(config,m.get('id'))]
     names=config.get('_preferred_directors',[])
     if names and search_round==0:pool.extend(director_candidates(backend,names,config))
-    if all(data is None for data in probed) and all(result is None for result in results) and not pool:raise RuntimeError('TMDB discovery unavailable')
+    if results and all(result is None for result in results) and not pool:raise RuntimeError('TMDB discovery unavailable')
     return pool
 
 
@@ -262,12 +308,26 @@ ADAPTERS = {'tmdb_discover': tmdb_candidates, 'tmdb_id_feed': tmdb_id_feed, 'tra
 
 def discover(backend, preferred, config):
     pool, statuses = {}, []
+    config.setdefault('_discovery_pages',{})
+    config.setdefault('_discovery_totals',{})
+    config.setdefault('_discovery_stats',{})
     for source in config['sources']:
         if not source.get('enabled', False):
             continue
         name = source['id']
         try:
-            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _search_round=config.get('_search_round',0), _preferred_movie_ids=config.get('_preferred_movie_ids',[]), _include_similar=config.get('_include_similar',False), _evidence_routes=config.get('_evidence_routes',False), _anchor_batch_size=config.get('_anchor_batch_size',6), _preferred_keywords=config.get('_preferred_keywords',[]), _preferred_keyword_groups=config.get('_preferred_keyword_groups',[]), _preferred_periods=config.get('_preferred_periods',[]), _preferred_directors=config.get('_preferred_directors',[]), _preferred_companies=config.get('_preferred_companies',[]), _preferred_cast=config.get('_preferred_cast',[]), _director_anchor_ids=config.get('_director_anchor_ids',{}), _discovery_pages=config.get('_discovery_pages',{}), _anchor_coverage=config.get('_anchor_coverage',set()), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
+            options=dict(source,minimum_votes=config['minimum_votes'],
+                         page_window=config.get('page_window',20),
+                         discovery_workers=config.get('discovery_workers',4),
+                         discovery_request_limit=config.get('discovery_request_limit',24))
+            for key,default in [('_excluded_ids',set()),('_now',None),('_page_seed',0),('_search_round',0),
+                                ('_preferred_movie_ids',[]),('_include_similar',False),('_evidence_routes',False),
+                                ('_anchor_batch_size',6),('_preferred_keywords',[]),('_preferred_keyword_groups',[]),
+                                ('_preferred_periods',[]),('_preferred_directors',[]),('_preferred_companies',[]),
+                                ('_preferred_cast',[]),('_director_anchor_ids',{}),('_discovery_pages',{}),
+                                ('_discovery_totals',{}),('_discovery_stats',{}),('_anchor_coverage',set())]:
+                options[key]=config.get(key,default)
+            candidates=ADAPTERS[source['adapter']](backend,preferred,options)
             valid = [m for m in candidates if isinstance(m,dict) and type(m.get('id')) is int and m['id'] > 0 and not excluded(config,m['id'])]
             for movie in valid:
                 mid = movie['id']

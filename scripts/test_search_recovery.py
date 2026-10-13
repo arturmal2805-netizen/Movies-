@@ -44,7 +44,7 @@ class SearchRecoveryTests(unittest.TestCase):
   cfg=dict(load_config(),sources=[{'id':'tmdb','adapter':'tmdb_discover','enabled':True,'pages':1}],
            _preferred_movie_ids=[900000],_include_similar=True)
   pool,_=discover(backend,[],cfg)
-  self.assertEqual(len(pool),1);self.assertEqual(pool[0]['_personal_routes'],['recommendations'])
+  self.assertEqual(len(pool),1);self.assertEqual(set(pool[0]['_personal_routes']),{'audience-popularity','recommendations'})
   backend.movie.side_effect=lambda path:{'results':[horror(700000)]}
   pool,_=discover(backend,[],cfg)
   self.assertEqual(set(pool[0]['_personal_routes']),{'recommendations','similar'})
@@ -102,8 +102,9 @@ class SearchRecoveryTests(unittest.TestCase):
    queries=[parse_qs(urlsplit(c.args[0]).query) for c in backend.movie.call_args_list]
    ids={int(q['with_keywords'][0]) for q in queries if q.get('with_genres')==['27'] and 'with_keywords' in q}
    self.assertEqual(len(ids),4);observed|=ids
-   self.assertTrue(any(q.get('with_keywords')==['4565'] for q in queries))
-   self.assertTrue(any(q.get('with_genres')==['27'] and 'with_keywords' not in q for q in queries))
+   if i==0:
+    self.assertTrue(any(q.get('with_keywords')==['4565'] for q in queries))
+    self.assertTrue(any(q.get('with_genres')==['27'] and 'with_keywords' not in q for q in queries))
   self.assertEqual(observed,set(range(100,112)))
 
  def test_preferred_period_routes_are_soft_and_cannot_change_explicit_minimum_year(self):

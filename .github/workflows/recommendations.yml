@@ -27,6 +27,8 @@ on:
       - 'scripts/taste_model.py'
       - 'scripts/synopsis_model.py'
       - 'scripts/production_model.py'
+      - 'scripts/audience_priority.py'
+      - 'scripts/test_audience_priority.py'
       - 'scripts/test_production_model.py'
       - 'scripts/warm_personal_history.py'
       - 'scripts/test_synopsis_model.py'

@@ -37,7 +37,8 @@
   "history_enrichment_per_run": 240,
   "manual_batch_target": 30,
   "manual_anchor_limit": 36,
-  "search_rounds": 6,
+  "search_rounds": 8,
   "detail_candidate_limit": 1200,
-  "manual_quality_pool": 480
+  "manual_quality_pool": 480,
+  "discovery_request_limit": 64
 }

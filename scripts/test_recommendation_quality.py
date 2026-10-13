@@ -70,7 +70,7 @@ class QualityTests(unittest.TestCase):
   result=diverse_candidates(entries)
   self.assertEqual([e[1]['id'] for e in result],[901,903,902])
  def test_rotating_search_separates_genres_and_is_bounded(self):
-  backend=Mock();backend.movie.return_value={'results':[movie(901)]}
+  backend=Mock();backend.movie.return_value={'results':[movie(901)],'total_pages':500}
   config={'minimum_votes':100,'pages':3,'_now':NOW,'_preferred_keywords':[123]}
   tmdb_candidates(backend,[27,878],config)
   params=[parse_qs(urlsplit(call.args[0]).query) for call in backend.movie.call_args_list]

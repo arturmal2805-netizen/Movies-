@@ -10,14 +10,17 @@ class PersonalizedDiscoveryTests(unittest.TestCase):
   from urllib.parse import urlsplit,parse_qs
   backend=Mock();backend.movie.return_value={'results':[],'total_pages':500}
   config=dict(load_config(),sources=[{'id':'tmdb','adapter':'tmdb_discover','enabled':True,'pages':3}],_page_seed=177,_discovery_pages={})
+  seen=set()
   for refill in range(3):
    backend.movie.reset_mock();config['_search_round']=refill
    discover(backend,[],config)
    pages=[int(parse_qs(urlsplit(c.args[0]).query)['page'][0]) for c in backend.movie.call_args_list if c.args[0].startswith('discover/movie?')]
-   # Each broad strategy scans its highest remaining pages as well as deeper ones.
-   self.assertEqual(pages.count(2+refill),3)
+   # Each refill progresses through unvisited head pages and deeper pages.
+   paths=[c.args[0] for c in backend.movie.call_args_list]
+   self.assertFalse(seen.intersection(paths));seen.update(paths)
+   self.assertLessEqual(len(paths),64)
    self.assertTrue(any(page>20 for page in pages))
-   if refill:self.assertNotIn(2+refill-1,pages)
+   self.assertTrue(any(1<page<=100 for page in pages))
 
  def test_one_page_and_short_catalogues_never_request_nonexistent_or_duplicate_pages(self):
   from urllib.parse import urlsplit,parse_qs
@@ -111,18 +114,20 @@ class PersonalizedDiscoveryTests(unittest.TestCase):
   with patch('recommend.discover',return_value=(pool,[])):
    self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,dict(load_config(),history_enrichment_per_run=0),manual=True),1)
   metadata=backend.collection[0]['metadata']
-  self.assertEqual(metadata['recommendationAnchorIds'],[600001]);self.assertEqual(metadata['recommendationDirectorSeeds'],['Trusted']);self.assertEqual(metadata['recommendationSearchVersion'],'production-search43')
+  self.assertEqual(metadata['recommendationAnchorIds'],[600001]);self.assertEqual(metadata['recommendationDirectorSeeds'],['Trusted']);self.assertEqual(metadata['recommendationSearchVersion'],'audience-search44')
 
- def test_personal_keyword_queries_precede_broad_lists_and_require_horror(self):
+ def test_personal_keyword_queries_have_reserved_budget_and_require_horror(self):
   from urllib.parse import urlsplit,parse_qs
   backend=Mock();backend.movie.return_value={'results':[]}
   config=dict(load_config(),sources=[{'id':'tmdb','adapter':'tmdb_discover','enabled':True,'pages':3}],_preferred_keywords=[101,102,103,104])
   discover(backend,[],config)
   paths=[c.args[0] for c in backend.movie.call_args_list if c.args[0].startswith('discover/movie?')]
-  self.assertEqual(len(paths),21)
-  # Every learned theme is probed first, then pages share the request budget.
-  for path in paths[:4]:
-   query=parse_qs(urlsplit(path).query);self.assertIn(int(query['with_keywords'][0]),[101,102,103,104]);self.assertEqual(query['with_genres'],['27'])
+  self.assertLessEqual(len(paths),64)
+  queries=[parse_qs(urlsplit(path).query) for path in paths]
+  personal=[q for q in queries if q.get('with_keywords',[None])[0] in ['101','102','103','104']]
+  self.assertEqual({q['with_keywords'][0] for q in personal},{'101','102','103','104'})
+  self.assertTrue(all(q['with_genres']==['27'] for q in personal))
+  self.assertTrue(any(q.get('with_genres')==['27'] and 'with_keywords' not in q for q in queries))
 
  def test_translated_director_is_resolved_from_two_verified_liked_film_credits(self):
   backend=Mock()

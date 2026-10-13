@@ -24,7 +24,7 @@ class KeywordGroupTests(unittest.TestCase):
 
  def test_and_groups_reach_adapter_without_removing_broad_search_or_exceeding_budget(self):
   backend=Mock();backend.movie.return_value={'results':[],'total_pages':100}
-  cfg=dict(load_config(),sources=[{'id':'tmdb','adapter':'tmdb_discover','enabled':True,'pages':3}],
+  cfg=dict(load_config(),discovery_request_limit=24,sources=[{'id':'tmdb','adapter':'tmdb_discover','enabled':True,'pages':3}],
            _preferred_keywords=[10,20,30,40],_preferred_keyword_groups=[[11,12],[21,22],[31,32],[41,42]])
   discover(backend,[53,878],cfg)
   queries=[parse_qs(urlsplit(call.args[0]).query) for call in backend.movie.call_args_list]

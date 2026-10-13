@@ -14,7 +14,7 @@ NOW=datetime.datetime(2026,10,13,18,30,tzinfo=datetime.timezone.utc)
 class AudienceDiscoveryTests(unittest.TestCase):
  def test_new_routes_cover_horror_and_dystopia_without_raising_vote_minimum(self):
   backend=Mock();backend.movie.return_value={'results':[],'total_pages':30}
-  config=dict(load_config(),_now=NOW,_evidence_routes=True,_preferred_keywords=[1,2,3,4],
+  config=dict(load_config(),discovery_request_limit=24,_now=NOW,_evidence_routes=True,_preferred_keywords=[1,2,3,4],
               _preferred_keyword_groups=[[5,6],[7,8],[9,10],[11,12]],_preferred_periods=[2010,2020])
   tmdb_candidates(backend,[53,878],config)
   queries=[parse_qs(urlsplit(c.args[0]).query) for c in backend.movie.call_args_list]
@@ -41,13 +41,13 @@ class AudienceDiscoveryTests(unittest.TestCase):
     return by_id[int(path.split('/')[1].split('?')[0])]
    return {'results':[]}
   backend.movie=lookup
-  cfg=dict(load_config(),sources=[{'id':'tmdb','adapter':'tmdb_discover','enabled':True,'pages':3}],history_enrichment_per_run=0)
+  cfg=dict(load_config(),discovery_request_limit=24,sources=[{'id':'tmdb','adapter':'tmdb_discover','enabled':True,'pages':3}],history_enrichment_per_run=0)
   for manual in (False,True):
    backend.collection=[]
    with patch('recommend.match_score',return_value=-1):
     self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,cfg,manual=manual),3)
    self.assertTrue(all('audience-votes' in r['metadata']['recommendationPersonalRoutes'] for r in backend.collection))
-   self.assertTrue(all(r['metadata']['recommendationSearchVersion']=='production-search43' for r in backend.collection))
+   self.assertTrue(all(r['metadata']['recommendationSearchVersion']=='audience-search44' for r in backend.collection))
 
 
 if __name__=='__main__':unittest.main()
