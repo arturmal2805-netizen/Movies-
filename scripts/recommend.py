@@ -351,9 +351,9 @@ def enrich_history(b,uid,ratings,collection,config):
    detail=b.movie(detail_path(mid))
    return detail if isinstance(detail,dict) and detail.get('id')==mid else None
   except Exception:return None
- completed=0
  with ThreadPoolExecutor(max_workers=config.get('detail_workers',4)) as executor:
   details=list(executor.map(fetch,selected))
+ writes=[]
  for mid,detail in zip(selected,details):
   if detail is None:continue
   extra=feature_metadata(detail)
@@ -370,14 +370,19 @@ def enrich_history(b,uid,ratings,collection,config):
    if type(detail.get('vote_count')) is int and detail['vote_count']>=0:metrics['voteCount']=detail['vote_count']
    if metrics:metadata['remoteMetrics']=metrics
    if row['metadata'].get('director') and not metadata['director']:metadata['director']=row['metadata']['director']
-   try:
-    path=table+'?user_id=eq.'+uid+'&tmdb_id=eq.'+str(mid)
-    if table=='ratings' and parsed_time(row.get('updated_at')):
-     path+='&updated_at=eq.'+urllib.parse.quote(row['updated_at'],safe='')
-    written=b.db(path,'PATCH',{'metadata':metadata},'return=representation')
-    if written==[]:continue # A newer opinion or a deleted row wins the race.
-    row['metadata']=metadata;completed+=1
-   except Exception:continue
+   writes.append((table,row,metadata,mid))
+ def write(item):
+  table,row,metadata,mid=item
+  try:
+   path=table+'?user_id=eq.'+uid+'&tmdb_id=eq.'+str(mid)
+   if table=='ratings' and parsed_time(row.get('updated_at')):
+    path+='&updated_at=eq.'+urllib.parse.quote(row['updated_at'],safe='')
+   written=b.db(path,'PATCH',{'metadata':metadata},'return=representation')
+   if written==[]:return False # A newer opinion or a deleted row wins the race.
+   row['metadata']=metadata;return True
+  except Exception:return False
+ with ThreadPoolExecutor(max_workers=config.get('detail_workers',4)) as executor:
+  completed=sum(executor.map(write,writes))
  if selected:print('History metadata refreshed:',completed,'records; other collection fields retained.')
  return completed
 

@@ -1,5 +1,5 @@
 """Production learning must be private, coverage-safe and never an admission gate."""
-import copy,unittest,datetime
+import copy,unittest,datetime,threading
 from unittest.mock import Mock
 from urllib.parse import urlsplit,parse_qs
 from production_model import production_features,fit_production,production_score
@@ -137,6 +137,20 @@ class ProductionTests(unittest.TestCase):
   self.assertEqual(enrich_history(backend,'test',rows,[],load_config()),0)
   self.assertIn('updated_at=eq.2026-10-01T12%3A00%3A00%2B00%3A00',calls[0][0])
   self.assertEqual(calls[0][2],'return=representation');self.assertEqual(rows,before)
+
+ def test_bulk_metadata_writes_run_in_a_bounded_parallel_group(self):
+  backend=FakeBackend();rows=history()[:8]
+  backend.movie=lambda path:dict(movie(int(path.split('/')[1].split('?')[0])),budget=5000000)
+  barrier=threading.Barrier(4);lock=threading.Lock();active=peak=0
+  def db(path,method='GET',body=None,prefer=None):
+   nonlocal active,peak
+   with lock:active+=1;peak=max(peak,active)
+   try:barrier.wait(timeout=3);return [{'metadata':body['metadata']}]
+   finally:
+    with lock:active-=1
+  backend.db=db
+  self.assertEqual(enrich_history(backend,'test',rows,[],dict(load_config(),detail_workers=4)),8)
+  self.assertEqual(peak,4)
 
 
 if __name__=='__main__':unittest.main()
