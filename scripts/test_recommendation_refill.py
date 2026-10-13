@@ -66,6 +66,7 @@ class RefillTests(unittest.TestCase):
 
  def test_full_manual_pipeline_sends_the_positive_rating_as_search_seed(self):
   backend=FakeBackend();backend.ratings=[{'tmdb_id':600001,'impression':'like','metadata':{'title':'Liked','year':2020,'genreIds':[27],'keywords':[],'productionCountries':['US'],'originalLanguage':'en','featureVersion':2,'description':'A horror plot','remoteMetrics':{'popularity':10}}}]
+  backend.movie=lambda path:dict(movie(600001),genre_ids=[27],genres=[{'id':27}])
   with patch('recommend.discover',return_value=([],[])) as search:
    recommend_user(backend,{'user_id':'test'},NOW,load_config(),manual=True)
   self.assertEqual(search.call_args_list[0].args[2]['_preferred_movie_ids'],[600001])

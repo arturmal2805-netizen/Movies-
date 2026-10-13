@@ -26,6 +26,9 @@ on:
       - 'scripts/movie_features.py'
       - 'scripts/taste_model.py'
       - 'scripts/synopsis_model.py'
+      - 'scripts/production_model.py'
+      - 'scripts/test_production_model.py'
+      - 'scripts/warm_personal_history.py'
       - 'scripts/test_synopsis_model.py'
       - 'scripts/selection_quality.py'
       - 'scripts/test_selection_quality.py'
@@ -63,6 +66,9 @@ jobs:
           ref: main
       - name: Test recommendation logic
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Refresh personal history for the new model
+        if: ${{ github.event_name == 'push' }}
+        run: python3 scripts/warm_personal_history.py
       - name: Add private personalized films
         env:
           TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}

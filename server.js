@@ -56,7 +56,7 @@ export class ServerStore {
   return rows;
  }
  async load(){return await Promise.all([this.readAll('ratings'),this.readAll('collection')]);}
- async saveRating(f,r){if(!this.session)throw new Error('Войдите, чтобы сохранить оценку на сервере.');return this.api('/rest/v1/ratings?on_conflict=user_id,tmdb_id',{method:'POST',body:{user_id:this.session.user.id,tmdb_id:f.tmdbId,cinematography:r.cinematography??null,plot:r.plot??null,impression:r.impression,metadata:f,updated_at:r.ratedAt||new Date().toISOString()},headers:{Prefer:'resolution=merge-duplicates,return=representation'}});}
+ async saveRating(f,r){if(!this.session)throw new Error('Войдите, чтобы сохранить оценку на сервере.');return this.api('/rest/v1/ratings?on_conflict=user_id,tmdb_id',{method:'POST',body:{user_id:this.session.user.id,tmdb_id:f.tmdbId,cinematography:r.feedbackStage==='interest'?null:r.cinematography??null,plot:r.feedbackStage==='interest'?null:r.plot??null,impression:r.impression,metadata:{...f,ratingFeedbackStage:r.feedbackStage||'unknown',ratingInterestLevel:r.feedbackStage==='interest'?r.interestLevel:null},updated_at:r.ratedAt||new Date().toISOString()},headers:{Prefer:'resolution=merge-duplicates,return=representation'}});}
  async deleteRating(f){await this.api('/rest/v1/ratings?tmdb_id=eq.'+f.tmdbId,{method:'DELETE'});}
  async clearRatings(){await this.api('/rest/v1/ratings?user_id=eq.'+this.session.user.id,{method:'DELETE'});}
  async saveCollection(f,saved){if(!this.session)throw new Error('Войдите, чтобы сохранить коллекцию.');await this.api('/rest/v1/collection?on_conflict=user_id,tmdb_id',{method:'POST',body:{user_id:this.session.user.id,tmdb_id:f.tmdbId,metadata:f,saved},headers:{Prefer:'resolution=merge-duplicates'}});}

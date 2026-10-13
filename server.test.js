@@ -59,3 +59,10 @@ test('export without login makes no network request',async()=>{
  const store=new ServerStore();store.api=async()=>{throw new Error('unexpected request');};
  await assert.rejects(store.exportRatings(),/Войдите/);
 });
+
+test('interest writes preserve movie metadata and leave both technical scales unknown',async()=>{
+ let sent;const s=new ServerStore({url:'https://example.com',publishableKey:'public'},async(url,options)=>{sent=JSON.parse(options.body);return new Response('[]');});
+ s.session={user:{id:'user-1'},access_token:'test-token',expires_at:Date.now()/1000+3600};
+ await s.saveRating({tmdbId:157336,companyIds:[1],castIds:[2]}, {feedbackStage:'interest',interestLevel:1,impression:'dislike',plot:1,cinematography:1});
+ assert.equal(sent.plot,null);assert.equal(sent.cinematography,null);assert.equal(sent.metadata.ratingFeedbackStage,'interest');assert.equal(sent.metadata.ratingInterestLevel,1);assert.deepEqual(sent.metadata.companyIds,[1]);
+});

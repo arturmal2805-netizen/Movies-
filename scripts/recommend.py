@@ -8,6 +8,7 @@ from recommendation_sources import discover,hourly_limit,detail_path
 from movie_features import profile,match_score,rejection_score,genres,keywords,director,classify,normalize,feature_metadata,eligible_for_discovery,rating_signal,features,specific_feature,GENERIC
 from import_catalog import IDS
 from synopsis_model import synopsis_score
+from production_model import production_score
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 SEARCH_GENERIC=GENERIC|{'spin off','prequel','reboot','franchise','based on short film','based on play or musical'}
 
@@ -37,6 +38,13 @@ def preferred_periods(tastes,limit=2):
  if not tastes.predictive:return []
  keys=[key for key in tastes.balanced_weights if key[0]=='period' and tastes.positive_support.get(key,0)>=3 and tastes.balanced_weights[key]>0]
  return [key[1]*5 for key in sorted(keys,key=lambda key:(-tastes.balanced_weights[key],-key[1]))[:limit]]
+
+def preferred_production_seeds(tastes,kind,limit=6):
+ model=getattr(tastes,'production_model',{})
+ if not model.get('ready'):return []
+ required=2 if kind=='company' else 3
+ keys=[k for k,v in model['frequency'].items() if k[0]==kind and v>0 and model['positive_support'].get(k,0)>=required]
+ return [int(k[1]) for k in sorted(keys,key=lambda k:(-model['frequency'][k]*math.log1p(model['positive_support'][k]),int(k[1])))[:limit]]
 
 def supported_preference(tastes,key):
  if tastes.get(key,0)<=0:return False
@@ -195,7 +203,7 @@ def load_config():
  for key in ('base_per_hour','extra_per_source','maximum_per_hour','minimum_votes'):
   if type(config[key]) is not int or config[key]<0:raise ValueError('Invalid recommendation limit')
  if not 1<=config['maximum_per_hour']<=100:raise ValueError('Hourly maximum must be 1..100')
- if type(config.get('history_enrichment_per_run',12)) is not int or not 0<=config.get('history_enrichment_per_run',12)<=100:raise ValueError('Unbounded history enrichment')
+ if type(config.get('history_enrichment_per_run',12)) is not int or not 0<=config.get('history_enrichment_per_run',12)<=300:raise ValueError('Unbounded history enrichment')
  for key in ('discovery_workers','detail_workers'):
   if type(config.get(key,4)) is not int or not 1<=config.get(key,4)<=4:raise ValueError('Worker count must be 1..4')
  if type(config.get('page_window',20)) is not int or not 2<=config.get('page_window',20)<=20:raise ValueError('Page window must be 2..20')
@@ -290,7 +298,7 @@ def preferred_director_seeds(ratings,tastes,limit=8,rotation=0):
  for row in ratings:
   for raw in preference_director_names(row.get('metadata') or {}):
    name=normalize(raw)
-   if name in names and name not in negatives and name not in keys and row.get('impression')=='like' and (row.get('plot') or 0)>=9 and (row.get('cinematography') or 0)>=9 and tastes.balanced_weights.get(('director',name),0)>0:keys.append(name)
+   if name in names and name not in negatives and name not in keys and row.get('impression')=='like' and (row.get('metadata') or {}).get('ratingFeedbackStage')!='interest' and (row.get('plot') or 0)>=9 and (row.get('cinematography') or 0)>=9 and tastes.balanced_weights.get(('director',name),0)>0:keys.append(name)
  ordered=sorted(keys,key=lambda key:(-tastes.balanced_weights[('director',key)],key))
  fixed=ordered[:min(4,limit)];extra=ordered[len(fixed):]
  if extra:
@@ -307,6 +315,22 @@ def director_anchor_ids(ratings,names):
  return {name:ids[:2] for name,ids in result.items()}
 
 
+def history_enrichment_ids(pending,limit):
+ if limit<=0:return []
+ # Refresh all available preferences and a spread of counterexamples together.
+ # A prefix of TMDB IDs would systematically miss the latest failed batches.
+ positive=[mid for mid,entries in pending.items() if any(t=='ratings' and r.get('impression')=='like' for t,r in entries)]
+ positive.sort(key=lambda mid:not any(eligible_for_discovery(r.get('metadata') or {}) for t,r in pending[mid] if t=='ratings'))
+ selected=positive[:max(1,limit//2)]
+ def spread(ids,count):
+  count=min(count,len(ids))
+  return [ids[i*len(ids)//count] for i in range(count)] if count else []
+ negative=[mid for mid,entries in pending.items() if mid not in selected and any(t=='ratings' and r.get('impression')=='dislike' and eligible_for_discovery(r.get('metadata') or {}) for t,r in entries)]
+ selected+=spread(negative,limit-len(selected))
+ remaining=[mid for mid in pending if mid not in selected]
+ selected+=spread(remaining,limit-len(selected))
+ return selected
+
 def enrich_history(b,uid,ratings,collection,config):
  # Small resumable migration: enrich rated films first, without altering ratings, saved flags or timestamps.
  pending={}
@@ -318,10 +342,10 @@ def enrich_history(b,uid,ratings,collection,config):
    pop=metadata.get('popularity');pop=metrics.get('popularity') if pop is None else pop
    story=metadata.get('description') or metadata.get('overview')
    context_complete=(isinstance(story,str) and bool(story.strip()) or metadata.get('synopsisChecked')) and (type(pop) in (int,float) and math.isfinite(pop) and pop>=0 or metadata.get('reachChecked'))
-   if metadata.get('featureVersion')==2 and all(key in metadata for key in ('keywords','productionCountries','originalLanguage')) and context_complete:continue
+   if metadata.get('featureVersion')==2 and all(key in metadata for key in ('keywords','productionCountries','originalLanguage')) and context_complete and metadata.get('productionChecked'):continue
    mid=row.get('tmdb_id')
    if type(mid) is int and mid>0:pending.setdefault(mid,[]).append((table,row))
- selected=list(pending)[:config.get('history_enrichment_per_run',12)]
+ selected=history_enrichment_ids(pending,config.get('history_enrichment_per_run',12))
  def fetch(mid):
   try:
    detail=b.movie(detail_path(mid))
@@ -347,10 +371,15 @@ def enrich_history(b,uid,ratings,collection,config):
    if metrics:metadata['remoteMetrics']=metrics
    if row['metadata'].get('director') and not metadata['director']:metadata['director']=row['metadata']['director']
    try:
-    b.db(table+'?user_id=eq.'+uid+'&tmdb_id=eq.'+str(mid),'PATCH',{'metadata':metadata})
+    path=table+'?user_id=eq.'+uid+'&tmdb_id=eq.'+str(mid)
+    if table=='ratings' and parsed_time(row.get('updated_at')):
+     path+='&updated_at=eq.'+urllib.parse.quote(row['updated_at'],safe='')
+    written=b.db(path,'PATCH',{'metadata':metadata},'return=representation')
+    if written==[]:continue # A newer opinion or a deleted row wins the race.
     row['metadata']=metadata;completed+=1
    except Exception:continue
  if selected:print('History metadata refreshed:',completed,'records; other collection fields retained.')
+ return completed
 
 
 def recommend_user(b,user,now,config,manual=False,request_id=None):
@@ -378,6 +407,8 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
  search_config['_preferred_periods']=preferred_periods(tastes)
  search_config['_include_similar']=personal_search
  search_config['_evidence_routes']=personal_search
+ search_config['_preferred_companies']=preferred_production_seeds(tastes,'company')
+ search_config['_preferred_cast']=preferred_production_seeds(tastes,'cast',limit=4)
  search_config['_anchor_batch_size']=12 if personal_search else 6
  candidates,statuses=discover(b,preferred,search_config)
  print('Discovery:',json.dumps(statuses))
@@ -457,9 +488,12 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
   metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':director(detail),'moods':classify(detail),'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'synopsisChecked':True,'reachChecked':True,'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity'),'voteCount':detail.get('vote_count'),'tmdbUpdatedAt':now.isoformat()}}
   metadata['discoverySources']=movie.get('discovery_sources',[])
   metadata.update(feature_metadata(detail))
-  metadata.update(recommendationSearchVersion='audience-search42',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
+  metadata.update(recommendationSearchVersion='production-search43',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
   metadata['recommendationSynopsisScore']=round(.25*synopsis_score(detail,tastes.synopsis_model),6)
   metadata['recommendationSynopsisDocuments']=tastes.synopsis_model.get('document_count',0)
+  metadata['recommendationProductionScore']=round(.5*production_score(detail,tastes.production_model),6)
+  metadata['recommendationProductionPositiveCount']=tastes.production_model.get('positive_count',0)
+  metadata['recommendationProductionNegativeCount']=tastes.production_model.get('negative_count',0)
   metadata['recommendationPersonalRoutes']=detail.get('_personal_routes',[])
   metadata['recommendationThemeGroups']=detail.get('_matched_theme_groups',[])
   metadata['recommendationAnchorCount']=len(preferred_movies)

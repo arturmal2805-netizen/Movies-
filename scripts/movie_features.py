@@ -4,6 +4,7 @@ from pathlib import Path
 from collections import defaultdict
 from taste_model import fit_margin,margin_features,MODEL_VERSION
 from synopsis_model import fit_synopsis,synopsis_score
+from production_model import fit_production,production_score
 RULES=json.loads((Path(__file__).resolve().parents[1]/'config/category-rules.json').read_text())
 ORDER=['horror',*RULES['known']]
 GENERIC={'based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','woman director'}
@@ -54,6 +55,7 @@ def features(movie,include_director_aliases=True):
 
 def rating_signal(row):
  sign={'like':1,'dislike':-1,'neutral':0,'watched':0}.get(row.get('impression'),0)
+ if row.get('feedbackStage')=='interest' or (row.get('metadata') or {}).get('ratingFeedbackStage')=='interest':return sign
  values=[row.get(k) for k in ('plot','cinematography') if type(row.get(k)) in (int,float) and 1<=row[k]<=10]
  adjustment=(sum(values)/len(values)-5.5)/4.5 if values else 0
  if row.get('impression')=='neutral' and values and all(value==5 for value in values):return 0
@@ -66,7 +68,7 @@ class TasteProfile(dict):
    for key in vector:
     if specific_feature(key):self.neighbor_index[key].append(i)
 
-def profile(ratings,include_quality=True,include_director_aliases=True,include_public_quality=True,include_synopsis=True,include_reach=True,include_runtime=True):
+def profile(ratings,include_quality=True,include_director_aliases=True,include_public_quality=True,include_synopsis=True,include_reach=True,include_runtime=True,include_production=True):
  ratings=list(ratings)
  runtime_enabled=include_runtime and include_quality and include_director_aliases and include_public_quality and (include_synopsis or include_reach)
  sums=defaultdict(float);counts=defaultdict(int);shares=defaultdict(float);anchors=[]
@@ -109,8 +111,10 @@ def profile(ratings,include_quality=True,include_director_aliases=True,include_p
  result.include_reach=include_reach and include_quality and include_director_aliases and include_public_quality
  result.include_runtime=runtime_enabled
  result.synopsis_model=fit_synopsis(ratings) if result.predictive and result.include_synopsis else {}
+ result.production_model=fit_production([r for r in ratings if eligible_for_discovery(r.get('metadata') or {})]) if result.predictive and include_production and include_quality and include_director_aliases and include_public_quality and (result.include_synopsis or result.include_reach or result.include_runtime) else {'ready':False}
  result.training_count=positive_count+negative_count;result.positive_count=positive_count;result.negative_count=negative_count
  result.model_version=(MODEL_VERSION if result.include_runtime else 'synopsis-aware40' if result.include_synopsis or result.include_reach else 'reliability-aware38' if include_quality and include_director_aliases and include_public_quality else 'director-aware37' if include_quality and include_director_aliases else 'quality-aware36' if include_quality else 'empirical-taste32') if result.predictive else 'contrast-fallback'
+ if result.production_model.get('ready'):result.model_version='production-aware43'
  return result
 
 def predictive_features(movie,include_quality=True,include_director_aliases=True,include_reach=True,include_runtime=True):
@@ -176,7 +180,7 @@ def match_score(movie,taste):
  rating=movie.get('rating',movie.get('vote_average'))
  quality=.2*(rating-6.5) if getattr(taste,'include_public_quality',False) and type(rating) in (int,float) and math.isfinite(rating) and 0<rating<=10 else 0
  story=.25*synopsis_score(movie,getattr(taste,'synopsis_model',{}))
- return .25*rejection_score(movie,taste)+.75*balanced_score(movie,taste)+quality+story
+ return .25*rejection_score(movie,taste)+.75*balanced_score(movie,taste)+quality+story+.5*production_score(movie,getattr(taste,'production_model',{}))
 
 
 def feature_metadata(detail):
@@ -184,7 +188,14 @@ def feature_metadata(detail):
  result={'genreIds':genres(detail),'keywords':[k['name'] for k in rows],'keywordIds':[k['id'] for k in rows],
          'director':director(detail),'originalLanguage':detail.get('original_language',''),
          'productionCountries':[c['iso_3166_1'] for c in detail.get('production_countries') or [] if isinstance(c,dict) and isinstance(c.get('iso_3166_1'),str)],
-         'moods':classify(detail),'featureVersion':2}
+         'moods':classify(detail),'featureVersion':2,'productionChecked':True}
+ raw=detail.get('production_companies');raw=raw if isinstance(raw,list) else []
+ result['companyIds']=list(dict.fromkeys(c['id'] for c in raw if isinstance(c,dict) and type(c.get('id')) is int and c['id']>0))[:8]
+ credits=detail.get('credits');credits=credits if isinstance(credits,dict) else {}
+ cast=credits.get('cast');cast=cast if isinstance(cast,list) else []
+ result['castIds']=list(dict.fromkeys(c['id'] for c in cast if isinstance(c,dict) and type(c.get('id')) is int and c['id']>0))[:6]
+ budget=detail.get('budget')
+ result['productionBudget']=budget if type(budget) in (int,float) and math.isfinite(budget) and budget>0 else None
  if detail.get('directorAliases'):result['directorAliases']=detail['directorAliases']
  return result
 

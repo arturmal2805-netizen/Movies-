@@ -32,7 +32,7 @@ def selection_evaluation(rows):
     train, test = decisive[:split], decisive[split:]
     test = [r for r in test if eligible_for_discovery(r.get('metadata') or {})]
     model = profile(train)
-    previous = profile(train,include_runtime=False)
+    previous = profile(train,include_production=False)
     previous_floor = None
     def measure(selected_model,cutoff,legacy_gate):
         predictions = [(match_score(r['metadata'], selected_model), rejection_score(r['metadata'], selected_model), r['impression'] == 'like') for r in test]

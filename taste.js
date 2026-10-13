@@ -1,7 +1,8 @@
-import {filmCategories} from './categories.js?v=quality42';
-import {normalizeRating} from './ratings.js';
-import {fitMargin,marginFeatures,tasteModelVersion} from './taste-model.js?v=quality42';
-import {fitSynopsis,synopsisScore} from './synopsis-model.js?v=quality42';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality43';
+import {normalizeRating} from './ratings.js?v=quality43';
+import {fitMargin,marginFeatures,tasteModelVersion} from './taste-model.js?v=quality43';
+import {fitSynopsis,synopsisScore} from './synopsis-model.js?v=quality43';
+import {fitProduction,productionScore} from './production-model.js?v=quality43';
 const generic=new Set(['based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','woman director']);
 const normalize=value=>String(value||'').toLocaleLowerCase('ru').replace(/[-_]/g,' ').replace(/\s+/g,' ').trim();
 export function tasteFeatures(film,includeDirectorAliases=true){
@@ -16,14 +17,15 @@ export function tasteFeatures(film,includeDirectorAliases=true){
 }
 export function tasteSignal(value){
  const r=normalizeRating(value);if(!r)return 0;
+ if(r.feedbackStage==='interest')return ({like:1,dislike:-1})[r.impression]||0;
  const scales=[r.plot,r.cinematography].filter(Number.isFinite);
  const adjustment=scales.length?(scales.reduce((a,b)=>a+b,0)/scales.length-5.5)/4.5:0;
  if(r.impression==='neutral'&&scales.length&&scales.every(v=>v===5))return 0;
  return (({like:1,dislike:-1})[r.impression]||0)*.8+adjustment*.2;
 }
 const cachedProfiles=new WeakMap();
-export function buildTasteProfile(films,reactions,{includeQuality=true,includeDirectorAliases=true,includePublicQuality=true,includeSynopsis=true,includeReach=true,includeRuntime=true}={}){
- const signature=JSON.stringify([includeQuality,includeDirectorAliases,includePublicQuality,includeSynopsis,includeReach,includeRuntime,films.filter(f=>reactions[f.id]).map(f=>[f.id,normalizeRating(reactions[f.id]),f.genreIds,f.genre,f.keywords,f.director,f.originalLanguage,f.original_language,f.year,f.release_date,f.tmdbId,f.description||f.overview,f.rating,f.vote_average,f.directorAliases,f.popularity,f.remoteMetrics?.popularity,f.minutes,f.runtime])]);
+export function buildTasteProfile(films,reactions,{includeQuality=true,includeDirectorAliases=true,includePublicQuality=true,includeSynopsis=true,includeReach=true,includeRuntime=true,includeProduction=true}={}){
+ const signature=JSON.stringify([includeQuality,includeDirectorAliases,includePublicQuality,includeSynopsis,includeReach,includeRuntime,includeProduction,films.filter(f=>reactions[f.id]).map(f=>[f.id,normalizeRating(reactions[f.id]),f.genreIds,f.genre,f.keywords,f.director,f.originalLanguage,f.original_language,f.year,f.release_date,f.tmdbId,f.description||f.overview,f.rating,f.vote_average,f.directorAliases,f.popularity,f.remoteMetrics?.popularity,f.minutes,f.runtime,f.companyIds,f.castIds,f.productionBudget,f.production_companies,f.credits?.cast,f.budget])]);
  const runtimeEnabled=includeRuntime&&includeQuality&&includeDirectorAliases&&includePublicQuality&&(includeSynopsis||includeReach);
  const cached=cachedProfiles.get(reactions);if(cached?.signature===signature)return cached.profile;
  const sums=new Map(),counts=new Map(),shares=new Map(),anchors=[];
@@ -42,6 +44,8 @@ export function buildTasteProfile(films,reactions,{includeQuality=true,includeDi
  profile.synopsisModel=profile.predictive&&profile.includeSynopsis?fitSynopsis(films,reactions):null;
  profile.modelVersion=profile.predictive?(profile.includeRuntime?tasteModelVersion:profile.includeSynopsis||profile.includeReach?'synopsis-aware40':includeQuality?(includeDirectorAliases?(includePublicQuality?'reliability-aware38':'director-aware37'):'quality-aware36'):'empirical-taste32'):'contrast-fallback';
 
+ profile.productionModel=profile.predictive&&includeProduction&&includeQuality&&includeDirectorAliases&&includePublicQuality&&(profile.includeSynopsis||profile.includeReach||profile.includeRuntime)?fitProduction(films.filter(isEligibleForDiscovery),reactions):null;
+ if(profile.productionModel?.ready)profile.modelVersion='production-aware43';
  cachedProfiles.set(reactions,{signature,profile});return profile;
 }
 const importance={genre:1,category:5,keyword:4,director:2,language:.75,period:.75,quality:.75,reach:1.5,runtime:.75};
@@ -72,7 +76,7 @@ function predictiveFeatures(film,includeQuality=true,includeDirectorAliases=true
 }
 export function tasteScore(film,profile){
  const target=filmCategories(film).some(c=>c==='horror'||c==='dystopian');
- if(profile.predictive){const vector=predictiveFeatures(film,profile.includeQuality!==false,profile.includeDirectorAliases!==false,profile.includeReach===true,profile.includeRuntime===true).filter(([key,,kind])=>!['reach','runtime'].includes(kind)||profile.balancedWeights.has(key)),frequency=3*vector.reduce((sum,[key,share,kind])=>sum+(profile.balancedWeights.get(key)||0)*share*featureWeight(key,kind),0)/Math.max(1,vector.reduce((sum,[key,share,kind])=>sum+share*featureWeight(key,kind),0));const rating=film.rating??film.vote_average,quality=profile.includePublicQuality&&Number.isFinite(rating)&&rating>0&&rating<=10?.2*(rating-6.5):0;return (target?1:0)+.25*tasteAcceptanceScore(film,profile)+.75*frequency+quality+.25*synopsisScore(film,profile.synopsisModel);}
+ if(profile.predictive){const vector=predictiveFeatures(film,profile.includeQuality!==false,profile.includeDirectorAliases!==false,profile.includeReach===true,profile.includeRuntime===true).filter(([key,,kind])=>!['reach','runtime'].includes(kind)||profile.balancedWeights.has(key)),frequency=3*vector.reduce((sum,[key,share,kind])=>sum+(profile.balancedWeights.get(key)||0)*share*featureWeight(key,kind),0)/Math.max(1,vector.reduce((sum,[key,share,kind])=>sum+share*featureWeight(key,kind),0));const rating=film.rating??film.vote_average,quality=profile.includePublicQuality&&Number.isFinite(rating)&&rating>0&&rating<=10?.2*(rating-6.5):0;return (target?1:0)+.25*tasteAcceptanceScore(film,profile)+.75*frequency+quality+.25*synopsisScore(film,profile.synopsisModel)+.5*productionScore(film,profile.productionModel);}
  const vector=tasteFeatures(film);return (target?1:0)+vector.reduce((value,[key,share,kind])=>value+(profile.get(key)||0)*share*featureWeight(key,kind),0)+nearbyScore(vector,profile.neighborIndex?[...new Set(vector.flatMap(([key])=>profile.neighborIndex.get(key)||[]))].sort((a,b)=>a-b).map(i=>profile.anchors[i]):profile.anchors||[])*2;
 }
 
