@@ -66,3 +66,9 @@ test('interest writes preserve movie metadata and leave both technical scales un
  await s.saveRating({tmdbId:157336,companyIds:[1],castIds:[2]}, {feedbackStage:'interest',interestLevel:1,impression:'dislike',plot:1,cinematography:1});
  assert.equal(sent.plot,null);assert.equal(sent.cinematography,null);assert.equal(sent.metadata.ratingFeedbackStage,'interest');assert.equal(sent.metadata.ratingInterestLevel,1);assert.deepEqual(sent.metadata.companyIds,[1]);
 });
+
+test('presentation model is recorded separately from the original candidate generation model',async()=>{
+ let sent;const s=new ServerStore({url:'https://example.com',publishableKey:'public'},async(url,options)=>{sent=JSON.parse(options.body);return new Response('[]');});s.session={user:{id:'user-1'},access_token:'token',expires_at:Date.now()/1000+3600};
+ await s.saveRating({tmdbId:1,recommendationModel:'synopsis-aware40'}, {feedbackStage:'interest',interestLevel:1,impression:'dislike',presentationModel:'production-aware43',presentationSort:'taste',presentationTab:'discover',presentationScore:.3,uiVersion:'quality43b'});
+ assert.equal(sent.metadata.recommendationModel,'synopsis-aware40');assert.equal(sent.metadata.ratingPresentationModel,'production-aware43');assert.equal(sent.metadata.ratingPresentationSort,'taste');assert.equal(sent.metadata.ratingPresentationScore,.3);
+});

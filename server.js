@@ -1,4 +1,5 @@
 import {serverConfig} from './server-config.js';
+export function ratingFeedbackMetadata(r){return {ratingFeedbackStage:r.feedbackStage||'unknown',ratingInterestLevel:r.feedbackStage==='interest'?r.interestLevel:null,ratingPresentationModel:typeof r.presentationModel==='string'?r.presentationModel:null,ratingPresentationSort:r.presentationSort||null,ratingPresentationTab:r.presentationTab||null,ratingPresentationScore:Number.isFinite(r.presentationScore)?r.presentationScore:null,ratingUiVersion:r.uiVersion||null};}
 export class ServerStore {
  constructor(config=serverConfig,request=(...args)=>fetch(...args)){this.config=config;this.request=request;this.session=null;this.refreshPromise=null;this.configured=Boolean(config.url&&config.publishableKey);}
  async api(path,{method='GET',body,auth=true,headers={}}={}){
@@ -56,7 +57,7 @@ export class ServerStore {
   return rows;
  }
  async load(){return await Promise.all([this.readAll('ratings'),this.readAll('collection')]);}
- async saveRating(f,r){if(!this.session)throw new Error('Войдите, чтобы сохранить оценку на сервере.');return this.api('/rest/v1/ratings?on_conflict=user_id,tmdb_id',{method:'POST',body:{user_id:this.session.user.id,tmdb_id:f.tmdbId,cinematography:r.feedbackStage==='interest'?null:r.cinematography??null,plot:r.feedbackStage==='interest'?null:r.plot??null,impression:r.impression,metadata:{...f,ratingFeedbackStage:r.feedbackStage||'unknown',ratingInterestLevel:r.feedbackStage==='interest'?r.interestLevel:null},updated_at:r.ratedAt||new Date().toISOString()},headers:{Prefer:'resolution=merge-duplicates,return=representation'}});}
+ async saveRating(f,r){if(!this.session)throw new Error('Войдите, чтобы сохранить оценку на сервере.');return this.api('/rest/v1/ratings?on_conflict=user_id,tmdb_id',{method:'POST',body:{user_id:this.session.user.id,tmdb_id:f.tmdbId,cinematography:r.feedbackStage==='interest'?null:r.cinematography??null,plot:r.feedbackStage==='interest'?null:r.plot??null,impression:r.impression,metadata:{...f,...ratingFeedbackMetadata(r)},updated_at:r.ratedAt||new Date().toISOString()},headers:{Prefer:'resolution=merge-duplicates,return=representation'}});}
  async deleteRating(f){await this.api('/rest/v1/ratings?tmdb_id=eq.'+f.tmdbId,{method:'DELETE'});}
  async clearRatings(){await this.api('/rest/v1/ratings?user_id=eq.'+this.session.user.id,{method:'DELETE'});}
  async saveCollection(f,saved){if(!this.session)throw new Error('Войдите, чтобы сохранить коллекцию.');await this.api('/rest/v1/collection?on_conflict=user_id,tmdb_id',{method:'POST',body:{user_id:this.session.user.id,tmdb_id:f.tmdbId,metadata:f,saved},headers:{Prefer:'resolution=merge-duplicates'}});}
