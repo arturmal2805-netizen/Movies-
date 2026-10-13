@@ -160,7 +160,7 @@ export const categoryRules = {
         "so bad it's good"
       ],
       "popularity_weight": 6,
-      "votes_weight": 7,
+      "votes_weight": 2.5,
       "excluded_genre_combinations": [
         [
           27,
@@ -351,7 +351,9 @@ export const categoryRules = {
           "entity",
           "supernatural"
         ]
-      }
+      },
+      "imdb_audience_weight": 12,
+      "imdb_audience_floor": 10000
     }
   },
   "keyword_groups": {

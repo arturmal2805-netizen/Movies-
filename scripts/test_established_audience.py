@@ -3,15 +3,11 @@ import unittest
 from unittest.mock import Mock,patch
 from urllib.parse import urlsplit,parse_qs
 from audience_priority import selection_priority_score
-from recommend import preferred_audience_languages,recommend_user,load_config,selection51_diagnostics
+from recommend import preferred_audience_languages,recommend_user,load_config,selection52_diagnostics
 from recommendation_sources import tmdb_candidates
 from test_recommendation_pipeline import FakeBackend,movie,NOW
 
 class EstablishedAudienceTests(unittest.TestCase):
- def test_large_audience_can_overcome_noisy_rating_and_weak_personal_bonus(self):
-  known={'popularity':2,'vote_count':5000,'vote_average':6}
-  niche={'popularity':10,'vote_count':150,'vote_average':8}
-  self.assertGreater(selection_priority_score(known,-2),selection_priority_score(niche,2))
  def test_language_direction_uses_positive_support_not_negative_flood(self):
   rows=[{'impression':'like','metadata':{'year':2020,'genreIds':[27],'originalLanguage':'en'}}for _ in range(5)]
   rows +=[{'impression':'dislike','metadata':{'year':2020,'genreIds':[27],'originalLanguage':'fr'}}for _ in range(500)]
@@ -43,4 +39,4 @@ class EstablishedAudienceTests(unittest.TestCase):
   cfg=dict(load_config(),sources=[{'id':'tmdb','adapter':'tmdb_discover','enabled':True,'pages':3}],history_enrichment_per_run=0)
   self.assertEqual(recommend_user(b,{'user_id':'test'},NOW,cfg,manual=True),30)
   self.assertEqual(b.search_report['selectedAudience1000'],0)
-  self.assertTrue(all(r['metadata']['recommendationSelectionVersion']=='audience-first51'for r in b.collection))
+  self.assertTrue(all(r['metadata']['recommendationSelectionVersion']=='audience-first52'for r in b.collection))

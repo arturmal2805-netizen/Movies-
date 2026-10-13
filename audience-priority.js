@@ -1,14 +1,14 @@
 // Match the server's audience prior; missing values are neutral, never a veto.
-import {normalizeInterests,buildStyleModel} from './interests.js?v=quality51';
-import {tasteScore,buildTasteProfile} from './taste.js?v=quality51';
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality51';
-import {productionPolicy,productionExclusion,styleAffinity} from './production-policy.js?v=quality51';
+import {normalizeInterests,buildStyleModel} from './interests.js?v=quality52';
+import {tasteScore,buildTasteProfile} from './taste.js?v=quality52';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality52';
+import {productionPolicy,productionExclusion,styleAffinity} from './production-policy.js?v=quality52';
 export function buildSelectionProfile(films,reactions,interests){
  const profile=buildTasteProfile(films,reactions),preferences=normalizeInterests(interests),key=JSON.stringify(preferences);
  if(profile.styleKey!==key){profile.interests=preferences;profile.styleModel=buildStyleModel(films,reactions,preferences);profile.styleKey=key;}
  return profile;
 }
-export const selectionVersion='audience-first51';
+export const selectionVersion='audience-first52';
 export function isEligibleForSelection(film,interests){return isEligibleForDiscovery(film)&&!productionExclusion(film,{interests});}
 export function publicQualityTier(film){
  const rating=film.rating??film.vote_average,votes=film.vote_count??film.remoteMetrics?.voteCount;
@@ -17,7 +17,7 @@ export function publicQualityTier(film){
 }
 export function audienceProductionScore(film,{legacy=false,styleModel=null}={}){
  const popularity=film.popularity??film.remoteMetrics?.popularity,votes=film.vote_count??film.remoteMetrics?.voteCount;
- return (Number.isFinite(popularity)&&popularity>0?productionPolicy.popularity_weight*Math.log2(1+popularity):0)+(Number.isFinite(votes)&&votes>0?productionPolicy.votes_weight*Math.log2(1+votes):0)+(legacy?0:6*styleAffinity(film,styleModel));
+ return (Number.isFinite(popularity)&&popularity>0?productionPolicy.popularity_weight*Math.log2(1+popularity):0)+(Number.isFinite(votes)&&votes>0?productionPolicy.votes_weight*Math.log2(1+votes):0)+imdbAudienceBonus(film)+(legacy?0:6*styleAffinity(film,styleModel));
 }
 export function audienceFirstScore(film){
  const popularity=film.popularity??film.remoteMetrics?.popularity,votes=film.vote_count??film.remoteMetrics?.voteCount;
@@ -41,12 +41,20 @@ export function audiencePriorityScore(film,predictive=false,{legacy=false}={}){
  const value=audienceScore(film,{legacy})+publicQualityScore(film,predictive,{legacy});
  return legacy?value:Math.max(-3,Math.min(3,value));
 }
+export function validatedImdbMetrics(film){
+ const r=film.remoteMetrics;if(!r||r.imdbVerified!==true||typeof r.imdbId!=='string'||!/^tt[0-9]{7,12}$/.test(r.imdbId))return null;
+ const canonical=film.imdb_id??film.imdbId;if(canonical&&canonical!==r.imdbId)return null;
+ return Number.isFinite(r.imdb)&&r.imdb>0&&r.imdb<=10&&Number.isSafeInteger(r.imdbVoteCount)&&r.imdbVoteCount>0&&r.imdbVoteCount<=1e10?{rating:r.imdb,votes:r.imdbVoteCount}:null;
+}
 export function confidenceQuality(film){
  const rating=film.rating??film.vote_average,votes=film.vote_count??film.remoteMetrics?.voteCount;
- return Number.isFinite(rating)&&rating>0&&rating<=10&&Number.isFinite(votes)&&votes>0?5+(rating-5)*(votes/(votes+300)):5;
+ const valid=Number.isFinite(rating)&&rating>0&&rating<=10&&Number.isFinite(votes)&&votes>0;
+ const tmdb=valid?5+(rating-5)*(votes/(votes+300)):5,imdb=validatedImdbMetrics(film);
+ if(!imdb)return tmdb;
+ const estimate=5+(imdb.rating-5)*(imdb.votes/(imdb.votes+1000));return valid?(tmdb+estimate)/2:estimate;
 }
 export function selectionPriorityScore(film,personal=0,styleModel=null){
- return audienceProductionScore(film,{legacy:true})+12*(confidenceQuality(film)-6)+(Number.isFinite(personal)?7*Math.tanh(personal/3):0)+6*styleAffinity(film,styleModel);
+ return audienceProductionScore(film,{legacy:true})+10*(confidenceQuality(film)-6)+(Number.isFinite(personal)?7*Math.tanh(personal/3):0)+6*styleAffinity(film,styleModel);
 }
 export function selectionScore(film,profile,options={}){
  return options.legacy||options.legacyVersion==='45'?tasteScore(film,profile)+audiencePriorityScore(film,profile.predictive,options):options.legacyVersion==='46'?audienceFirstScore(film):options.legacyVersion==='48'?audienceProductionScore(film,{styleModel:profile.styleModel}):selectionPriorityScore(film,personalFitScore(film,profile),profile.styleModel);
@@ -57,4 +65,11 @@ export function compareSelection(a,b,profile,scores=null,secondary=null){
  const primary=film=>scores?.get(film.id)??selectionScore(film,profile);
  const tie=film=>secondary?.get(film.id)??selectionSecondaryScore(film,profile);
  return primary(b)-primary(a)||tie(b)-tie(a)||(a.tmdbId??a.id)-(b.tmdbId??b.id);
+}
+
+export function imdbAudienceBonus(film){
+ const evidence=validatedImdbMetrics(film),floor=productionPolicy.imdb_audience_floor;
+ if(!evidence||evidence.votes<=floor)return 0;
+ const confidence=Math.max(0,Math.min(1,(evidence.rating-5)/1.5));
+ return productionPolicy.imdb_audience_weight*Math.log2(1+(evidence.votes-floor)/floor)*confidence;
 }

@@ -114,7 +114,7 @@ class PersonalizedDiscoveryTests(unittest.TestCase):
   with patch('recommend.discover',return_value=(pool,[])):
    self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,dict(load_config(),history_enrichment_per_run=0),manual=True),1)
   metadata=backend.collection[0]['metadata']
-  self.assertEqual(metadata['recommendationAnchorIds'],[600001]);self.assertEqual(metadata['recommendationDirectorSeeds'],['Trusted']);self.assertEqual(metadata['recommendationSearchVersion'],'audience-search51')
+  self.assertEqual(metadata['recommendationAnchorIds'],[600001]);self.assertEqual(metadata['recommendationDirectorSeeds'],['Trusted']);self.assertEqual(metadata['recommendationSearchVersion'],'audience-search52')
 
  def test_personal_keyword_queries_have_reserved_budget_and_require_horror(self):
   from urllib.parse import urlsplit,parse_qs

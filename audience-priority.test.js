@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {audienceScore,audiencePriorityScore,publicQualityScore,audienceFirstScore,audienceProductionScore,selectionPriorityScore,personalFitScore,compareSelection,selectionScore,selectionVersion} from './audience-priority.js';
+import {audienceScore,audiencePriorityScore,publicQualityScore,audienceFirstScore,audienceProductionScore,selectionPriorityScore,personalFitScore,compareSelection,selectionScore,selectionVersion,imdbAudienceBonus} from './audience-priority.js';
 import {buildTasteProfile,tasteScore} from './taste.js';
 test('public reach gives a material soft priority and both metadata shapes agree',()=>{
  assert.ok(audienceScore({popularity:30})-audienceScore({popularity:2})>.8);
  assert.ok(audienceScore({vote_count:20000})>audienceScore({vote_count:200}));
  assert.equal(audienceScore({remoteMetrics:{popularity:30,voteCount:2000}}),audienceScore({popularity:30,vote_count:2000}));
- assert.equal(selectionVersion,'audience-first51');
+ assert.equal(selectionVersion,'audience-first52');
 });
 test('unknown public reach is neutral and extreme data cannot drown out personal evidence',()=>{
  for(const value of [undefined,null,0,-1,NaN,Infinity,true,'100'])assert.equal(audienceScore({popularity:value,vote_count:value}),0);
@@ -55,8 +55,11 @@ test('personal evidence changes every comparison without removing negative candi
  assert.ok(Number.isFinite(selectionPriorityScore({...movie,vote_count:1e308})));
 });
 
-test('established audience outweighs a noisy niche review without a cutoff',()=>{
- const known={popularity:2,vote_count:5000,vote_average:6},niche={popularity:10,vote_count:150,vote_average:8};
- assert.ok(selectionPriorityScore(known,-2)>selectionPriorityScore(niche,2));
- for(const votes of [100,300,1000,5000])assert.ok(Number.isFinite(selectionPriorityScore({...known,vote_count:votes},-100)));
+
+test('only verified canonical IMDb audience evidence affects public recognition',()=>{
+ const film={popularity:3,vote_count:300,vote_average:6},remoteMetrics={imdbId:'tt1234567',imdbVerified:true,imdb:6.8,imdbVoteCount:25000};
+ assert.ok(selectionPriorityScore({...film,remoteMetrics})>selectionPriorityScore(film));
+ assert.ok(imdbAudienceBonus({...film,remoteMetrics})>0);
+ for(const changes of [{imdbVerified:false},{imdbVoteCount:null},{imdbId:'bad'},{imdb:NaN}])assert.equal(selectionPriorityScore({...film,remoteMetrics:{...remoteMetrics,...changes}}),selectionPriorityScore(film));
+ assert.equal(selectionPriorityScore({...film,imdb_id:'tt9999999',remoteMetrics}),selectionPriorityScore(film));
 });

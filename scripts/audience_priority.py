@@ -1,8 +1,9 @@
 """Public-first ordering and frozen audience priors; never eligibility thresholds."""
 import math
 from production_policy import POLICY,style_affinity
+from imdb_audience import validated_imdb_metrics
 
-SELECTION_VERSION='audience-first51'
+SELECTION_VERSION='audience-first52'
 
 def public_quality_tier(movie):
     rating=movie.get('rating',movie.get('vote_average'))
@@ -19,7 +20,7 @@ def audience_production_score(movie,legacy=False,style_model=None):
         raw=movie.get(field)
         if raw is None:raw=remote.get(remote_field)
         if type(raw) in (int,float) and math.isfinite(raw) and raw>0:score+=weight*math.log2(1+raw)
-    return score
+    return score+imdb_audience_bonus(movie)
 
 def audience_first_score(movie):
     """First sorting key, not a cutoff: trending reach plus audience breadth."""
@@ -74,11 +75,23 @@ def confidence_quality(movie):
     rating=movie.get('rating',movie.get('vote_average'))
     remote=movie.get('remoteMetrics');remote=remote if isinstance(remote,dict) else {}
     votes=movie.get('vote_count');votes=remote.get('voteCount') if votes is None else votes
-    if type(rating) not in (int,float) or not math.isfinite(rating) or not 0<rating<=10 or type(votes) not in (int,float) or not math.isfinite(votes) or votes<=0:return 5.
-    return 5+(rating-5)*(votes/(votes+300))
+    valid=type(rating)in(int,float)and math.isfinite(rating)and 0<rating<=10 and type(votes)in(int,float)and math.isfinite(votes)and votes>0
+    tmdb=5+(rating-5)*(votes/(votes+300))if valid else 5.
+    imdb=validated_imdb_metrics(movie)
+    if not imdb:return tmdb
+    estimate=5+(imdb['rating']-5)*(imdb['votes']/(imdb['votes']+1000))
+    return (tmdb+estimate)/2 if valid else estimate
 
 def selection_priority_score(movie,personal=0.,style_model=None):
     # Continuous ordering: personal evidence must affect every comparison,
     # rather than a tie that almost never occurs. It never vetoes a candidate.
     fit=7*math.tanh(personal/3) if type(personal) in (int,float) and math.isfinite(personal) else 0.
-    return audience_production_score(movie,legacy=True)+12*(confidence_quality(movie)-6)+fit+6*style_affinity(movie,style_model)
+    return audience_production_score(movie,legacy=True)+10*(confidence_quality(movie)-6)+fit+6*style_affinity(movie,style_model)
+
+
+
+def imdb_audience_bonus(movie):
+    evidence=validated_imdb_metrics(movie)
+    if not evidence or evidence['votes']<=POLICY['imdb_audience_floor']:return 0.
+    confidence=max(0.,min(1.,(evidence['rating']-5)/1.5))
+    return POLICY['imdb_audience_weight']*math.log2(1+(evidence['votes']-POLICY['imdb_audience_floor'])/POLICY['imdb_audience_floor'])*confidence

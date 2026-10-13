@@ -12,6 +12,7 @@ from synopsis_model import synopsis_score
 from production_model import production_score
 from audience_priority import audience_production_score,public_quality_score,public_quality_tier,selection_priority_score,confidence_quality,SELECTION_VERSION
 from interests import normalize_interests,build_style_model,style_key
+from imdb_audience import enrich_audience,validated_imdb_metrics
 from production_policy import production_exclusion,POLICY,director_focus,style_affinity
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 SEARCH_GENERIC=GENERIC|{'spin off','prequel','reboot','franchise','based on short film','based on play or musical'}
@@ -121,6 +122,8 @@ def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None,pre
   reason='Совпадает с вашими оценками: '+', '.join(GENRES.get(g,'Жанр') for g in favorite[:2])+'.' if favorite else 'Для знакомства с новым жанром; учтены оценки и популярность TMDB.'
   if themes:reason='По вашим оценкам подходят темы: '+', '.join(themes[:2])+'.'
   elif personal<=0 and ratings:reason='Выбран по популярности TMDB и размеру аудитории; личное совпадение пока слабое.'
+  evidence=validated_imdb_metrics(movie)
+  if evidence and evidence['votes']>=10000 and personal<=0:reason='Подтверждённая аудитория IMDb: '+format(evidence['votes'],',').replace(',',' ')+' голосов; личное совпадение пока слабое.'
   if style_affinity(movie,getattr(tastes,'style_model',None))>0:reason='Совпадает сочетание тем из понравившихся примеров; учтены отзывы и популярность.'
   if not ratings:reason='Стартовая рекомендация по оценкам TMDB. После ваших оценок подбор станет персональным.'
   if 'horror' in categories:reason='Приоритет хоррорам. '+reason
@@ -146,14 +149,15 @@ def audience_votes(movie):
  if value is None:value=(movie.get('remoteMetrics')or{}).get('voteCount')if isinstance(movie.get('remoteMetrics'),dict)else None
  return value if type(value)in(int,float)and math.isfinite(value)and value>0 else 0
 
-def selection51_diagnostics(final,target,tastes,ratings,collection):
+def selection52_diagnostics(final,target,tastes,ratings,collection):
  chosen=[e[1]for e in final[:target]];pool=[e[1]for e in final]
  def previous(m):
   remote=m.get('remoteMetrics');remote=remote if isinstance(remote,dict)else{}
   pop=m.get('popularity');pop=remote.get('popularity')if pop is None else pop;votes=audience_votes(m)
   public=(6*math.log2(1+pop)if type(pop)in(int,float)and math.isfinite(pop)and pop>0 else 0)+2.5*math.log2(1+votes)
   personal=match_score(m,tastes)
-  return public+10*(confidence_quality(m)-6)+7*math.tanh(personal/3)+6*style_affinity(m,tastes.style_model)
+  rating=m.get('rating',m.get('vote_average'));quality=5+(rating-5)*(votes/(votes+300))if type(rating)in(int,float)and math.isfinite(rating)and 0<rating<=10 and votes>0 else 5.
+  return public+10*(quality-6)+7*math.tanh(personal/3)+6*style_affinity(m,tastes.style_model)
  old=sorted(pool,key=lambda m:(-previous(m),-(match_score(m,tastes)+public_quality_score(m,tastes.predictive)),m['id']))[:target]
  rated={r['tmdb_id']for r in ratings}
  queued=[r['metadata']for r in collection if r.get('tmdb_id')not in rated and isinstance(r.get('metadata'),dict)and eligible_for_discovery(r['metadata'])and not production_exclusion(r['metadata'])]
@@ -589,6 +593,15 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   print('Search fit:',good_fit,'positive personal scores in top',min(budget,len(final)))
   # Weak matches are a reason to search further, not to discard valid films.
   if len(final)>=budget and len(attempted)>=quality_pool and (not personal_search or good_fit>=budget) or len(attempted)>=detail_limit:break
+ # IMDb has a separate, verified audience count; a small TMDB audience is
+ # not sufficient evidence of obscurity. No guessed IDs, no second budget gate.
+ ordered=[];seen_imdb=set()
+ by_votes=sorted(final,key=lambda e:(-audience_votes(e[1]),-e[0],e[1]['id']))
+ for a,c in zip(final,by_votes):
+  for e in (a,c):
+   if e[1]['id']not in seen_imdb:ordered.append(e[1]);seen_imdb.add(e[1]['id'])
+ imdb_stats=enrich_audience(b,ordered,80 if manual else 12)
+ final=rank_candidates(list(details.values()),ratings,collection,config['minimum_votes'],now,tastes=tastes)
  b.search_report={'candidateCount':len(pool),'verifiedCount':len(details),'accepted':min(budget,len(final)),
   'positivePersonal':sum(match_score(e[1],tastes)>0 for e in final[:budget]),
   'styleMatches':sum(style_affinity(e[1],tastes.style_model)>0 for e in final[:budget]),
@@ -596,7 +609,14 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   'medianPopularity':median([e[1].get('popularity',0)for e in final[:budget]])if final else 0,
   'medianVoteCount':median([e[1].get('vote_count',0)for e in final[:budget]])if final else 0,
   'medianPublicRating':median([e[1].get('vote_average',0)for e in final[:budget]])if final else 0}
- b.search_report.update(selection51_diagnostics(final,budget,tastes,ratings,collection))
+ evidence=[validated_imdb_metrics(e[1])for e in final[:budget]]
+ evidence=[m for m in evidence if m]
+ b.search_report.update(imdb_stats)
+ b.search_report.update(selectedImdb10000=sum(m['votes']>=10000 for m in evidence),selectedImdbVerified=len(evidence),
+  medianImdbVoteCount=median([m['votes']for m in evidence])if evidence else None,
+  medianImdbRating=median([m['rating']for m in evidence])if evidence else None,
+  knownImdbPool10000=sum(bool(validated_imdb_metrics(m))and validated_imdb_metrics(m)['votes']>=10000 for m in details.values()))
+ b.search_report.update(selection52_diagnostics(final,budget,tastes,ratings,collection))
  if attempted and not fetched_any:raise RequestFailure('Candidate metadata unavailable; retry next run')
  if not final and (search_unavailable or metadata_failures):raise RequestFailure('Search incomplete: provider requests failed; retry the manual request')
  if len(final)<budget:print('Batch below target:',len(final),'of',budget,'after bounded search; excluded films are not used as filler.')
@@ -610,8 +630,9 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   fid=10000000+detail['id'];genre_ids=genres(detail)
   metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':director(detail),'moods':classify(detail),'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'synopsisChecked':True,'reachChecked':True,'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity'),'voteCount':detail.get('vote_count'),'tmdbUpdatedAt':now.isoformat()}}
   metadata['discoverySources']=movie.get('discovery_sources',[])
+  if validated_imdb_metrics(detail):metadata['remoteMetrics'].update(detail['remoteMetrics'])
   metadata.update(feature_metadata(detail))
-  metadata.update(recommendationSearchVersion='audience-search51',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
+  metadata.update(recommendationSearchVersion='audience-search52',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
   metadata['recommendationAudienceScore']=round(audience_production_score(detail,style_model=tastes.style_model),6)
   metadata['recommendationAudiencePriority']=round(audience_production_score(detail,style_model=tastes.style_model),6)
   metadata.update(audience_summary)
@@ -642,12 +663,6 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   metadata['recommendationSearchPasses']=search_round+1
   metadata['recommendationFit']='positive' if match_score(detail,tastes)>0 else 'weak'
   if request_id:metadata['recommendationRequestId']=request_id
-  if os.environ.get('OMDB_API_KEY') and detail.get('imdb_id'):
-   try:
-    result=b.request('https://www.omdbapi.com/?'+urllib.parse.urlencode({'apikey':os.environ['OMDB_API_KEY'],'i':detail['imdb_id']}),{})
-    rating=float(result['imdbRating'])
-    if result.get('imdbID')==detail['imdb_id'] and 0<=rating<=10:metadata['remoteMetrics'].update(imdb=rating,imdbUpdatedAt=now.isoformat())
-   except Exception:pass
   inserted=[{}] if dry_run else b.db('collection?on_conflict=user_id,tmdb_id','POST',{'user_id':uid,'tmdb_id':detail['id'],'metadata':metadata,'reason':reason},'resolution=ignore-duplicates,return=representation')
   if inserted:added+=1
  if not manual and not dry_run:b.db('profiles?user_id=eq.'+uid,'PATCH',{'last_recommendation_at':now.isoformat()})
@@ -702,7 +717,7 @@ def run():
    except Exception as error:
     failures+=1;print('Private batch failed:',error_summary(error),'; existing collection retained. Retry on next run.')
   print('Profiles processed:',len(users),'failed:',failures)
-  if not failures:print('::notice title=Recommendation batch51::'+json.dumps({'added':added,'manual':manual,'profiles':len(users)},separators=(',',':')))
+  if not failures:print('::notice title=Recommendation batch52::'+json.dumps({'added':added,'manual':manual,'profiles':len(users)},separators=(',',':')))
   if failures:raise RuntimeError('Some private batches failed')
   if request_id:finish_manual_job(b,request_id,target,'completed',added)
  except Exception:

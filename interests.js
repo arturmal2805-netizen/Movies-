@@ -1,4 +1,4 @@
-import {categoryRules} from './category-rules.js?v=quality51';
+import {categoryRules} from './category-rules.js?v=quality52';
 import {normalizeRating} from './ratings.js?v=quality43';
 export const defaultInterests=categoryRules.selection.production.default_interests;
 const clean=value=>typeof value==='string'?value.replace(/\s+/g,' ').trim().slice(0,120):'';
