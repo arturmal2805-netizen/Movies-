@@ -3,7 +3,7 @@ import math
 from production_policy import POLICY,style_affinity
 from imdb_audience import validated_imdb_metrics
 
-SELECTION_VERSION='audience-first52'
+SELECTION_VERSION='audience-first53'
 
 def public_quality_tier(movie):
     rating=movie.get('rating',movie.get('vote_average'))
@@ -92,6 +92,8 @@ def selection_priority_score(movie,personal=0.,style_model=None):
 
 def imdb_audience_bonus(movie):
     evidence=validated_imdb_metrics(movie)
-    if not evidence or evidence['votes']<=POLICY['imdb_audience_floor']:return 0.
-    confidence=max(0.,min(1.,(evidence['rating']-5)/1.5))
-    return POLICY['imdb_audience_weight']*math.log2(1+(evidence['votes']-POLICY['imdb_audience_floor'])/POLICY['imdb_audience_floor'])*confidence
+    if not evidence:return 0.
+    floor=POLICY['imdb_audience_floor']
+    quality=max(0.,min(1.,(evidence['rating']-6)*2))
+    support=min(1.,evidence['votes']/floor)
+    return quality*support*(POLICY['imdb_audience_weight']+6*math.log2(1+evidence['votes']/floor))

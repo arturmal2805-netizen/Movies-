@@ -1,14 +1,14 @@
 // Match the server's audience prior; missing values are neutral, never a veto.
-import {normalizeInterests,buildStyleModel} from './interests.js?v=quality52';
-import {tasteScore,buildTasteProfile} from './taste.js?v=quality52';
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality52';
-import {productionPolicy,productionExclusion,styleAffinity} from './production-policy.js?v=quality52';
+import {normalizeInterests,buildStyleModel} from './interests.js?v=quality53';
+import {tasteScore,buildTasteProfile} from './taste.js?v=quality53';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality53';
+import {productionPolicy,productionExclusion,styleAffinity} from './production-policy.js?v=quality53';
 export function buildSelectionProfile(films,reactions,interests){
  const profile=buildTasteProfile(films,reactions),preferences=normalizeInterests(interests),key=JSON.stringify(preferences);
  if(profile.styleKey!==key){profile.interests=preferences;profile.styleModel=buildStyleModel(films,reactions,preferences);profile.styleKey=key;}
  return profile;
 }
-export const selectionVersion='audience-first52';
+export const selectionVersion='audience-first53';
 export function isEligibleForSelection(film,interests){return isEligibleForDiscovery(film)&&!productionExclusion(film,{interests});}
 export function publicQualityTier(film){
  const rating=film.rating??film.vote_average,votes=film.vote_count??film.remoteMetrics?.voteCount;
@@ -69,7 +69,7 @@ export function compareSelection(a,b,profile,scores=null,secondary=null){
 
 export function imdbAudienceBonus(film){
  const evidence=validatedImdbMetrics(film),floor=productionPolicy.imdb_audience_floor;
- if(!evidence||evidence.votes<=floor)return 0;
- const confidence=Math.max(0,Math.min(1,(evidence.rating-5)/1.5));
- return productionPolicy.imdb_audience_weight*Math.log2(1+(evidence.votes-floor)/floor)*confidence;
+ if(!evidence)return 0;
+ const quality=Math.max(0,Math.min(1,(evidence.rating-6)*2)),support=Math.min(1,evidence.votes/floor);
+ return quality*support*(productionPolicy.imdb_audience_weight+6*Math.log2(1+evidence.votes/floor));
 }

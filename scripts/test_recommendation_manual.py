@@ -37,8 +37,9 @@ class ManualTests(unittest.TestCase):
      self.status=body['status'];return [{'id':REQUEST}]
     return [{'user_id':OWNER}]
   backend=Jobs()
-  with patch.dict('os.environ',{'SUPABASE_URL':'test','SUPABASE_SERVICE_ROLE_KEY':'test','TMDB_ACCESS_TOKEN':'test','MANUAL_RECOMMENDATIONS':'true','RECOMMENDATION_REQUEST_ID':REQUEST},clear=True),patch('recommend.Backend',return_value=backend),patch('recommend.recommend_user',return_value=7) as recommend:
+  with patch.dict('os.environ',{'SUPABASE_URL':'test','SUPABASE_SERVICE_ROLE_KEY':'test','TMDB_ACCESS_TOKEN':'test','MANUAL_RECOMMENDATIONS':'true','RECOMMENDATION_REQUEST_ID':REQUEST},clear=True),patch('recommend.Backend',return_value=backend),patch('recommend.recommend_user',return_value=7) as recommend,patch('builtins.print')as output:
    run();run()
+  self.assertFalse(any(str(call.args[0]).startswith('::notice')for call in output.call_args_list))
   self.assertEqual(recommend.call_count,1)
   self.assertEqual(recommend.call_args.args[1]['user_id'],OWNER)
   self.assertTrue(recommend.call_args.kwargs['manual'])

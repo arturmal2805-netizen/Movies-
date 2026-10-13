@@ -1,4 +1,4 @@
-import {normalizeInterests} from './interests.js?v=quality52';
+import {normalizeInterests} from './interests.js?v=quality53';
 import {serverConfig} from './server-config.js';
 export function ratingFeedbackMetadata(r){return {ratingFeedbackStage:r.feedbackStage||'unknown',ratingInterestLevel:r.feedbackStage==='interest'?r.interestLevel:null,ratingPresentationModel:typeof r.presentationModel==='string'?r.presentationModel:null,ratingPresentationSort:r.presentationSort||null,ratingPresentationTab:r.presentationTab||null,ratingPresentationScore:Number.isFinite(r.presentationScore)?r.presentationScore:null,ratingUiVersion:r.uiVersion||null};}
 export class ServerStore {

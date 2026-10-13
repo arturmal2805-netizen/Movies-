@@ -149,7 +149,7 @@ def audience_votes(movie):
  if value is None:value=(movie.get('remoteMetrics')or{}).get('voteCount')if isinstance(movie.get('remoteMetrics'),dict)else None
  return value if type(value)in(int,float)and math.isfinite(value)and value>0 else 0
 
-def selection52_diagnostics(final,target,tastes,ratings,collection):
+def selection53_diagnostics(final,target,tastes,ratings,collection):
  chosen=[e[1]for e in final[:target]];pool=[e[1]for e in final]
  def previous(m):
   remote=m.get('remoteMetrics');remote=remote if isinstance(remote,dict)else{}
@@ -616,7 +616,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   medianImdbVoteCount=median([m['votes']for m in evidence])if evidence else None,
   medianImdbRating=median([m['rating']for m in evidence])if evidence else None,
   knownImdbPool10000=sum(bool(validated_imdb_metrics(m))and validated_imdb_metrics(m)['votes']>=10000 for m in details.values()))
- b.search_report.update(selection52_diagnostics(final,budget,tastes,ratings,collection))
+ b.search_report.update(selection53_diagnostics(final,budget,tastes,ratings,collection))
  if attempted and not fetched_any:raise RequestFailure('Candidate metadata unavailable; retry next run')
  if not final and (search_unavailable or metadata_failures):raise RequestFailure('Search incomplete: provider requests failed; retry the manual request')
  if len(final)<budget:print('Batch below target:',len(final),'of',budget,'after bounded search; excluded films are not used as filler.')
@@ -632,7 +632,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   metadata['discoverySources']=movie.get('discovery_sources',[])
   if validated_imdb_metrics(detail):metadata['remoteMetrics'].update(detail['remoteMetrics'])
   metadata.update(feature_metadata(detail))
-  metadata.update(recommendationSearchVersion='audience-search52',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
+  metadata.update(recommendationSearchVersion='audience-search53',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
   metadata['recommendationAudienceScore']=round(audience_production_score(detail,style_model=tastes.style_model),6)
   metadata['recommendationAudiencePriority']=round(audience_production_score(detail,style_model=tastes.style_model),6)
   metadata.update(audience_summary)
@@ -717,7 +717,7 @@ def run():
    except Exception as error:
     failures+=1;print('Private batch failed:',error_summary(error),'; existing collection retained. Retry on next run.')
   print('Profiles processed:',len(users),'failed:',failures)
-  if not failures:print('::notice title=Recommendation batch52::'+json.dumps({'added':added,'manual':manual,'profiles':len(users)},separators=(',',':')))
+  if not failures and os.environ.get('GITHUB_ACTIONS')=='true':print('::notice title=Recommendation batch53::'+json.dumps({'added':added,'manual':manual,'profiles':len(users)},separators=(',',':')))
   if failures:raise RuntimeError('Some private batches failed')
   if request_id:finish_manual_job(b,request_id,target,'completed',added)
  except Exception:

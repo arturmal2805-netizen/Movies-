@@ -1,13 +1,19 @@
 import os,unittest,math,copy
 from unittest.mock import Mock,patch
 from imdb_audience import parse_metrics,validated_imdb_metrics,enrich_audience
-from audience_priority import selection_priority_score,confidence_quality
+from audience_priority import selection_priority_score,confidence_quality,imdb_audience_bonus
 from recommend import recommend_user,load_config
 from test_recommendation_pipeline import FakeBackend,movie,NOW
 
 def response(identity='tt1234567',**kwargs):return {'Response':'True','Type':'movie','imdbID':identity,'imdbRating':'6.8','imdbVotes':'25,000',**kwargs}
 
 class ImdbAudienceTests(unittest.TestCase):
+ def test_large_audience_with_poor_reviews_gets_no_familiarity_bonus(self):
+  proof=parse_metrics(response(imdbRating='5.7',imdbVotes='100,000'),'tt1234567')
+  self.assertEqual(imdb_audience_bonus({'remoteMetrics':proof}),0)
+  good=parse_metrics(response(imdbRating='6.8',imdbVotes='25,000'),'tt1234567')
+  self.assertGreater(imdb_audience_bonus({'remoteMetrics':good}),0)
+
  def test_provider_identity_type_and_complete_numeric_evidence_are_required(self):
   for changes in ({'imdbID':'tt9999999'},{'Type':'series'},{'Response':'False'},{'imdbRating':'N/A'},{'imdbRating':'11.2'},{'imdbVotes':'1,23,456'},{'imdbVotes':'-1'},{'imdbVotes':True},{'imdbVotes':'N/A'}):self.assertIsNone(parse_metrics(response(**changes),'tt1234567'))
   proof=parse_metrics(response(),'tt1234567');self.assertEqual(proof['imdbVoteCount'],25000)
