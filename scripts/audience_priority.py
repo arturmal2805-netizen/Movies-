@@ -1,8 +1,8 @@
 """Public-first ordering and frozen audience priors; never eligibility thresholds."""
 import math
-from production_policy import POLICY,budget_priority_score,style_affinity
+from production_policy import POLICY,style_affinity
 
-SELECTION_VERSION='audience-first49'
+SELECTION_VERSION='audience-first50'
 
 def public_quality_tier(movie):
     rating=movie.get('rating',movie.get('vote_average'))
@@ -14,7 +14,7 @@ def public_quality_tier(movie):
 
 def audience_production_score(movie,legacy=False,style_model=None):
     remote=movie.get('remoteMetrics');remote=remote if isinstance(remote,dict) else {}
-    score=budget_priority_score(movie)+(0 if legacy else 6*style_affinity(movie,style_model))
+    score=0 if legacy else 6*style_affinity(movie,style_model)
     for field,remote_field,weight in (('popularity','popularity',POLICY['popularity_weight']),('vote_count','voteCount',POLICY['votes_weight'])):
         raw=movie.get(field)
         if raw is None:raw=remote.get(remote_field)
@@ -80,8 +80,5 @@ def confidence_quality(movie):
 def selection_priority_score(movie,personal=0.,style_model=None):
     # Continuous ordering: personal evidence must affect every comparison,
     # rather than a tie that almost never occurs. It never vetoes a candidate.
-    remote=movie.get('remoteMetrics');remote=remote if isinstance(remote,dict) else {}
-    votes=movie.get('vote_count');votes=remote.get('voteCount') if votes is None else votes
-    breadth=1.5*math.log2(1+votes) if type(votes) in (int,float) and math.isfinite(votes) and votes>0 else 0.
     fit=7*math.tanh(personal/3) if type(personal) in (int,float) and math.isfinite(personal) else 0.
-    return audience_production_score(movie,legacy=True)+breadth+12*(confidence_quality(movie)-6)+fit+6*style_affinity(movie,style_model)
+    return audience_production_score(movie,legacy=True)+10*(confidence_quality(movie)-6)+fit+6*style_affinity(movie,style_model)

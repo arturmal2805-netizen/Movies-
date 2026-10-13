@@ -6,7 +6,7 @@ test('public reach gives a material soft priority and both metadata shapes agree
  assert.ok(audienceScore({popularity:30})-audienceScore({popularity:2})>.8);
  assert.ok(audienceScore({vote_count:20000})>audienceScore({vote_count:200}));
  assert.equal(audienceScore({remoteMetrics:{popularity:30,voteCount:2000}}),audienceScore({popularity:30,vote_count:2000}));
- assert.equal(selectionVersion,'audience-first49');
+ assert.equal(selectionVersion,'audience-first50');
 });
 test('unknown public reach is neutral and extreme data cannot drown out personal evidence',()=>{
  for(const value of [undefined,null,0,-1,NaN,Infinity,true,'100'])assert.equal(audienceScore({popularity:value,vote_count:value}),0);

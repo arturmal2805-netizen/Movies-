@@ -21,28 +21,20 @@ def history():
 class ProductionTests(unittest.TestCase):
  def test_identical_themes_can_be_ranked_by_personal_production_evidence(self):
   rows=history();current=profile(rows);previous=profile(rows,include_production=False)
-  self.assertEqual(current.model_version,'production-aware43');self.assertEqual(previous.model_version,'duration-aware42')
+  self.assertEqual(current.model_version,'audience-context50');self.assertEqual(previous.model_version,'duration-aware42')
   self.assertAlmostEqual(match_score(rows[0]['metadata'],previous),match_score(rows[-1]['metadata'],previous))
   self.assertGreater(match_score(rows[0]['metadata'],current),match_score(rows[-1]['metadata'],current))
   self.assertEqual(preferred_production_seeds(current,'company'),[101]);self.assertEqual(preferred_production_seeds(current,'cast'),[201])
   self.assertTrue(eligible_for_discovery(rows[-1]['metadata']))
   for row in rows:self.assertLessEqual(abs(production_score(row['metadata'],current.production_model)),2)
 
- def test_budget_preference_can_run_in_either_direction(self):
-  for liked,rejected in [(30000000,500000),(500000,30000000)]:
-   rows=history()
-   for r in rows:r['metadata']=dict(r['metadata'],companyIds=[1],castIds=[2],productionBudget=liked if r['impression']=='like' else rejected)
-   model=fit_production(rows)
-   self.assertGreater(production_score(rows[0]['metadata'],model),production_score(rows[-1]['metadata'],model))
-
- def test_budget_quality_interaction_distinguishes_equal_marginal_preferences(self):
-  rows=[]
-  for i in range(80):
-   budget=1000000 if i%4<2 else 30000000;rating=4. if i%2==0 else 8.
-   liked=(i%4 in (0,3));rows.append({'impression':'like' if liked else 'dislike','metadata':{'budget':budget,'rating':rating}})
-  model=fit_production(rows)
-  self.assertGreater(production_score(rows[0]['metadata'],model),production_score(rows[1]['metadata'],model))
-  self.assertGreater(production_score(rows[3]['metadata'],model),production_score(rows[2]['metadata'],model))
+ def test_financial_metadata_never_enters_learned_production_features(self):
+  rows=history();before=fit_production(rows);changed=copy.deepcopy(rows)
+  for row in changed:row['metadata'].update(productionBudget=None,budget=1)
+  self.assertEqual(before,fit_production(changed))
+  for cost in (None,1,1000000000,float('inf')):
+   self.assertEqual(production_features({'budget':cost,'companyIds':[101]}),production_features({'companyIds':[101]}))
+   self.assertEqual(production_score(dict(rows[0]['metadata'],budget=cost,productionBudget=cost),before),production_score(rows[0]['metadata'],before))
 
  def test_unfilled_history_cannot_create_a_fake_production_preference(self):
   rows=history();baseline=fit_production(rows)
@@ -81,7 +73,7 @@ class ProductionTests(unittest.TestCase):
   self.assertEqual(enrich_history(backend,'test',rows,[],load_config()),40)
   for r,before in zip(rows,original):
    for key in ('plot','cinematography','impression','updated_at'):self.assertEqual(r[key],before[key])
-  self.assertEqual(profile(rows).model_version,'production-aware43')
+  self.assertEqual(profile(rows).model_version,'audience-context50')
   backend.patched.clear();self.assertEqual(enrich_history(backend,'test',rows,[],load_config()),0);self.assertEqual(backend.patched,[])
 
  def test_metadata_sampling_covers_likes_and_late_rejections_without_a_prefix_bias(self):

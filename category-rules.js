@@ -151,12 +151,7 @@ export const categoryRules = {
     ],
     "require_target": true,
     "production": {
-      "minimum_known_budget_usd": 3000000,
       "excluded_keywords": [
-        "independent film",
-        "low budget",
-        "microbudget",
-        "micro budget",
         "mockbuster",
         "campy",
         "parody",
@@ -164,11 +159,8 @@ export const categoryRules = {
         "horror spoof",
         "so bad it's good"
       ],
-      "popularity_weight": 4,
-      "votes_weight": 1,
-      "budget_weight": 2,
-      "budget_scale_usd": 5000000,
-      "require_known_budget": true,
+      "popularity_weight": 6,
+      "votes_weight": 2.5,
       "excluded_genre_combinations": [
         [
           27,

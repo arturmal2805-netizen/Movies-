@@ -18,13 +18,6 @@ def production_features(movie):
     for kind,raw,limit in [('company',companies,8),('cast',cast,6)]:
         values=list(dict.fromkeys(str(v) for v in raw if type(v) is int and v>0))[:limit]
         for value in values:result[(kind,value)]=1/math.sqrt(len(values))
-    budget=movie.get('productionBudget');budget=movie.get('budget') if budget is None else budget
-    if type(budget) in (int,float) and math.isfinite(budget) and budget>0:
-        band=str(min(8,int(math.log2(budget/1000000+1))))
-        result[('budget',band)]=1
-        rating=movie.get('rating',movie.get('vote_average'))
-        if type(rating) in (int,float) and math.isfinite(rating) and 0<rating<=10:
-            result[('budget-quality',band+':'+str(min(9,int(rating))))]=1
     return result
 
 

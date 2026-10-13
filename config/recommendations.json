@@ -40,6 +40,5 @@
   "search_rounds": 12,
   "detail_candidate_limit": 2400,
   "manual_quality_pool": 800,
-  "discovery_request_limit": 64,
-  "budget_verification_limit": 400
+  "discovery_request_limit": 64
 }

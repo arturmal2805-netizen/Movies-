@@ -25,10 +25,10 @@ class InterestsTests(unittest.TestCase):
   self.assertEqual(value['directors'],[]);self.assertEqual(value['genrePriority'],['dystopian','horror'])
   self.assertEqual(len(normalize_interests()['directors']),5)
   self.assertIn('Корали Фаржа',[d['name']for d in normalize_interests()['directors']])
- def test_director_preference_removal_removes_only_the_budget_exception(self):
+ def test_director_preference_removal_never_restores_a_financial_gate(self):
   m={'budget':2000000,'director':'Robert Eggers','genreIds':[27]}
   self.assertIsNone(production_exclusion(m))
-  self.assertEqual(production_exclusion(m,interests={'directors':[]}),'known_low_budget')
+  self.assertIsNone(production_exclusion(m,interests={'directors':[]}))
  def test_patterns_find_other_directors_and_ignore_a_bare_favorite_name(self):
   rows=[{'impression':'like','metadata':{'director':'Robert Eggers','keywords':['gothic horror','period piece','vampire']}}]+[{'impression':'dislike','metadata':{'director':'Other','keywords':['vampire','zombie']}}for _ in range(20)]
   model=build_style_model(rows)

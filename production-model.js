@@ -9,8 +9,6 @@ export function productionFeatures(movie){
   const ids=[...new Set(raw.filter(v=>Number.isInteger(v)&&v>0))].slice(0,limit);
   for(const id of ids)vector.push([`${kind}:${id}`,1/Math.sqrt(ids.length),kind]);
  }
- const budget=movie.productionBudget??movie.budget;
- if(Number.isFinite(budget)&&budget>0){const band=Math.min(8,Math.floor(Math.log2(budget/1000000+1)));vector.push([`budget:${band}`,1,'budget']);const rating=movie.rating??movie.vote_average;if(Number.isFinite(rating)&&rating>0&&rating<=10)vector.push([`budget-quality:${band}:${Math.min(9,Math.floor(rating))}`,1,'budget-quality']);}
  return vector;
 }
 export function fitProduction(films,reactions){

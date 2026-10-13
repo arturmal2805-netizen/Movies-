@@ -7,7 +7,7 @@ from synopsis_model import fit_synopsis,synopsis_score
 from production_model import fit_production,production_score
 RULES=json.loads((Path(__file__).resolve().parents[1]/'config/category-rules.json').read_text())
 ORDER=['horror',*RULES['known']]
-GENERIC={'based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','woman director'}
+GENERIC={'based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','low budget','microbudget','micro budget','woman director'}
 
 def normalize(value):return re.sub(r'\s+',' ',re.sub('[-_]',' ',str(value or '').lower())).strip()
 
@@ -114,7 +114,7 @@ def profile(ratings,include_quality=True,include_director_aliases=True,include_p
  result.production_model=fit_production([r for r in ratings if eligible_for_discovery(r.get('metadata') or {})]) if result.predictive and include_production and include_quality and include_director_aliases and include_public_quality and (result.include_synopsis or result.include_reach or result.include_runtime) else {'ready':False}
  result.training_count=positive_count+negative_count;result.positive_count=positive_count;result.negative_count=negative_count
  result.model_version=(MODEL_VERSION if result.include_runtime else 'synopsis-aware40' if result.include_synopsis or result.include_reach else 'reliability-aware38' if include_quality and include_director_aliases and include_public_quality else 'director-aware37' if include_quality and include_director_aliases else 'quality-aware36' if include_quality else 'empirical-taste32') if result.predictive else 'contrast-fallback'
- if result.production_model.get('ready'):result.model_version='production-aware43'
+ if result.production_model.get('ready'):result.model_version='audience-context50'
  return result
 
 def predictive_features(movie,include_quality=True,include_director_aliases=True,include_reach=True,include_runtime=True):

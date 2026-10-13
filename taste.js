@@ -1,9 +1,9 @@
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality49';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality50';
 import {normalizeRating} from './ratings.js?v=quality43';
 import {fitMargin,marginFeatures,tasteModelVersion} from './taste-model.js?v=quality43';
 import {fitSynopsis,synopsisScore} from './synopsis-model.js?v=quality43';
-import {fitProduction,productionScore} from './production-model.js?v=quality43';
-const generic=new Set(['based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','woman director']);
+import {fitProduction,productionScore} from './production-model.js?v=quality50';
+const generic=new Set(['based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','low budget','microbudget','micro budget','woman director']);
 const normalize=value=>String(value||'').toLocaleLowerCase('ru').replace(/[-_]/g,' ').replace(/\s+/g,' ').trim();
 export function tasteFeatures(film,includeDirectorAliases=true){
  const aliases=includeDirectorAliases&&Array.isArray(film.directorAliases)?[...new Set(film.directorAliases.filter(name=>typeof name==='string'&&name.trim()).map(normalize))]:[];
@@ -25,7 +25,7 @@ export function tasteSignal(value){
 }
 const cachedProfiles=new WeakMap();
 export function buildTasteProfile(films,reactions,{includeQuality=true,includeDirectorAliases=true,includePublicQuality=true,includeSynopsis=true,includeReach=true,includeRuntime=true,includeProduction=true}={}){
- const signature=JSON.stringify([includeQuality,includeDirectorAliases,includePublicQuality,includeSynopsis,includeReach,includeRuntime,includeProduction,films.filter(f=>reactions[f.id]).map(f=>[f.id,normalizeRating(reactions[f.id]),f.genreIds,f.genre,f.keywords,f.director,f.originalLanguage,f.original_language,f.year,f.release_date,f.tmdbId,f.description||f.overview,f.rating,f.vote_average,f.directorAliases,f.popularity,f.remoteMetrics?.popularity,f.minutes,f.runtime,f.companyIds,f.castIds,f.productionBudget,f.production_companies,f.credits?.cast,f.budget])]);
+ const signature=JSON.stringify([includeQuality,includeDirectorAliases,includePublicQuality,includeSynopsis,includeReach,includeRuntime,includeProduction,films.filter(f=>reactions[f.id]).map(f=>[f.id,normalizeRating(reactions[f.id]),f.genreIds,f.genre,f.keywords,f.director,f.originalLanguage,f.original_language,f.year,f.release_date,f.tmdbId,f.description||f.overview,f.rating,f.vote_average,f.directorAliases,f.popularity,f.remoteMetrics?.popularity,f.minutes,f.runtime,f.companyIds,f.castIds,f.production_companies,f.credits?.cast])]);
  const runtimeEnabled=includeRuntime&&includeQuality&&includeDirectorAliases&&includePublicQuality&&(includeSynopsis||includeReach);
  const cached=cachedProfiles.get(reactions);if(cached?.signature===signature)return cached.profile;
  const sums=new Map(),counts=new Map(),shares=new Map(),anchors=[];
@@ -45,7 +45,7 @@ export function buildTasteProfile(films,reactions,{includeQuality=true,includeDi
  profile.modelVersion=profile.predictive?(profile.includeRuntime?tasteModelVersion:profile.includeSynopsis||profile.includeReach?'synopsis-aware40':includeQuality?(includeDirectorAliases?(includePublicQuality?'reliability-aware38':'director-aware37'):'quality-aware36'):'empirical-taste32'):'contrast-fallback';
 
  profile.productionModel=profile.predictive&&includeProduction&&includeQuality&&includeDirectorAliases&&includePublicQuality&&(profile.includeSynopsis||profile.includeReach||profile.includeRuntime)?fitProduction(films.filter(isEligibleForDiscovery),reactions):null;
- if(profile.productionModel?.ready)profile.modelVersion='production-aware43';
+ if(profile.productionModel?.ready)profile.modelVersion='audience-context50';
  cachedProfiles.set(reactions,{signature,profile});return profile;
 }
 const importance={genre:1,category:5,keyword:4,director:2,language:.75,period:.75,quality:.75,reach:1.5,runtime:.75};

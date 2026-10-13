@@ -12,8 +12,7 @@ from synopsis_model import synopsis_score
 from production_model import production_score
 from audience_priority import audience_production_score,public_quality_score,public_quality_tier,selection_priority_score,SELECTION_VERSION
 from interests import normalize_interests,build_style_model,style_key
-from budget_evidence import BudgetVerifier,BudgetResolver
-from production_policy import production_exclusion,production_budget,POLICY,director_focus,style_affinity
+from production_policy import production_exclusion,POLICY,director_focus,style_affinity
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 SEARCH_GENERIC=GENERIC|{'spin off','prequel','reboot','franchise','based on short film','based on play or musical'}
 
@@ -205,9 +204,6 @@ class Backend:
   if not self.key.startswith('sb_secret_'):headers['Authorization']='Bearer '+self.key
   if prefer:headers['Prefer']=prefer
   return self.request(self.url+'/rest/v1/'+path,headers,method,body)
- def budget_claims(self,ids):
-  if not hasattr(self,'_budget_resolver'):self._budget_resolver=BudgetResolver(self.movie)
-  return self._budget_resolver(ids)
  def load_interests(self,uid):
   uid=validated_uuid(uid,'User ID')
   user=self.request(self.url+'/auth/v1/admin/users/'+uid,{'apikey':self.key,'Authorization':'Bearer '+self.key})
@@ -236,7 +232,7 @@ def load_config():
   if type(config.get(key,4)) is not int or not 1<=config.get(key,4)<=4:raise ValueError('Worker count must be 1..4')
  if type(config.get('page_window',20)) is not int or not 2<=config.get('page_window',20)<=20:raise ValueError('Page window must be 2..20')
  if type(config.get('discovery_request_limit',24)) is not int or not 8<=config.get('discovery_request_limit',24)<=64:raise ValueError('Discovery request limit must be 8..64')
- for key,default,upper in [('manual_batch_target',30,100),('manual_anchor_limit',36,48),('search_rounds',3,12),('detail_candidate_limit',240,2400),('manual_quality_pool',160,2400),('budget_verification_limit',400,600)]:
+ for key,default,upper in [('manual_batch_target',30,100),('manual_anchor_limit',36,48),('search_rounds',3,12),('detail_candidate_limit',240,2400),('manual_quality_pool',160,2400)]:
   if type(config.get(key,default)) is not int or not 1<=config.get(key,default)<=upper:raise ValueError('Unbounded '+key)
  ids=[s['id'] for s in config['sources']]
  if len(ids)!=len(set(ids)):raise ValueError('Source IDs must be unique')
@@ -488,7 +484,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
  if not budget:
   print('Private batch skipped: scheduled-hour budget or rolling 60-minute maximum reached.')
   return 0
- production_rejections=set();detail_rejections=Counter();rejection_lock=threading.Lock();budget_verifier=BudgetVerifier(limit=config.get('budget_verification_limit',400),fetch=getattr(b,'budget_claims',lambda ids:{}))
+ production_rejections=set();detail_rejections=Counter();rejection_lock=threading.Lock()
  def hydrate(entry):
   movie=entry[1]
   def reject(reason,fetched=True):
@@ -511,7 +507,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   except Exception as error:return reject(error_summary(error),False)
  # Coarse discover results lack keywords/countries: filter taste only after canonical enrichment.
  # Exhaust the current pool before rotating pages; never fill a batch with rejected movies.
- attempted=set();details={};unverified={};fetched_any=False;final=[]
+ attempted=set();details={};fetched_any=False;final=[]
  search_unavailable=any(s.get('source')=='tmdb' and s.get('status')=='failed' for s in statuses)
  metadata_failures=0
  detail_limit=config.get('detail_candidate_limit',240)
@@ -520,18 +516,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
  def needs_personal_search():
   return personal_search and sum(match_score(entry[1],tastes)>0 for entry in final[:budget])<budget
  pool={entry[1]['id']:entry[1] for entry in ranked}
- def verify_details(movies):
-  waiting={**unverified,**{m['id']:m for m in movies}}
-  ordered=sorted(waiting.values(),key=lambda m:(-selection_priority_score(m,match_score(m,tastes),tastes.style_model),m['id']))
-  budget_verifier.verify(ordered)
-  unverified.clear()
-  for detail in ordered:
-   if production_budget(detail)is None and detail['id']not in budget_verifier.attempted:unverified[detail['id']]=detail
-   elif not production_exclusion(detail,interests=tastes.interests):details[detail['id']]=detail
-   else:production_rejections.add(detail['id'])
  for search_round in range(rounds):
-  if budget_verifier.failures<2:budget_verifier.limit=min(config.get('budget_verification_limit',400),max(1,(config.get('budget_verification_limit',400)*(search_round+1)+rounds-1)//rounds))
-  verify_details([])
   final=rank_candidates(list(details.values()),ratings,collection,config['minimum_votes'],now,tastes=tastes)
 
   if search_round:
@@ -551,7 +536,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
    print('Refill discovery:',json.dumps(statuses))
   pending=rank_candidates(list(pool.values()),ratings,collection,config['minimum_votes'],now,preliminary=True,tastes=tastes)
   pending=[entry for entry in pending if entry[1]['id'] not in attempted]
-  while pending and len(attempted)<detail_limit and (len(final)<budget or len(attempted)<quality_pool or needs_personal_search() or (manual or personal_search) and (any(production_budget(entry[1]) is None for entry in pending) or pending[0][0]>=min(entry[0] for entry in final[:budget]))):
+  while pending and len(attempted)<detail_limit and (len(final)<budget or len(attempted)<quality_pool or needs_personal_search() or (manual or personal_search) and pending[0][0]>=min(entry[0] for entry in final[:budget])):
    chunk=pending[:min(60,max(20,(budget-len(final))*2),detail_limit-len(attempted))]
    pending=pending[len(chunk):]
    attempted.update(entry[1]['id'] for entry in chunk)
@@ -559,7 +544,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
    metadata_failures+=sum(not fetched for _,fetched in hydrated)
    fetched_any=fetched_any or any(fetched for _,fetched in hydrated)
    new_details=[detail for detail,_ in hydrated if detail]
-   verify_details(new_details)
+   details.update({m['id']:m for m in new_details})
    final=diverse_candidates(rank_candidates(list(details.values()),ratings,collection,config['minimum_votes'],now,tastes=tastes),strict_audience=True)
   print('Search pass:',search_round+1,'unique pool:',len(pool),'discovery requests:',search_config['_discovery_stats'].get('requests',0),'details attempted:',len(attempted),'metadata failures:',metadata_failures,'canonical eligible:',len(details),'personalized eligible:',len(final),'target:',budget)
   good_fit=sum(match_score(entry[1],tastes)>0 for entry in final[:budget])
@@ -569,20 +554,16 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
  b.search_report={'candidateCount':len(pool),'verifiedCount':len(details),'accepted':min(budget,len(final)),
   'positivePersonal':sum(match_score(e[1],tastes)>0 for e in final[:budget]),
   'styleMatches':sum(style_affinity(e[1],tastes.style_model)>0 for e in final[:budget]),
-  'budgetRecovered':sum(bool(e[1].get('budgetEvidence'))for e in final[:budget]),
-  'budgetLookupFailures':budget_verifier.failures,'budgetVerifications':len(budget_verifier.attempted),'detailsAttempted':len(attempted),'detailRejections':dict(detail_rejections),
+  'detailsAttempted':len(attempted),'detailRejections':dict(detail_rejections),
+  'medianPopularity':median([e[1].get('popularity',0)for e in final[:budget]])if final else 0,
   'medianVoteCount':median([e[1].get('vote_count',0)for e in final[:budget]])if final else 0,
   'medianPublicRating':median([e[1].get('vote_average',0)for e in final[:budget]])if final else 0}
  if attempted and not fetched_any:raise RequestFailure('Candidate metadata unavailable; retry next run')
- if not final and budget_verifier.failures:raise RequestFailure('Budget verification unavailable: retry the manual request')
  if not final and (search_unavailable or metadata_failures):raise RequestFailure('Search incomplete: provider requests failed; retry the manual request')
  if len(final)<budget:print('Batch below target:',len(final),'of',budget,'after bounded search; excluded films are not used as filler.')
  audience_summary=audience_diagnostics(final,budget,tastes.predictive)
- selected_budgets=[production_budget(entry[1]) for entry in final[:budget] if production_budget(entry[1]) is not None]
- audience_summary.update(recommendationProposedBudgetMedian=round(median(selected_budgets),2) if selected_budgets else None,recommendationProposedBudgetKnownCount=len(selected_budgets),recommendationProductionExcludedCount=len(production_rejections))
- audience_summary['recommendationBudgetRecoveredEligibleCount']=sum(bool(entry[1].get('budgetEvidence'))for entry in final[:budget])
+ audience_summary['recommendationProductionExcludedCount']=len(production_rejections)
  print('Audience and production selection evidence:',json.dumps(audience_summary))
- print('Budget verification:',len(budget_verifier.attempted),'checked;',len(budget_verifier.resolved),'referenced amounts;',budget_verifier.failures,'optional provider failures.')
  added=0
  for _,detail,reason in final:
   if added>=budget:break
@@ -591,21 +572,16 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':director(detail),'moods':classify(detail),'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'synopsisChecked':True,'reachChecked':True,'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity'),'voteCount':detail.get('vote_count'),'tmdbUpdatedAt':now.isoformat()}}
   metadata['discoverySources']=movie.get('discovery_sources',[])
   metadata.update(feature_metadata(detail))
-  metadata.update(recommendationSearchVersion='audience-search49',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
+  metadata.update(recommendationSearchVersion='audience-search50',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
   metadata['recommendationAudienceScore']=round(audience_production_score(detail,style_model=tastes.style_model),6)
   metadata['recommendationAudiencePriority']=round(audience_production_score(detail,style_model=tastes.style_model),6)
   metadata.update(audience_summary)
   metadata['recommendationOrderingScore']=round(selection_priority_score(detail,match_score(detail,tastes),tastes.style_model),6)
-  metadata['recommendationProductionPolicy']='production-policy48'
+  metadata['recommendationProductionPolicy']='content-policy50'
   metadata['recommendationStyleAffinity']=style_affinity(detail,tastes.style_model)
   metadata['recommendationStyleReferenceCount']=tastes.style_model['reference_count']
   metadata['recommendationGenrePriority']=tastes.interests['genrePriority']
   metadata['recommendationPublicQualityTier']=public_quality_tier(detail)
-  metadata['recommendationBudgetKnown']=production_budget(detail) is not None
-  metadata['recommendationBudgetSource']='wikidata' if detail.get('budgetEvidence')else 'tmdb'
-  metadata['recommendationBudgetVerifications']=len(budget_verifier.attempted)
-  metadata['recommendationBudgetRecoveredCount']=len(budget_verifier.resolved)
-  metadata['recommendationBudgetLookupFailures']=budget_verifier.failures
   metadata['recommendationOrderingSecondaryScore']=round(match_score(detail,tastes)+public_quality_score(detail,tastes.predictive),6)
   metadata['recommendationDiscoveryRequests']=search_config['_discovery_stats'].get('requests',0)
   metadata['recommendationSynopsisScore']=round(.25*synopsis_score(detail,tastes.synopsis_model),6)

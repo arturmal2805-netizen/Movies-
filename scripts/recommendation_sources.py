@@ -6,7 +6,7 @@ import urllib.parse
 from simkl_source import FEED_URL, HEADERS, entries
 from movie_features import genres,RULES,normalize
 
-def detail_path(mid):return f'movie/{mid}?language=ru-RU&append_to_response=keywords,credits,external_ids'
+def detail_path(mid):return f'movie/{mid}?language=ru-RU&append_to_response=keywords,credits'
 
 def annotate_query(rows,path):
     query=urllib.parse.parse_qs(urllib.parse.urlsplit(path).query)
