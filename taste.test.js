@@ -5,7 +5,7 @@ test('continuous public quality is secondary, cache-aware and does not change ac
  const films=Array.from({length:40},(_,i)=>({id:i+1,year:2020,genreIds:[27],keywords:[i<8?'monster':'ghost']}));
  const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<8?'like':'dislike'}]));
  const model=buildTasteProfile(films,reactions),previous=buildTasteProfile(films,reactions,{includePublicQuality:false});
- assert.notEqual(model,previous);assert.equal(model.modelVersion,'synopsis-aware40');assert.equal(previous.modelVersion,'director-aware37');
+ assert.notEqual(model,previous);assert.equal(model.modelVersion,'duration-aware42');assert.equal(previous.modelVersion,'director-aware37');
  for(const rating of [2,6.5,9]){
   const film={year:2020,genreIds:[27],rating};
   assert.ok(Math.abs(tasteScore(film,model)-tasteScore(film,previous)-.2*(rating-6.5))<1e-12);
@@ -100,4 +100,26 @@ test('negative-only rare tags are penalized and cannot override rejection',()=>{
  const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<10?'like':'dislike'}]));
  const p=buildTasteProfile(films,reactions),candidate={genreIds:[27],year:2020,originalLanguage:'es',keywords:['haunted house',...Array.from({length:24},(_,i)=>`rare label ${i}`)]};
  assert.ok(tasteScore(candidate,p)<1);for(let i=0;i<24;i++)assert.ok(p.balancedWeights.get(`keyword:rare label ${i}`)<0);assert.ok(tasteAcceptanceScore(candidate,p)<-.8);
+});
+
+test('length preferences learn either direction while old model and unknown length stay neutral',()=>{
+ for(const [liked,rejected] of [[90,130],[130,90]]){
+  const films=Array.from({length:100},(_,i)=>({id:i+1,year:2020,genreIds:[27],minutes:i<10?liked:rejected}));
+  const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<10?'like':'dislike'}]));
+  const current=buildTasteProfile(films,reactions),previous=buildTasteProfile(films,reactions,{includeRuntime:false});
+  assert.ok(tasteScore(films[0],current)>tasteScore(films[99],current));
+  assert.ok(Math.abs(tasteScore(films[0],previous)-tasteScore(films[99],previous))<1e-10);
+  assert.equal(current.modelVersion,'duration-aware42');assert.equal(previous.modelVersion,'synopsis-aware40');
+ }
+ const films=Array.from({length:100},(_,i)=>({id:i+1,genreIds:[27],keywords:[i<10?'ritual':'ghost']}));
+ const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<10?'like':'dislike'}]));
+ const current=buildTasteProfile(films,reactions);
+ for(const duration of [100,null,false,0,-1,'100',NaN,Infinity])assert.ok(Math.abs(tasteScore({...films[99],minutes:duration},current)-tasteScore(films[99],current))<1e-10);
+});
+
+test('profile cache invalidates when a rated film length changes',()=>{
+ const films=Array.from({length:100},(_,i)=>({id:i+1,genreIds:[27],minutes:100}));
+ const reactions=Object.fromEntries(films.map((f,i)=>[f.id,{impression:i<10?'like':'dislike'}]));
+ const before=buildTasteProfile(films,reactions);films[0].minutes=140;
+ assert.notEqual(buildTasteProfile(films,reactions),before);
 });

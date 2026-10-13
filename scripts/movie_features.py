@@ -66,8 +66,9 @@ class TasteProfile(dict):
    for key in vector:
     if specific_feature(key):self.neighbor_index[key].append(i)
 
-def profile(ratings,include_quality=True,include_director_aliases=True,include_public_quality=True,include_synopsis=True,include_reach=True):
+def profile(ratings,include_quality=True,include_director_aliases=True,include_public_quality=True,include_synopsis=True,include_reach=True,include_runtime=True):
  ratings=list(ratings)
+ runtime_enabled=include_runtime and include_quality and include_director_aliases and include_public_quality and (include_synopsis or include_reach)
  sums=defaultdict(float);counts=defaultdict(int);shares=defaultdict(float);anchors=[]
  for row in ratings:
   signal=rating_signal(row)
@@ -86,7 +87,7 @@ def profile(ratings,include_quality=True,include_director_aliases=True,include_p
   if label not in ('like','dislike'):continue
   if label=='like':positive_count+=1;counts_by_class=positive
   else:negative_count+=1;counts_by_class=negative
-  vector=predictive_features(row.get('metadata') or {},include_quality=include_quality,include_director_aliases=include_director_aliases,include_reach=include_reach and include_quality and include_director_aliases and include_public_quality)
+  vector=predictive_features(row.get('metadata') or {},include_quality=include_quality,include_director_aliases=include_director_aliases,include_reach=include_reach and include_quality and include_director_aliases and include_public_quality,include_runtime=runtime_enabled)
   examples.append((margin_features(vector),label=='like'))
   for key,share in vector.items():
    counts_by_class[key]+=share
@@ -106,12 +107,13 @@ def profile(ratings,include_quality=True,include_director_aliases=True,include_p
  result.include_public_quality=include_public_quality and include_quality
  result.include_synopsis=include_synopsis and include_quality and include_director_aliases and include_public_quality
  result.include_reach=include_reach and include_quality and include_director_aliases and include_public_quality
+ result.include_runtime=runtime_enabled
  result.synopsis_model=fit_synopsis(ratings) if result.predictive and result.include_synopsis else {}
  result.training_count=positive_count+negative_count;result.positive_count=positive_count;result.negative_count=negative_count
- result.model_version=(MODEL_VERSION if result.include_synopsis or result.include_reach else 'reliability-aware38' if include_quality and include_director_aliases and include_public_quality else 'director-aware37' if include_quality and include_director_aliases else 'quality-aware36' if include_quality else 'empirical-taste32') if result.predictive else 'contrast-fallback'
+ result.model_version=(MODEL_VERSION if result.include_runtime else 'synopsis-aware40' if result.include_synopsis or result.include_reach else 'reliability-aware38' if include_quality and include_director_aliases and include_public_quality else 'director-aware37' if include_quality and include_director_aliases else 'quality-aware36' if include_quality else 'empirical-taste32') if result.predictive else 'contrast-fallback'
  return result
 
-def predictive_features(movie,include_quality=True,include_director_aliases=True,include_reach=True):
+def predictive_features(movie,include_quality=True,include_director_aliases=True,include_reach=True,include_runtime=True):
  vector=features(movie,include_director_aliases=include_director_aliases)
  language=movie.get('originalLanguage') or movie.get('original_language')
  if language:vector[('language',language)]=1
@@ -126,11 +128,14 @@ def predictive_features(movie,include_quality=True,include_director_aliases=True
  popularity=movie.get('popularity');popularity=metrics.get('popularity') if popularity is None else popularity
  # Public audience reach is learned from personal labels, never a minimum.
  if include_reach and type(popularity) in (int,float) and math.isfinite(popularity) and popularity>=0:vector[('reach',min(8,int(math.log2(popularity+1))))]=1
+ duration=movie.get('minutes');duration=movie.get('runtime') if duration is None else duration
+ # Learn length preferences in either direction; this never limits eligibility.
+ if include_runtime and type(duration) in (int,float) and math.isfinite(duration) and duration>0:vector[('runtime',min(12,int(duration)//20))]=1
  return vector
 
 def specific_feature(key):return key[0] in ('keyword','director') or key[0]=='category' and key[1]!='horror'
 
-IMPORTANCE={'genre':1,'category':5,'keyword':4,'director':2,'language':.75,'period':.75,'quality':.75,'reach':1.5}
+IMPORTANCE={'genre':1,'category':5,'keyword':4,'director':2,'language':.75,'period':.75,'quality':.75,'reach':1.5,'runtime':.75}
 def importance(key):return .5 if key==('category','horror') else IMPORTANCE[key[0]]
 
 def nearby_score(vector,anchors):
@@ -155,13 +160,13 @@ def contrast_score(movie,taste):
 def balanced_score(movie,taste):
  if not getattr(taste,'predictive',False):return contrast_score(movie,taste)
  weights=taste.balanced_weights
- vector=predictive_features(movie,include_quality=getattr(taste,'include_quality',True),include_director_aliases=getattr(taste,'include_director_aliases',True),include_reach=getattr(taste,'include_reach',False))
- vector={key:share for key,share in vector.items() if key[0]!='reach' or key in weights}
+ vector=predictive_features(movie,include_quality=getattr(taste,'include_quality',True),include_director_aliases=getattr(taste,'include_director_aliases',True),include_reach=getattr(taste,'include_reach',False),include_runtime=getattr(taste,'include_runtime',False))
+ vector={key:share for key,share in vector.items() if key[0] not in ('reach','runtime') or key in weights}
  return 3*sum(weights.get(key,0)*share*importance(key) for key,share in vector.items())/max(1,sum(share*importance(key) for key,share in vector.items()))
 
 def rejection_score(movie,taste):
  if not getattr(taste,'predictive',False):return contrast_score(movie,taste)
- return taste.bias+sum(taste.get(key,0)*share for key,share in margin_features(predictive_features(movie,include_quality=getattr(taste,'include_quality',True),include_director_aliases=getattr(taste,'include_director_aliases',True),include_reach=getattr(taste,'include_reach',False))).items())
+ return taste.bias+sum(taste.get(key,0)*share for key,share in margin_features(predictive_features(movie,include_quality=getattr(taste,'include_quality',True),include_director_aliases=getattr(taste,'include_director_aliases',True),include_reach=getattr(taste,'include_reach',False),include_runtime=getattr(taste,'include_runtime',False))).items())
 
 def match_score(movie,taste):
  if not getattr(taste,'predictive',False):return contrast_score(movie,taste)

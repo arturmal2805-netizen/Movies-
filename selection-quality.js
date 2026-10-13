@@ -1,5 +1,5 @@
-import {buildTasteProfile,tasteScore,tasteAcceptanceScore} from './taste.js?v=quality40';
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality40';
+import {buildTasteProfile,tasteScore,tasteAcceptanceScore} from './taste.js?v=quality42';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality42';
 
 export function ratingSummary(rows){
  const unique=new Map();
@@ -22,10 +22,10 @@ export function ratingSummary(rows){
 }
 
 function chronological(rows){return rows.filter(r=>['like','dislike'].includes(r.impression)).sort((a,b)=>String(a.updated_at||'').localeCompare(String(b.updated_at||''))||a.tmdb_id-b.tmdb_id);}
-function modelFor(rows,includeQuality=true,includeDirectorAliases=true,includePublicQuality=true,includeSynopsis=true,includeReach=true){
+function modelFor(rows,includeQuality=true,includeDirectorAliases=true,includePublicQuality=true,includeSynopsis=true,includeReach=true,includeRuntime=true){
  const films=rows.map(r=>({...r.metadata,id:r.tmdb_id,tmdbId:r.tmdb_id}));
  const reactions=Object.fromEntries(rows.map(r=>[r.tmdb_id,{impression:r.impression,plot:r.plot,cinematography:r.cinematography,ratedAt:r.updated_at}]));
- return buildTasteProfile(films,reactions,{includeQuality,includeDirectorAliases,includePublicQuality,includeSynopsis,includeReach});
+ return buildTasteProfile(films,reactions,{includeQuality,includeDirectorAliases,includePublicQuality,includeSynopsis,includeReach,includeRuntime});
 }
 function score(film,model){return tasteScore(film,model)-(filmCategories(film).some(c=>c==='horror'||c==='dystopian')?1:0);}
 export function selectionFloor(rows,includeQuality=true){
@@ -44,7 +44,7 @@ export function evaluateSelection(rows){
  if(decisive.length<100||decisive.some(r=>!r.updated_at))return {status:'insufficient'};
  const split=Math.floor(decisive.length*.8),train=decisive.slice(0,split);
  const test=decisive.slice(split).filter(r=>isEligibleForDiscovery(r.metadata||{})),model=modelFor(train);
- const previous=modelFor(train,true,true,true,false,false),previousFloor=null;
+ const previous=modelFor(train,true,true,true,true,true,false),previousFloor=null;
  const measure=(selectedModel,cutoff,legacyGate)=>{
   const predictions=test.map(r=>[score(r.metadata,selectedModel),tasteAcceptanceScore(r.metadata,selectedModel),r.impression==='like']);
   const ordered=[...predictions].sort((a,b)=>b[0]-a[0]);

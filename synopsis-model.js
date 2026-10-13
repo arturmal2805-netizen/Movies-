@@ -1,5 +1,5 @@
 // Bounded, private synopsis classifier; mirrors scripts/synopsis_model.py.
-import {fitMargin} from './taste-model.js?v=quality40';
+import {fitMargin} from './taste-model.js?v=quality42';
 const stop=new Set('а без более бы был была были было быть в вам вас весь во вот все всего всех вы где да даже для до его ее если есть еще же за здесь и из или им их к как ко когда кто ли либо мне может мы на надо наш не него нее нет ни них но ну о об один он она они оно от по под при про раз с со так такой там те тем то того тоже той только том ты у уже что чтобы это эта эти этот'.split(' '));
 const suffixes='иями ями ами иями его ого ему ому ией иям ием ею ия иью иях ие ые ое ей ий ый ой ем им ым ом их ых ую юю ая яя ов ев ий ы и я а е о у ю ь'.split(' ').sort((a,b)=>b.length-a.length);
 

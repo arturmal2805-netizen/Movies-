@@ -377,6 +377,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
  search_config['_preferred_keyword_groups']=preferred_keyword_groups(ratings)
  search_config['_preferred_periods']=preferred_periods(tastes)
  search_config['_include_similar']=personal_search
+ search_config['_evidence_routes']=personal_search
  search_config['_anchor_batch_size']=12 if personal_search else 6
  candidates,statuses=discover(b,preferred,search_config)
  print('Discovery:',json.dumps(statuses))
@@ -456,7 +457,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
   metadata={'id':fid,'tmdbId':detail['id'],'title':detail['title'],'original':detail.get('original_title',detail['title']),'year':int(detail['release_date'][:4]),'genre':GENRES.get(genre_ids[0],'Кино') if genre_ids else 'Кино','genreIds':genre_ids,'minutes':detail['runtime'],'rating':detail.get('vote_average',0),'ratingSource':'TMDB','director':director(detail),'moods':classify(detail),'symbol':'✦','colors':['#4c6478','#263443'],'caption':reason,'description':detail.get('overview',''),'synopsisChecked':True,'reachChecked':True,'recommendationReason':reason,'remoteMetrics':{'poster':'https://image.tmdb.org/t/p/w500'+detail['poster_path'],'popularity':detail.get('popularity'),'voteCount':detail.get('vote_count'),'tmdbUpdatedAt':now.isoformat()}}
   metadata['discoverySources']=movie.get('discovery_sources',[])
   metadata.update(feature_metadata(detail))
-  metadata.update(recommendationSearchVersion='full-search41',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
+  metadata.update(recommendationSearchVersion='audience-search42',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
   metadata['recommendationSynopsisScore']=round(.25*synopsis_score(detail,tastes.synopsis_model),6)
   metadata['recommendationSynopsisDocuments']=tastes.synopsis_model.get('document_count',0)
   metadata['recommendationPersonalRoutes']=detail.get('_personal_routes',[])
@@ -468,7 +469,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None):
   metadata['recommendationQualityPoolTarget']=quality_pool
   metadata['recommendationBatchTarget']=budget
   metadata['recommendationMode']='manual' if manual else 'scheduled'
-  metadata['recommendationSelectionVersion']='synopsis-aware40'
+  metadata['recommendationSelectionVersion']=tastes.model_version
   metadata['recommendationVerifiedPoolSize']=len(details)
   metadata['recommendationSearchPasses']=search_round+1
   metadata['recommendationFit']='positive' if match_score(detail,tastes)>0 else 'weak'

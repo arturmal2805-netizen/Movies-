@@ -9,7 +9,10 @@ from movie_features import genres,RULES,normalize
 def detail_path(mid):return f'movie/{mid}?language=ru-RU&append_to_response=keywords,credits'
 
 def annotate_query(rows,path):
-    words=urllib.parse.parse_qs(urllib.parse.urlsplit(path).query).get('with_keywords',[])
+    query=urllib.parse.parse_qs(urllib.parse.urlsplit(path).query)
+    if query.get('sort_by')==['vote_count.desc']:
+        rows=[dict(m,_personal_routes=['audience-votes']) if isinstance(m,dict) else m for m in rows]
+    words=query.get('with_keywords',[])
     if words==['4565']:return [dict(m,_discovery_category='dystopian') if isinstance(m,dict) else m for m in rows]
     if words and ',' in words[0]:return [dict(m,_matched_theme_groups=[words[0]]) if isinstance(m,dict) else m for m in rows]
     return rows
@@ -82,6 +85,17 @@ def tmdb_candidates(backend, preferred, config):
            'primary_release_date.lte':now.date().isoformat(),'primary_release_date.gte':str(RULES['selection']['minimum_year'])+'-01-01','vote_count.gte':config['minimum_votes'],'without_genres':','.join(map(str,RULES['selection']['always_excluded_genres']))}
     strategies=[{'sort_by':'popularity.desc','with_genres':27},{'sort_by':'vote_average.desc','with_genres':27},
                 {'sort_by':'popularity.desc','with_keywords':4565}]
+    if config.get('_evidence_routes'):
+        # Audience count is a separate discovery route, not a higher minimum
+        # or a ranking override. Decades expose unseen films behind the head
+        # of the global lists while every existing route remains available.
+        strategies.extend([{'sort_by':'vote_count.desc','with_genres':27},
+                           {'sort_by':'vote_count.desc','with_keywords':4565}])
+        minimum=RULES['selection']['minimum_year']
+        for year in range(minimum,now.year+1,10):
+            strategies.append({'sort_by':'vote_count.desc','with_genres':27,
+                               'primary_release_date.gte':str(year)+'-01-01',
+                               'primary_release_date.lte':min(now.date().isoformat(),str(year+9)+'-12-31')})
     # Broad sci-fi/thriller lists waste the shortlist on unrelated family/adventure films.
     strategies.extend(dict(sort_by='popularity.desc',**({'with_genres':'27,53'} if genre==53 else {'with_genres':878,'with_keywords':4565})) for genre in preferred[:3] if genre in (53,878))
     keyword_seeds=config.get('_preferred_keywords',[])[:12]
@@ -244,7 +258,7 @@ def discover(backend, preferred, config):
             continue
         name = source['id']
         try:
-            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _search_round=config.get('_search_round',0), _preferred_movie_ids=config.get('_preferred_movie_ids',[]), _include_similar=config.get('_include_similar',False), _anchor_batch_size=config.get('_anchor_batch_size',6), _preferred_keywords=config.get('_preferred_keywords',[]), _preferred_keyword_groups=config.get('_preferred_keyword_groups',[]), _preferred_periods=config.get('_preferred_periods',[]), _preferred_directors=config.get('_preferred_directors',[]), _director_anchor_ids=config.get('_director_anchor_ids',{}), _discovery_pages=config.get('_discovery_pages',{}), _anchor_coverage=config.get('_anchor_coverage',set()), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
+            candidates = ADAPTERS[source['adapter']](backend, preferred, dict(source, minimum_votes=config['minimum_votes'], _excluded_ids=config.get('_excluded_ids',set()), _now=config.get('_now'), _page_seed=config.get('_page_seed',0), _search_round=config.get('_search_round',0), _preferred_movie_ids=config.get('_preferred_movie_ids',[]), _include_similar=config.get('_include_similar',False), _evidence_routes=config.get('_evidence_routes',False), _anchor_batch_size=config.get('_anchor_batch_size',6), _preferred_keywords=config.get('_preferred_keywords',[]), _preferred_keyword_groups=config.get('_preferred_keyword_groups',[]), _preferred_periods=config.get('_preferred_periods',[]), _preferred_directors=config.get('_preferred_directors',[]), _director_anchor_ids=config.get('_director_anchor_ids',{}), _discovery_pages=config.get('_discovery_pages',{}), _anchor_coverage=config.get('_anchor_coverage',set()), page_window=config.get('page_window',20), discovery_workers=config.get('discovery_workers',4)))
             valid = [m for m in candidates if isinstance(m,dict) and type(m.get('id')) is int and m['id'] > 0 and not excluded(config,m['id'])]
             for movie in valid:
                 mid = movie['id']

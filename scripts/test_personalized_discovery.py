@@ -111,7 +111,7 @@ class PersonalizedDiscoveryTests(unittest.TestCase):
   with patch('recommend.discover',return_value=(pool,[])):
    self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,dict(load_config(),history_enrichment_per_run=0),manual=True),1)
   metadata=backend.collection[0]['metadata']
-  self.assertEqual(metadata['recommendationAnchorIds'],[600001]);self.assertEqual(metadata['recommendationDirectorSeeds'],['Trusted']);self.assertEqual(metadata['recommendationSearchVersion'],'full-search41')
+  self.assertEqual(metadata['recommendationAnchorIds'],[600001]);self.assertEqual(metadata['recommendationDirectorSeeds'],['Trusted']);self.assertEqual(metadata['recommendationSearchVersion'],'audience-search42')
 
  def test_personal_keyword_queries_precede_broad_lists_and_require_horror(self):
   from urllib.parse import urlsplit,parse_qs

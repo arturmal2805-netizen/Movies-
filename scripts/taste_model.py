@@ -2,8 +2,8 @@
 import math
 from collections import Counter
 
-MODEL_VERSION='synopsis-aware40'
-SCALES={'genre':1,'category':.5,'keyword':1,'director':1,'language':.5,'period':.5,'quality':.5,'reach':.5}
+MODEL_VERSION='duration-aware42'
+SCALES={'genre':1,'category':.5,'keyword':1,'director':1,'language':.5,'period':.5,'quality':.5,'reach':.5,'runtime':.5}
 
 def margin_features(vector):return {key:share*SCALES[key[0]] for key,share in vector.items()}
 

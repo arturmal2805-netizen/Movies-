@@ -19,7 +19,7 @@ class SynopsisTests(unittest.TestCase):
   liked,rejected=rows[0]['metadata'],rows[-1]['metadata']
   self.assertAlmostEqual(match_score(liked,previous),match_score(rejected,previous))
   self.assertGreater(match_score(liked,current),match_score(rejected,current))
-  self.assertEqual(current.model_version,'synopsis-aware40');self.assertEqual(previous.model_version,'reliability-aware38')
+  self.assertEqual(current.model_version,'duration-aware42');self.assertEqual(previous.model_version,'reliability-aware38')
 
  def test_neutral_and_watched_do_not_train_or_expand_the_private_vocabulary(self):
   rows=history();initial=fit_synopsis(rows)

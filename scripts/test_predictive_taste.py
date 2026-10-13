@@ -18,7 +18,7 @@ class PredictiveTasteTests(unittest.TestCase):
    self.assertAlmostEqual(match_score(candidate,model)-match_score(candidate,previous),.2*(rating-6.5))
    self.assertAlmostEqual(rejection_score(candidate,model),rejection_score(candidate,previous))
    self.assertEqual(len(rank_candidates([candidate],rows,[],now=NOW,tastes=model)),1)
-  self.assertEqual(model.model_version,'synopsis-aware40')
+  self.assertEqual(model.model_version,'duration-aware42')
   self.assertEqual(previous.model_version,'director-aware37')
 
  def test_public_rating_bands_are_learned_personally_not_assumed_better_when_higher(self):
