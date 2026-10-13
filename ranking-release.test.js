@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {RankingReleaseMonitor} from './ranking-release.js';
-const moduleFor=selection=>({selectionVersion:selection,selectionScore(){},selectionSecondaryScore(){},compareSelection(){},buildSelectionProfile(){}});
+const moduleFor=selection=>({selectionVersion:selection,selectionScore(){},selectionSecondaryScore(){},compareSelection(){},buildSelectionProfile(){},isEligibleForSelection(){}});
 const release={version:'quality47',selection:'audience-first47'};
 test('new ranking is applied once without a page reload',async()=>{
  let applied=0,loads=0;
@@ -39,4 +39,10 @@ test('simultaneous visibility and timer checks share one update request',async()
  const monitor=new RankingReleaseMonitor({version:'quality46',fetchManifest:()=>{requests++;return new Promise(resolve=>finish=resolve);},loadRanking:async()=>moduleFor(release.selection),onUpdate:()=>{}});
  const active=monitor.check();assert.equal(await monitor.check(),false);assert.equal(requests,1);
  finish(release);assert.equal(await active,true);
+});
+
+test('release without its eligibility policy cannot silently remove exclusions',async()=>{
+ const ranking=moduleFor('audience-first48');delete ranking.isEligibleForSelection;
+ const monitor=new RankingReleaseMonitor({version:'quality47',fetchManifest:async()=>({version:'quality48',selection:'audience-first48'}),loadRanking:async()=>ranking,onUpdate:()=>{throw new Error('Must not apply');}});
+ assert.equal(await monitor.check(),false);assert.equal(monitor.version,'quality47');
 });

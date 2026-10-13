@@ -47,7 +47,7 @@ class AudienceDiscoveryTests(unittest.TestCase):
    with patch('recommend.match_score',return_value=-1):
     self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,cfg,manual=manual),3)
    self.assertTrue(all('audience-votes' in r['metadata']['recommendationPersonalRoutes'] for r in backend.collection))
-   self.assertTrue(all(r['metadata']['recommendationSearchVersion']=='audience-search46' for r in backend.collection))
+   self.assertTrue(all(r['metadata']['recommendationSearchVersion']=='audience-search47' for r in backend.collection))
 
 
 if __name__=='__main__':unittest.main()

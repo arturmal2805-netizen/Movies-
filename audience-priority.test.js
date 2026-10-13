@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {audienceScore,audiencePriorityScore,publicQualityScore,audienceFirstScore,compareSelection,selectionScore,selectionVersion} from './audience-priority.js';
+import {audienceScore,audiencePriorityScore,publicQualityScore,audienceFirstScore,audienceProductionScore,compareSelection,selectionScore,selectionVersion} from './audience-priority.js';
 import {buildTasteProfile,tasteScore} from './taste.js';
 test('public reach gives a material soft priority and both metadata shapes agree',()=>{
  assert.ok(audienceScore({popularity:30})-audienceScore({popularity:2})>.8);
  assert.ok(audienceScore({vote_count:20000})>audienceScore({vote_count:200}));
  assert.equal(audienceScore({remoteMetrics:{popularity:30,voteCount:2000}}),audienceScore({popularity:30,vote_count:2000}));
- assert.equal(selectionVersion,'audience-first46');
+ assert.equal(selectionVersion,'audience-first47');
 });
 test('unknown public reach is neutral and extreme data cannot drown out personal evidence',()=>{
  for(const value of [undefined,null,0,-1,NaN,Infinity,true,'100'])assert.equal(audienceScore({popularity:value,vote_count:value}),0);
@@ -18,7 +18,8 @@ test('browser selection uses public reach as its first key without changing the 
  const profile=buildTasteProfile([],{}),a={genreIds:[27],popularity:2},b={...a,popularity:30};
  assert.equal(tasteScore(a,profile),tasteScore(b,profile));
  assert.ok(selectionScore(b,profile)>selectionScore(a,profile));
- assert.equal(selectionScore(a,profile),audienceFirstScore(a));
+ assert.equal(selectionScore(a,profile),audienceProductionScore(a));
+ assert.equal(selectionScore(a,profile,{legacyVersion:'46'}),audienceFirstScore(a));
 });
 test('audience44 stays frozen for honest before/after comparison',()=>{
  const film={popularity:20,vote_count:5000,vote_average:7};

@@ -146,7 +146,20 @@ export const categoryRules = {
       "gu",
       "pa"
     ],
-    "require_target": true
+    "require_target": true,
+    "production": {
+      "minimum_known_budget_usd": 10000000,
+      "excluded_keywords": [
+        "independent film",
+        "low budget",
+        "microbudget",
+        "micro budget"
+      ],
+      "popularity_weight": 4,
+      "votes_weight": 1,
+      "budget_weight": 2,
+      "budget_scale_usd": 5000000
+    }
   },
   "keyword_groups": {
     "creature-horror": [

@@ -1,8 +1,14 @@
 // Match the server's audience prior; missing values are neutral, never a veto.
 import {tasteScore,buildTasteProfile} from './taste.js?v=quality43';
-import {filmCategories} from './categories.js?v=quality43';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality43';
+import {productionPolicy,productionExclusion,budgetPriorityScore} from './production-policy.js?v=quality47';
 export {buildTasteProfile as buildSelectionProfile};
-export const selectionVersion='audience-first46';
+export const selectionVersion='audience-first47';
+export function isEligibleForSelection(film){return isEligibleForDiscovery(film)&&!productionExclusion(film);}
+export function audienceProductionScore(film){
+ const popularity=film.popularity??film.remoteMetrics?.popularity,votes=film.vote_count??film.remoteMetrics?.voteCount;
+ return (Number.isFinite(popularity)&&popularity>0?productionPolicy.popularity_weight*Math.log2(1+popularity):0)+(Number.isFinite(votes)&&votes>0?productionPolicy.votes_weight*Math.log2(1+votes):0)+budgetPriorityScore(film);
+}
 export function audienceFirstScore(film){
  const popularity=film.popularity??film.remoteMetrics?.popularity,votes=film.vote_count??film.remoteMetrics?.voteCount;
  return (Number.isFinite(popularity)&&popularity>0?3*Math.log2(1+popularity):0)+(Number.isFinite(votes)&&votes>0?Math.log2(1+votes):0);
@@ -26,7 +32,7 @@ export function audiencePriorityScore(film,predictive=false,{legacy=false}={}){
  return legacy?value:Math.max(-3,Math.min(3,value));
 }
 export function selectionScore(film,profile,options={}){
- return options.legacy||options.legacyVersion==='45'?tasteScore(film,profile)+audiencePriorityScore(film,profile.predictive,options):audienceFirstScore(film);
+ return options.legacy||options.legacyVersion==='45'?tasteScore(film,profile)+audiencePriorityScore(film,profile.predictive,options):options.legacyVersion==='46'?audienceFirstScore(film):audienceProductionScore(film);
 }
 export function selectionSecondaryScore(film,profile){return tasteScore(film,profile)-(filmCategories(film).some(c=>c==='horror'||c==='dystopian')?1:0)+publicQualityScore(film,profile.predictive);}
 export function compareSelection(a,b,profile,scores=null,secondary=null){

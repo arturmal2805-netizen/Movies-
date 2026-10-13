@@ -1,4 +1,5 @@
-import {audiencePriorityScore,audienceFirstScore,publicQualityScore} from './audience-priority.js?v=quality46';
+import {audienceFirstScore,audienceProductionScore,publicQualityScore} from './audience-priority.js?v=quality47';
+import {productionExclusion} from './production-policy.js?v=quality47';
 import {buildTasteProfile,tasteScore} from './taste.js?v=quality43';
 import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality43';
 
@@ -47,7 +48,7 @@ export function evaluateSelection(rows){
  const test=decisive.slice(split).filter(r=>isEligibleForDiscovery(r.metadata||{})),model=modelFor(train);
  const previous=model,previousFloor=null;
  const measure=(selectedModel,cutoff,legacyGate,legacyAudience=false)=>{
-  const predictions=test.map(r=>{const personal=score(r.metadata,selectedModel);return [legacyAudience?personal+audiencePriorityScore(r.metadata,selectedModel.predictive):audienceFirstScore(r.metadata),legacyAudience?personal:personal+publicQualityScore(r.metadata,selectedModel.predictive),r.impression==='like',r.tmdb_id];});
+  const predictions=test.filter(r=>legacyAudience||!productionExclusion(r.metadata)).map(r=>{const personal=score(r.metadata,selectedModel);return [legacyAudience?audienceFirstScore(r.metadata):audienceProductionScore(r.metadata),personal+publicQualityScore(r.metadata,selectedModel.predictive),r.impression==='like',r.tmdb_id];});
   const ordered=[...predictions].sort((a,b)=>b[0]-a[0]||b[1]-a[1]||a[3]-b[3]);
   const pool=ordered.filter(([value,margin])=>!legacyGate||margin>=-.8&&(cutoff===null||value>=cutoff)),kept=pool.slice(0,30);
   const liked=kept.filter(([, ,label])=>label).length;

@@ -28,6 +28,8 @@ on:
       - 'scripts/synopsis_model.py'
       - 'scripts/production_model.py'
       - 'scripts/audience_priority.py'
+      - 'scripts/production_policy.py'
+      - 'scripts/test_production_policy.py'
       - 'scripts/test_audience_priority.py'
       - 'scripts/test_production_model.py'
       - 'scripts/warm_personal_history.py'

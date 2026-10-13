@@ -1,7 +1,17 @@
 """Public-first ordering and frozen audience priors; never eligibility thresholds."""
 import math
+from production_policy import POLICY,budget_priority_score
 
-SELECTION_VERSION='audience-first46'
+SELECTION_VERSION='audience-first47'
+
+def audience_production_score(movie):
+    remote=movie.get('remoteMetrics');remote=remote if isinstance(remote,dict) else {}
+    score=budget_priority_score(movie)
+    for field,remote_field,weight in (('popularity','popularity',POLICY['popularity_weight']),('vote_count','voteCount',POLICY['votes_weight'])):
+        raw=movie.get(field)
+        if raw is None:raw=remote.get(remote_field)
+        if type(raw) in (int,float) and math.isfinite(raw) and raw>0:score+=weight*math.log2(1+raw)
+    return score
 
 def audience_first_score(movie):
     """First sorting key, not a cutoff: trending reach plus audience breadth."""

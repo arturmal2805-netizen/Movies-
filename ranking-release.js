@@ -14,7 +14,7 @@ export class RankingReleaseMonitor {
    const [major,suffix]=order(manifest.version),[current,revision]=order(this.version);
    if(major<current||major===current&&suffix<=revision||!this.canApply())return false;
    const ranking=await this.loadRanking(manifest.version);
-   if(!['selectionScore','selectionSecondaryScore','compareSelection','buildSelectionProfile'].every(k=>typeof ranking?.[k]==='function')||ranking.selectionVersion!==manifest.selection||!this.canApply())return false;
+   if(!['selectionScore','selectionSecondaryScore','compareSelection','buildSelectionProfile','isEligibleForSelection'].every(k=>typeof ranking?.[k]==='function')||ranking.selectionVersion!==manifest.selection||!this.canApply())return false;
    await this.onUpdate(ranking,manifest.version);
    this.version=manifest.version;return true;
   }catch{return false;}

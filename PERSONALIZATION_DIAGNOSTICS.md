@@ -586,3 +586,60 @@ URL, чтобы случайная старая копия не закрепля
 порядка включает оба ключа. Ретроспектива не показывает равномерного роста
 личной точности от строгой известности, поэтому версия обозначает смену
 приоритета по запросу пользователя, а не подтверждённое повышение конверсии.
+
+
+## Production and audience first47
+
+The explicit production policy is shared through config/category-rules.json,
+its generated category-rules.js module, scripts/production_policy.py and
+production-policy.js. Known positive TMDB budgets below USD 10,000,000 are
+excluded, as are exact normalized provider keywords `independent film`,
+`low budget`, `microbudget` and `micro budget`. This threshold was explicitly
+selected by the user. Provider zero, missing, malformed or nonfinite budgets
+remain unknown. Studio names, cast membership, plot text and absent budgets
+are never treated as proof of independent production.
+
+This is an additional discovery policy, separate from the genre/country/year
+policy and the learned production model. Existing likes, rejects, timestamps,
+archives and favorites are preserved. Production training still sees its
+original evidence, including rejected small-budget films, rather than losing
+its negative class through the new discovery filter.
+
+The new primary ranking key is:
+
+`4 * log2(1 + popularity) + log2(1 + votes) + 2 * log2(1 + budget / 5,000,000)`
+
+Each component independently validates its canonical value; unknown budgets
+contribute no invented amount. Popularity has one third more weight than in
+frozen46; budget has a continuous, unsaturated material contribution. Personal
+fit and confidence-adjusted public quality break equal-primary ties. Route
+and genre diversity bonuses cannot reorder this primary key. Explicitly
+excluded production cannot bypass the policy through huge popularity.
+
+TMDB discover results do not carry budgets. Canonical details are checked
+before storage. Unknown coarse budgets cannot be assumed inferior to a full
+batch: pending unknown-budget candidates continue to be enriched within the
+existing detail quota. Rejected candidates trigger page refills, preserving
+the manual target of 30 and the bounded 8-pass / 1,200-detail search. Missing
+budgets do not discard a valid three-film or thirty-film batch. If the bounded
+search genuinely has no allowed unseen film, forbidden films are never
+inserted to manufacture a nonzero result.
+
+Stored private batch diagnostics now include budget median, count of known
+budgets, and canonical production exclusions, alongside audience medians and
+search coverage. Recommendation/search versions are audience-first47 and
+audience-search47. Raw exported opinions and learned parameters remain
+outside the public checkout.
+
+The chronological comparison uses frozen46 with its former candidate policy
+and current47 with the explicit production policy. Actual account precision
+still counts all historical recommendations, including now-excluded rejected
+ones; filtering the validation pool cannot rewrite real accuracy. An all-bad
+recent holdout cannot establish increased positive conversion.
+
+The updated application applies production eligibility in the discovery tab,
+including existing unreviewed collection rows. Open-tab ranking modules must
+also export their eligibility policy; the release monitor rejects incomplete
+modules. A tab with the old application requires one normal refresh to gain
+this new filtering hook; later complete ranking updates preserve the active
+mobile card and postpone changes while review fields are open.
