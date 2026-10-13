@@ -1,11 +1,11 @@
-import {ratingSummary} from './selection-quality.js?v=quality44';
+import {ratingSummary} from './selection-quality.js?v=quality45';
 import {installMobileFeed} from './mobile-feed.js?v=quality43';
 import {categoryOptions,filmCategories,isEligibleForDiscovery} from './categories.js?v=quality43';
 import {buildTasteProfile} from './taste.js?v=quality43';
-import {selectionScore,selectionVersion} from './audience-priority.js?v=quality44';
+import {selectionScore,selectionVersion} from './audience-priority.js?v=quality45';
 import {ManualRecommendations} from './manual-recommendations.js';
 import {kyivTime,recentRecommendations,nextRecommendationRun} from './time.js';
-import {ServerStore,ratingFeedbackMetadata} from './server.js?v=quality44';
+import {ServerStore,ratingFeedbackMetadata} from './server.js?v=quality45';
 import {normalizeRating,isArchived,worstRating,bestRating,neutralRating,ratingLabel} from './ratings.js?v=quality43';
 import {cardRule,sourceDefinitions,sourceState,hasCompleteMetadata} from './sources.js';
 export const films = [
@@ -65,7 +65,7 @@ async function quickRate(id,impression='dislike'){
  if(savingRating||savingCollection||archiving||!requireAccount())return;
  const film=films.find(f=>f.id===id);if(!film)return;
  savingRating=true;document.querySelectorAll('[data-reject],[data-praise],[data-neutral],[data-impression]').forEach(button=>button.disabled=true);
- try{const rating=impression==='like'?bestRating():impression==='neutral'?neutralRating():worstRating();rating.presentationModel=lastPresentation.scores.has(id)?lastPresentation.model:null;rating.presentationScore=lastPresentation.scores.get(id);rating.presentationSort=lastPresentation.sort;rating.presentationTab=lastPresentation.tab;rating.uiVersion='quality44';await server.saveRating(film,rating);updateQualityRating(film,rating);reactions[id]=rating;await archiveWithAnimation(id,'archive',impression==='like'?'Самый разъёб · 10/10 · Фильм в архиве':impression==='neutral'?'Норм · 5/10 · Фильм в архиве':'Полная хуйня · 1/10 · Фильм в архиве');}
+ try{const rating=impression==='like'?bestRating():impression==='neutral'?neutralRating():worstRating();rating.presentationModel=lastPresentation.scores.has(id)?lastPresentation.model:null;rating.presentationScore=lastPresentation.scores.get(id);rating.presentationSort=lastPresentation.sort;rating.presentationTab=lastPresentation.tab;rating.uiVersion='quality45';await server.saveRating(film,rating);updateQualityRating(film,rating);reactions[id]=rating;await archiveWithAnimation(id,'archive',impression==='like'?'Самый разъёб · 10/10 · Фильм в архиве':impression==='neutral'?'Норм · 5/10 · Фильм в архиве':'Полная хуйня · 1/10 · Фильм в архиве');}
  catch(error){toast(error.message);if($('details').open)showDetails(id);}
  finally{savingRating=false;document.querySelectorAll('[data-reject],[data-praise],[data-neutral]').forEach(button=>button.disabled=false);}
 }
@@ -178,7 +178,7 @@ function startQualityCheck(){
  if(key===qualityReportKey&&(qualityReport&&qualityReport.status!=='error'||qualityWorker))return;
  qualityWorker?.terminate();qualityReport=null;qualityReportKey=key;
  try{
-  const worker=new Worker(new URL('./quality-worker.js?v=quality44',import.meta.url),{type:'module'});qualityWorker=worker;
+  const worker=new Worker(new URL('./quality-worker.js?v=quality45',import.meta.url),{type:'module'});qualityWorker=worker;
   let timer;
   const finish=report=>{clearTimeout(timer);worker.terminate();if(qualityWorker!==worker||server.session?.user?.id!==owner)return;qualityWorker=null;qualityReport=report;renderQuality();};
   timer=setTimeout(()=>finish({status:'error'}),20000);

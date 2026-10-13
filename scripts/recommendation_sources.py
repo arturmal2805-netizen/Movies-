@@ -128,6 +128,12 @@ def tmdb_candidates(backend, preferred, config):
     probes=['discover/movie?'+urllib.parse.urlencode({**query,**strategy,'page':1}) for strategy in strategies]
     broad=[i for i,s in enumerate(strategies) if tuple(sorted(s.items())) in broad_keys]
     personal=[i for i in range(len(probes)) if i not in broad]
+    # Protect the ranked global audience lists from decade/theme proliferation.
+    # They expose well-known unseen films before niche lists spend the budget.
+    headline=[i for i in broad if strategies[i] in
+              [{'sort_by':order,**target} for order in ('popularity.desc','vote_count.desc')
+               for target in ({'with_genres':27},{'with_keywords':4565})]]
+    secondary=[i for i in broad if i not in headline]
     count=config.get('pages',2);window=max(count,min(20,config.get('page_window',20)))
     limit=max(1,min(64,config.get('discovery_request_limit',24)))
     if count==1:limit=min(limit,len(probes))
@@ -201,7 +207,10 @@ def tmdb_candidates(backend, preferred, config):
     sequential=max(request_count,limit-exploration)
     remaining=sequential-request_count
     broad_budget=remaining if not personal else int(remaining*.65)
-    scan(broad,broad_budget)
+    before=request_count
+    scan(headline,int(broad_budget*.75))
+    scan(secondary,broad_budget-(request_count-before))
+    scan(headline,broad_budget-(request_count-before))
     scan(personal,sequential-request_count)
     # Short/exhausted personal lists return their unused slots to broad search.
     scan(broad,sequential-request_count)

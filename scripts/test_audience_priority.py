@@ -2,15 +2,51 @@
 import datetime,math,unittest
 from unittest.mock import Mock,patch
 from urllib.parse import parse_qs,urlsplit
-from audience_priority import audience_score,public_quality_score
+from audience_priority import audience_score,audience_priority_score,public_quality_score
 from recommendation_sources import tmdb_candidates
-from recommend import recommend_user,load_config,rank_candidates
+from recommend import recommend_user,load_config,rank_candidates,audience_diagnostics
 from movie_features import profile
 from test_recommendation_pipeline import FakeBackend,movie
 NOW=datetime.datetime(2026,10,13,18,30,tzinfo=datetime.timezone.utc)
 def horror(mid,**kwargs):return dict(movie(mid),genre_ids=[27],genres=[{'id':27}],**kwargs)
 
 class AudiencePriorityTests(unittest.TestCase):
+ def test_pool_diagnostics_distinguish_proposed_and_available_audiences(self):
+  a=dict(horror(2501001),popularity=2,vote_count=100)
+  b=dict(horror(2501002),popularity=20,vote_count=5000)
+  result=audience_diagnostics([(10,a,''),(9,b,'')],1,True)
+  self.assertEqual(result['recommendationProposedVoteMedian'],100)
+  self.assertEqual(result['recommendationAudiencePoolVoteMedian'],5000)
+  self.assertTrue(all(value is None for value in audience_diagnostics([],30).values()))
+ def test_previous_audience_version_is_frozen_and_new_votes_have_seven_times_the_weight(self):
+  m={'popularity':20,'vote_count':5000,'vote_average':7}
+  expected=.4*math.log2(21/9)+.1*math.log2(5500/1500)+.006*.5*5000/5500
+  self.assertAlmostEqual(audience_priority_score(m,True,legacy=True),expected)
+  a={'popularity':8,'vote_count':400};b=dict(a,vote_count=4000)
+  old=audience_score(b,legacy=True)-audience_score(a,legacy=True)
+  self.assertAlmostEqual(audience_score(b)-audience_score(a),old*7)
+ def test_popular_audience_can_override_a_weak_niche_keyword_advantage(self):
+  niche=dict(horror(2501001),popularity=2,vote_count=100,vote_average=5.5)
+  public=dict(horror(2501002),popularity=20,vote_count=5000,vote_average=7)
+  # Previously the niche film's weak thematic advantage overcame its tiny audience.
+  self.assertGreater(1.6+audience_priority_score(niche,True,legacy=True),.1+audience_priority_score(public,True,legacy=True))
+  with patch('recommend.match_score',side_effect=lambda m,t:1.6 if m['id']==niche['id'] else .1):
+   self.assertEqual(rank_candidates([niche,public],[],[],now=NOW)[0][1]['id'],public['id'])
+ def test_headline_popularity_and_vote_lists_own_most_of_the_deeper_broad_requests(self):
+  backend=Mock();backend.movie.return_value={'results':[],'total_pages':500}
+  cfg=dict(load_config(),_now=NOW,_evidence_routes=True,_preferred_keywords=list(range(100,112)),
+           _preferred_keyword_groups=[[201,202],[203,204],[205,206],[207,208]],_preferred_periods=[2010,2020],
+           _discovery_pages={},_discovery_totals={})
+  for i in range(3):tmdb_candidates(backend,[53,878],dict(cfg,_search_round=i))
+  queries=[parse_qs(urlsplit(c.args[0]).query) for c in backend.movie.call_args_list]
+  deep=[q for q in queries if q['page']!=['1'] and 'with_companies' not in q and 'with_cast' not in q]
+  headline=[q for q in deep if q['sort_by'][0] in ('popularity.desc','vote_count.desc') and
+            q['primary_release_date.gte']==['2000-01-01'] and q['primary_release_date.lte']==[NOW.date().isoformat()] and
+            ((q.get('with_genres')==['27'] and 'with_keywords' not in q) or
+             (q.get('with_keywords')==['4565'] and 'with_genres' not in q))]
+  self.assertGreater(len(headline),len(deep)*.4)
+  self.assertTrue(any(q.get('with_keywords')==['201,202'] for q in queries))
+  self.assertEqual(len(queries),192)
  def test_public_popularity_breaks_close_personal_ties(self):
   rows=[{'tmdb_id':900000+i,'impression':'like' if i<8 else 'dislike','metadata':{'genreIds':[27],'year':2020,'keywords':['body horror' if i<8 else 'ghost']}} for i in range(40)]
   obscure=horror(2500001);popular=dict(obscure,id=2500002,popularity=30)
@@ -28,7 +64,7 @@ class AudiencePriorityTests(unittest.TestCase):
   for value in (None,0,-1,float('nan'),float('inf'),True,'100'):
    self.assertEqual(audience_score({'popularity':value,'vote_count':value}),0)
   self.assertEqual(audience_score({'remoteMetrics':{'popularity':30,'voteCount':2000}}),audience_score({'popularity':30,'vote_count':2000}))
-  self.assertLessEqual(audience_score({'popularity':1e300,'vote_count':1e300}),1.1)
+  self.assertLessEqual(audience_priority_score({'popularity':1e300,'vote_count':1e300}),3)
  def test_null_top_level_uses_remote_data_and_quality_is_overflow_safe(self):
   self.assertEqual(audience_score({'popularity':None,'vote_count':None,'remoteMetrics':{'popularity':30,'voteCount':2000}}),audience_score({'popularity':30,'vote_count':2000}))
   self.assertEqual(audience_score({'remoteMetrics':[]}),0)

@@ -1,4 +1,4 @@
-import {audienceScore,publicQualityScore} from './audience-priority.js?v=quality44';
+import {audiencePriorityScore} from './audience-priority.js?v=quality45';
 import {buildTasteProfile,tasteScore,tasteAcceptanceScore} from './taste.js?v=quality43';
 import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality43';
 
@@ -46,12 +46,12 @@ export function evaluateSelection(rows){
  const split=Math.floor(decisive.length*.8),train=decisive.slice(0,split);
  const test=decisive.slice(split).filter(r=>isEligibleForDiscovery(r.metadata||{})),model=modelFor(train);
  const previous=model,previousFloor=null;
- const measure=(selectedModel,cutoff,legacyGate,includeAudience=false)=>{
-  const predictions=test.map(r=>[score(r.metadata,selectedModel)+(includeAudience?audienceScore(r.metadata)+publicQualityScore(r.metadata,selectedModel.predictive):0),tasteAcceptanceScore(r.metadata,selectedModel),r.impression==='like']);
+ const measure=(selectedModel,cutoff,legacyGate,legacyAudience=false)=>{
+  const predictions=test.map(r=>[score(r.metadata,selectedModel)+audiencePriorityScore(r.metadata,selectedModel.predictive,{legacy:legacyAudience}),tasteAcceptanceScore(r.metadata,selectedModel),r.impression==='like']);
   const ordered=[...predictions].sort((a,b)=>b[0]-a[0]);
   const pool=ordered.filter(([value,margin])=>!legacyGate||margin>=-.8&&(cutoff===null||value>=cutoff)),kept=pool.slice(0,30);
   const liked=kept.filter(([, ,label])=>label).length;
   return {accepted:kept.length,liked,precision:kept.length?liked/kept.length:null,eligible_pool:pool.length,likes_at_10:kept.slice(0,10).filter(([, ,y])=>y).length};
  };
- return {status:'evaluated',training:train.length,tested:test.length,positives:test.filter(r=>r.impression==='like').length,floor:previousFloor,metric:'top_30',before:measure(previous,previousFloor,false),after:measure(model,null,false,true)};
+ return {status:'evaluated',training:train.length,tested:test.length,positives:test.filter(r=>r.impression==='like').length,floor:previousFloor,metric:'top_30',before:measure(previous,previousFloor,false,true),after:measure(model,null,false)};
 }

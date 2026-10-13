@@ -1,7 +1,7 @@
 """Read-only comparison against the former gate; production uses ranked batches."""
 from movie_features import profile, match_score, rejection_score, eligible_for_discovery
 from statistics import median
-from audience_priority import audience_score,public_quality_score
+from audience_priority import audience_priority_score
 
 
 def chronological(rows):
@@ -35,8 +35,8 @@ def selection_evaluation(rows):
     model = profile(train)
     previous = model
     previous_floor = None
-    def measure(selected_model,cutoff,legacy_gate,include_audience=False):
-        predictions = [(match_score(r['metadata'], selected_model)+(audience_score(r['metadata'])+public_quality_score(r['metadata'],selected_model.predictive) if include_audience else 0), rejection_score(r['metadata'], selected_model), r['impression'] == 'like') for r in test]
+    def measure(selected_model,cutoff,legacy_gate,legacy_audience=False):
+        predictions = [(match_score(r['metadata'], selected_model)+audience_priority_score(r['metadata'],selected_model.predictive,legacy=legacy_audience), rejection_score(r['metadata'], selected_model), r['impression'] == 'like') for r in test]
         ordered=sorted(predictions,key=lambda p:p[0],reverse=True)
         pool=[item for item in ordered if not legacy_gate or item[1]>=-.8 and (cutoff is None or item[0]>=cutoff)]
         kept=pool[:30]
@@ -45,4 +45,4 @@ def selection_evaluation(rows):
                 'eligible_pool':len(pool),'likes_at_10': sum(label for _,_,label in kept[:10])}
     return {'status': 'evaluated', 'training': len(train), 'tested': len(test),
             'positives': sum(r['impression']=='like' for r in test),
-            'floor': previous_floor,'metric':'top_30', 'before': measure(previous,previous_floor,False), 'after': measure(model,None,False,True)}
+            'floor': previous_floor,'metric':'top_30', 'before': measure(previous,previous_floor,False,True), 'after': measure(model,None,False)}
