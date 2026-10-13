@@ -71,7 +71,7 @@ class ProbeCommandTests(unittest.TestCase):
   import runpy
   from pathlib import Path
   b=FakeBackend();b.search_report={'accepted':30}
-  with patch('recommend.Backend',return_value=b),patch('recommend.read_rows',return_value=[{'user_id':'test'}]),patch('recommend.recommend_user',return_value=30)as run:
+  with patch.dict('os.environ',{},clear=True),patch('recommend.Backend',return_value=b),patch('recommend.read_rows',return_value=[{'user_id':'test'}]),patch('recommend.recommend_user',return_value=30)as run:
    runpy.run_path(str(Path(__file__).with_name('probe_recommendations.py')),run_name='__main__')
   self.assertTrue(run.call_args.kwargs['manual']);self.assertTrue(run.call_args.kwargs['dry_run'])
   self.assertEqual(b.collection,[]);self.assertEqual(b.patched,[])

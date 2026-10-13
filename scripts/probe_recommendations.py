@@ -1,10 +1,13 @@
 """Read-only live search validation. No ratings, collection or profile writes."""
-import datetime,os
+import datetime,os,json,traceback
 from recommend import Backend,read_rows,load_config,recommend_user,error_summary
 
 def summarize(report,error=None):
  path=os.environ.get('GITHUB_STEP_SUMMARY')
  if not path:return
+ evidence=json.dumps(report,sort_keys=True,separators=(',',':'))
+ suffix=(' error='+error)if error else ''
+ print('::'+('error'if error else'notice')+' title=Read-only search49::'+(evidence+suffix).replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
  with open(path,'a')as out:
   out.write('### Read-only candidate search49\n\n')
   out.write('| Aggregate | Result |\n| --- | --- |\n')
@@ -21,4 +24,5 @@ if __name__=='__main__':
    if count<15:raise RuntimeError('Search returned fewer than15 permitted candidates; quantity target not verified')
    summarize(backend.search_report)
   except Exception as error:
-   summarize(getattr(backend,'search_report',{}),error_summary(error));raise
+   frame=traceback.extract_tb(error.__traceback__)[-1]
+   summarize(getattr(backend,'search_report',{}),error_summary(error)+' at '+os.path.basename(frame.filename)+':'+str(frame.lineno));raise
