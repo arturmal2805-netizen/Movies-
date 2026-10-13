@@ -1,6 +1,6 @@
 // Shared explicit preferences. Unknown TMDB budgets are missing evidence.
-import {directorSelected,patternAffinity} from './interests.js?v=quality48';
-import {categoryRules} from './category-rules.js?v=quality48';
+import {directorSelected,patternAffinity} from './interests.js?v=quality49';
+import {categoryRules} from './category-rules.js?v=quality49';
 export const productionPolicy=categoryRules.selection.production;
 export function productionBudget(movie){const value=movie.productionBudget??movie.budget;return Number.isFinite(value)&&value>0?value:null;}
 const normalize=value=>String(value||'').toLowerCase().replace(/[-_]/g,' ').replace(/\s+/g,' ').trim();

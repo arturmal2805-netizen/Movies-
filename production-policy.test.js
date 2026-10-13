@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {productionBudget,productionExclusion,budgetPriorityScore} from './production-policy.js';
-import {isEligibleForSelection,audienceProductionScore,selectionScore,buildSelectionProfile} from './audience-priority.js';
+import {isEligibleForSelection,audienceProductionScore,selectionPriorityScore,selectionScore,buildSelectionProfile} from './audience-priority.js';
 test('known low budgets are excluded, missing and invalid budgets are excluded after verification',()=>{
  for(const v of [undefined,null,0,-1,true,false,'3000000',NaN,Infinity]){assert.equal(productionBudget({budget:v}),null);assert.equal(productionExclusion({budget:v}),'unverified_budget');}
  assert.equal(productionExclusion({productionBudget:2999999}),'known_low_budget');assert.equal(productionExclusion({productionBudget:3000000}),null);
@@ -21,7 +21,7 @@ test('larger budgets boost public ranking while huge popularity retains priority
  const film={popularity:5,vote_count:200,budget:10000000},large={...film,budget:50000000};
  assert.ok(audienceProductionScore(large)-audienceProductionScore(film)>3);
  assert.ok(audienceProductionScore({...film,popularity:100})>audienceProductionScore(large));
- assert.equal(selectionScore(large,buildSelectionProfile([],{})),audienceProductionScore(large));
+ assert.equal(selectionScore(large,buildSelectionProfile([],{})),selectionPriorityScore(large,0,buildSelectionProfile([],{}).styleModel));
  assert.ok(Number.isFinite(budgetPriorityScore({budget:1e308})));
 });
 

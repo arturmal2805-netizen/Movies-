@@ -1,9 +1,9 @@
-import {audienceProductionScore,publicQualityScore,publicQualityTier} from './audience-priority.js?v=quality48';
-import {normalizeInterests} from './interests.js?v=quality48';
-import {buildSelectionProfile} from './audience-priority.js?v=quality48';
-import {productionExclusion} from './production-policy.js?v=quality48';
-import {buildTasteProfile,tasteScore} from './taste.js?v=quality48';
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality48';
+import {audienceProductionScore,publicQualityScore,publicQualityTier,selectionPriorityScore} from './audience-priority.js?v=quality49';
+import {normalizeInterests,buildStyleModel} from './interests.js?v=quality49';
+import {buildSelectionProfile} from './audience-priority.js?v=quality49';
+import {productionExclusion} from './production-policy.js?v=quality49';
+import {buildTasteProfile,tasteScore} from './taste.js?v=quality49';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality49';
 
 export function ratingSummary(rows){
  const unique=new Map();
@@ -48,9 +48,10 @@ export function evaluateSelection(rows,interests){
  if(decisive.length<100||decisive.some(r=>!r.updated_at))return {status:'insufficient'};
  const split=Math.floor(decisive.length*.8),train=decisive.slice(0,split);
  const test=decisive.slice(split).filter(r=>isEligibleForDiscovery(r.metadata||{})),model=buildSelectionProfile(train.map(r=>({...r.metadata,id:r.tmdb_id,tmdbId:r.tmdb_id})),Object.fromEntries(train.map(r=>[r.tmdb_id,{impression:r.impression,plot:r.plot,cinematography:r.cinematography,ratedAt:r.updated_at,feedbackStage:r.metadata?.ratingFeedbackStage||'unknown'}])),normalizeInterests(interests));
+ const legacyStyle=buildStyleModel(train.map(r=>({...r.metadata,id:r.tmdb_id})),Object.fromEntries(train.map(r=>[r.tmdb_id,{impression:r.impression,plot:r.plot,cinematography:r.cinematography}])),model.interests,{legacy:true});
  const previous=model,previousFloor=null;
  const measure=(selectedModel,cutoff,legacyGate,legacyAudience=false)=>{
-  const predictions=test.filter(r=>!productionExclusion(r.metadata,{legacy:legacyAudience,interests:model.interests})).map(r=>{const personal=score(r.metadata,selectedModel);return [audienceProductionScore(r.metadata,{legacy:legacyAudience,styleModel:model.styleModel}),personal+publicQualityScore(r.metadata,selectedModel.predictive),r.impression==='like',r.tmdb_id,legacyAudience?0:publicQualityTier(r.metadata)];});
+  const predictions=test.filter(r=>!productionExclusion(r.metadata,{interests:model.interests})).map(r=>{const personal=score(r.metadata,selectedModel);return [legacyAudience?audienceProductionScore(r.metadata,{styleModel:legacyStyle}):selectionPriorityScore(r.metadata,personal,model.styleModel),personal+publicQualityScore(r.metadata,selectedModel.predictive),r.impression==='like',r.tmdb_id,legacyAudience?publicQualityTier(r.metadata):0];});
   const ordered=[...predictions].sort((a,b)=>b[4]-a[4]||b[0]-a[0]||b[1]-a[1]||a[3]-b[3]);
   const pool=ordered.filter(([value,margin])=>!legacyGate||margin>=-.8&&(cutoff===null||value>=cutoff)),kept=pool.slice(0,30);
   const liked=kept.filter(([, ,label])=>label).length;

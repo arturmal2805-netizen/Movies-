@@ -3,6 +3,7 @@ import json,re,math
 from collections import Counter
 from pathlib import Path
 DEFAULT=json.loads((Path(__file__).resolve().parents[1]/'config/category-rules.json').read_text())['selection']['production']['default_interests']
+CONCEPTS=json.loads((Path(__file__).resolve().parents[1]/'config/category-rules.json').read_text())['selection']['production']['style_concepts']
 GENERIC={'vampire','zombie','monster','witch','ghost','murder','death','demon','violence','blood','sequel','remake','based on novel or book','based on true story','duringcreditsstinger','aftercreditsstinger','independent film','woman director'}
 def clean(value):return re.sub(r'\s+',' ',value).strip()[:120] if isinstance(value,str) else ''
 def norm(value):return clean(value).lower().replace('-',' ').replace('_',' ')
@@ -33,19 +34,24 @@ def director_names(movie):
 def director_selected(movie,interests=None):
  targets={norm(n) for d in normalize_interests(interests)['directors'] for n in d['aliases']+[d['name']]}
  return bool(director_names(movie).intersection(targets))
-def words(movie):
+def style_key(name):
+ name=norm(name)
+ return next(('@'+key for key,aliases in CONCEPTS.items()if name in aliases),'')
+def raw_words(movie):
  raw=movie.get('keywords') or []
  if isinstance(raw,dict):raw=raw.get('keywords') or []
  return {norm(k if isinstance(k,str) else k.get('name','')) for k in raw if isinstance(k,(dict,str))} if isinstance(raw,list) else set()
-def build_style_model(ratings,interests=None):
+def words(movie):return {style_key(k)for k in raw_words(movie)}
+def build_style_model(ratings,interests=None,legacy=False):
+ extract=raw_words if legacy else words
  references=[r.get('metadata') or {} for r in ratings if r.get('impression')=='like' and director_selected(r.get('metadata') or {},interests)]
  rejected=[r.get('metadata') or {} for r in ratings if r.get('impression')=='dislike']
- p=Counter(k for m in references for k in words(m) if k and k not in GENERIC)
- n=Counter(k for m in rejected for k in words(m) if k and k not in GENERIC)
+ p=Counter(k for m in references for k in extract(m) if k and k not in GENERIC)
+ n=Counter(k for m in rejected for k in extract(m) if k and k not in GENERIC)
  weights={k:min(3.,max(0.,math.log((v+1)/(len(references)+2))-math.log((n[k]+1)/(len(rejected)+2)) if rejected else math.log1p(v))) for k,v in p.items()}
- return {'weights':weights,'reference_count':len(references),'patterns':[sorted(k for k in words(m) if weights.get(k,0)>0) for m in references]}
+ return {'weights':weights,'reference_count':len(references),'legacy':legacy,'patterns':[sorted(k for k in extract(m) if weights.get(k,0)>0) for m in references]}
 def pattern_affinity(movie,model):
- candidates=words(movie);strongest=0.
+ candidates=raw_words(movie)if model.get('legacy')else words(movie);strongest=0.
  for pattern in model.get('patterns',[]):
   hits=[model.get('weights',{}).get(k,0.) for k in pattern if k in candidates]
   if len(hits)>=2:strongest=max(strongest,sum(hits))

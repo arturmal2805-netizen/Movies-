@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {audienceScore,audiencePriorityScore,publicQualityScore,audienceFirstScore,audienceProductionScore,compareSelection,selectionScore,selectionVersion} from './audience-priority.js';
+import {audienceScore,audiencePriorityScore,publicQualityScore,audienceFirstScore,audienceProductionScore,selectionPriorityScore,personalFitScore,compareSelection,selectionScore,selectionVersion} from './audience-priority.js';
 import {buildTasteProfile,tasteScore} from './taste.js';
 test('public reach gives a material soft priority and both metadata shapes agree',()=>{
  assert.ok(audienceScore({popularity:30})-audienceScore({popularity:2})>.8);
  assert.ok(audienceScore({vote_count:20000})>audienceScore({vote_count:200}));
  assert.equal(audienceScore({remoteMetrics:{popularity:30,voteCount:2000}}),audienceScore({popularity:30,vote_count:2000}));
- assert.equal(selectionVersion,'audience-first48');
+ assert.equal(selectionVersion,'audience-first49');
 });
 test('unknown public reach is neutral and extreme data cannot drown out personal evidence',()=>{
  for(const value of [undefined,null,0,-1,NaN,Infinity,true,'100'])assert.equal(audienceScore({popularity:value,vote_count:value}),0);
@@ -14,11 +14,11 @@ test('unknown public reach is neutral and extreme data cannot drown out personal
  assert.equal(audienceScore({popularity:null,vote_count:null,remoteMetrics:{popularity:30,voteCount:2000}}),audienceScore({popularity:30,vote_count:2000}));
  assert.ok(Number.isFinite(publicQualityScore({vote_average:10,vote_count:1e308})));
 });
-test('browser selection uses public reach as its first key without changing the learned taste model',()=>{
+test('browser joint selection keeps audience reach and learned taste separate',()=>{
  const profile=buildTasteProfile([],{}),a={genreIds:[27],popularity:2},b={...a,popularity:30};
  assert.equal(tasteScore(a,profile),tasteScore(b,profile));
  assert.ok(selectionScore(b,profile)>selectionScore(a,profile));
- assert.equal(selectionScore(a,profile),audienceProductionScore(a));
+ assert.equal(selectionScore(a,profile),selectionPriorityScore(a,personalFitScore(a,profile)));
  assert.equal(selectionScore(a,profile,{legacyVersion:'46'}),audienceFirstScore(a));
 });
 test('audience44 stays frozen for honest before/after comparison',()=>{
@@ -45,4 +45,12 @@ test('public audience continues to separate well-known films and never rejects u
  assert.ok(audienceFirstScore({popularity:400,vote_count:200000})>audienceFirstScore({popularity:40,vote_count:20000}));
  assert.ok(Number.isFinite(audienceFirstScore({popularity:1e308,vote_count:1e308})));
  for(const value of [undefined,null,0,-1,true,'100',NaN,Infinity])assert.equal(audienceFirstScore({popularity:value,vote_count:value}),0);
+});
+
+
+test('personal evidence changes every comparison without removing negative candidates',()=>{
+ const movie={popularity:10,vote_count:1000,vote_average:7,budget:5000000};
+ assert.ok(selectionPriorityScore(movie,2)>selectionPriorityScore(movie,-2));
+ assert.ok(Number.isFinite(selectionPriorityScore(movie,-10000)));
+ assert.ok(Number.isFinite(selectionPriorityScore({...movie,vote_count:1e308})));
 });

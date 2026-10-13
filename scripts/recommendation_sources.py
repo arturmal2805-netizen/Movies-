@@ -6,7 +6,7 @@ import urllib.parse
 from simkl_source import FEED_URL, HEADERS, entries
 from movie_features import genres,RULES,normalize
 
-def detail_path(mid):return f'movie/{mid}?language=ru-RU&append_to_response=keywords,credits'
+def detail_path(mid):return f'movie/{mid}?language=ru-RU&append_to_response=keywords,credits,external_ids'
 
 def annotate_query(rows,path):
     query=urllib.parse.parse_qs(urllib.parse.urlsplit(path).query)
@@ -105,6 +105,12 @@ def tmdb_candidates(backend, preferred, config):
             strategies.append({'sort_by':'vote_count.desc','with_genres':27,
                                'primary_release_date.gte':str(year)+'-01-01',
                                'primary_release_date.lte':min(now.date().isoformat(),str(year+9)+'-12-31')})
+    if config.get('_evidence_routes'):
+        for year in range(now.year,max(RULES['selection']['minimum_year']-1,now.year-12),-2):
+            for order in ('vote_count.desc','popularity.desc'):
+                strategies.append({'sort_by':order,'with_genres':27,
+                    'primary_release_date.gte':str(max(RULES['selection']['minimum_year'],year-1))+'-01-01',
+                    'primary_release_date.lte':min(now.date().isoformat(),str(year)+'-12-31')})
     # Broad sci-fi/thriller lists waste the shortlist on unrelated family/adventure films.
     strategies.extend(dict(sort_by='popularity.desc',**({'with_genres':'27,53'} if genre==53 else {'with_genres':878,'with_keywords':4565})) for genre in preferred[:3] if genre in (53,878))
     broad_keys={tuple(sorted(strategy.items())) for strategy in strategies}

@@ -1,14 +1,14 @@
 // Match the server's audience prior; missing values are neutral, never a veto.
-import {normalizeInterests,buildStyleModel} from './interests.js?v=quality48';
-import {tasteScore,buildTasteProfile} from './taste.js?v=quality48';
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality48';
-import {productionPolicy,productionExclusion,budgetPriorityScore,styleAffinity} from './production-policy.js?v=quality48';
+import {normalizeInterests,buildStyleModel} from './interests.js?v=quality49';
+import {tasteScore,buildTasteProfile} from './taste.js?v=quality49';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality49';
+import {productionPolicy,productionExclusion,budgetPriorityScore,styleAffinity} from './production-policy.js?v=quality49';
 export function buildSelectionProfile(films,reactions,interests){
  const profile=buildTasteProfile(films,reactions),preferences=normalizeInterests(interests),key=JSON.stringify(preferences);
  if(profile.styleKey!==key){profile.interests=preferences;profile.styleModel=buildStyleModel(films,reactions,preferences);profile.styleKey=key;}
  return profile;
 }
-export const selectionVersion='audience-first48';
+export const selectionVersion='audience-first49';
 export function isEligibleForSelection(film,interests){return isEligibleForDiscovery(film)&&!productionExclusion(film,{interests});}
 export function publicQualityTier(film){
  const rating=film.rating??film.vote_average,votes=film.vote_count??film.remoteMetrics?.voteCount;
@@ -41,12 +41,22 @@ export function audiencePriorityScore(film,predictive=false,{legacy=false}={}){
  const value=audienceScore(film,{legacy})+publicQualityScore(film,predictive,{legacy});
  return legacy?value:Math.max(-3,Math.min(3,value));
 }
-export function selectionScore(film,profile,options={}){
- return options.legacy||options.legacyVersion==='45'?tasteScore(film,profile)+audiencePriorityScore(film,profile.predictive,options):options.legacyVersion==='46'?audienceFirstScore(film):audienceProductionScore(film,{styleModel:profile.styleModel});
+export function confidenceQuality(film){
+ const rating=film.rating??film.vote_average,votes=film.vote_count??film.remoteMetrics?.voteCount;
+ return Number.isFinite(rating)&&rating>0&&rating<=10&&Number.isFinite(votes)&&votes>0?5+(rating-5)*(votes/(votes+300)):5;
 }
-export function selectionSecondaryScore(film,profile){return tasteScore(film,profile)-(filmCategories(film).some(c=>c==='horror'||c==='dystopian')?1:0)+publicQualityScore(film,profile.predictive);}
+export function selectionPriorityScore(film,personal=0,styleModel=null){
+ const votes=film.vote_count??film.remoteMetrics?.voteCount;
+ const breadth=Number.isFinite(votes)&&votes>0?1.5*Math.log2(1+votes):0;
+ return audienceProductionScore(film,{legacy:true})+breadth+12*(confidenceQuality(film)-6)+(Number.isFinite(personal)?7*Math.tanh(personal/3):0)+6*styleAffinity(film,styleModel);
+}
+export function selectionScore(film,profile,options={}){
+ return options.legacy||options.legacyVersion==='45'?tasteScore(film,profile)+audiencePriorityScore(film,profile.predictive,options):options.legacyVersion==='46'?audienceFirstScore(film):options.legacyVersion==='48'?audienceProductionScore(film,{styleModel:profile.styleModel}):selectionPriorityScore(film,personalFitScore(film,profile),profile.styleModel);
+}
+export function personalFitScore(film,profile){return tasteScore(film,profile)-(filmCategories(film).some(c=>c==='horror'||c==='dystopian')?1:0);}
+export function selectionSecondaryScore(film,profile){return personalFitScore(film,profile)+publicQualityScore(film,profile.predictive);}
 export function compareSelection(a,b,profile,scores=null,secondary=null){
  const primary=film=>scores?.get(film.id)??selectionScore(film,profile);
  const tie=film=>secondary?.get(film.id)??selectionSecondaryScore(film,profile);
- return publicQualityTier(b)-publicQualityTier(a)||primary(b)-primary(a)||tie(b)-tie(a)||(a.tmdbId??a.id)-(b.tmdbId??b.id);
+ return primary(b)-primary(a)||tie(b)-tie(a)||(a.tmdbId??a.id)-(b.tmdbId??b.id);
 }

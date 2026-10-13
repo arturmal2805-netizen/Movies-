@@ -24,7 +24,7 @@ class AudienceDiscoveryTests(unittest.TestCase):
   audience=[q for q in queries if q['sort_by']==['vote_count.desc']]
   self.assertTrue(any(q.get('with_keywords')==['4565'] for q in audience))
   self.assertEqual({q['primary_release_date.gte'][0] for q in audience if q.get('with_genres')==['27']},
-                   {'2000-01-01','2010-01-01','2020-01-01'})
+                   {'2000-01-01','2010-01-01','2020-01-01','2015-01-01','2017-01-01','2019-01-01','2021-01-01','2023-01-01','2025-01-01'})
   self.assertTrue(any(q['sort_by']==['popularity.desc'] for q in queries))
   self.assertTrue(any(q['sort_by']==['vote_average.desc'] for q in queries))
   self.assertTrue(all(q['primary_release_date.lte'][0]<=NOW.date().isoformat() for q in queries))
@@ -48,7 +48,7 @@ class AudienceDiscoveryTests(unittest.TestCase):
    with patch('recommend.match_score',return_value=-1):
     self.assertEqual(recommend_user(backend,{'user_id':'test'},NOW,cfg,manual=manual),3)
    self.assertTrue(all('audience-votes' in r['metadata']['recommendationPersonalRoutes'] for r in backend.collection))
-   self.assertTrue(all(r['metadata']['recommendationSearchVersion']=='audience-search48' for r in backend.collection))
+   self.assertTrue(all(r['metadata']['recommendationSearchVersion']=='audience-search49' for r in backend.collection))
 
 
 if __name__=='__main__':unittest.main()

@@ -49,3 +49,12 @@ class InterestsTests(unittest.TestCase):
    self.assertEqual(result['directors'],[]);self.assertEqual(result['genrePriority'][0],'dystopian')
   with patch.object(b,'request',return_value={'id':'another-user'}):
    with self.assertRaisesRegex(Exception,'not confirmed'):b.load_interests(uid)
+
+
+class StyleConceptTests(unittest.TestCase):
+ def test_synonyms_generalize_without_counting_two_names_of_one_theme_twice(self):
+  rows=[{'impression':'like','metadata':{'director':'Robert Eggers','keywords':['gothic horror','period piece','isolation']}}]
+  model=build_style_model(rows)
+  self.assertGreater(pattern_affinity({'keywords':['gothic','19th century','alone']},model),0)
+  self.assertEqual(pattern_affinity({'keywords':['gothic','gothic horror']},model),0)
+  self.assertEqual(pattern_affinity({'keywords':['school','beach','friends']},model),0)

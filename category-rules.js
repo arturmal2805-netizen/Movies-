@@ -270,6 +270,95 @@ export const categoryRules = {
             ]
           }
         ]
+      },
+      "style_concepts": {
+        "gothic": [
+          "gothic",
+          "gothic horror",
+          "gothic romance"
+        ],
+        "period": [
+          "period piece",
+          "17th century",
+          "18th century",
+          "19th century",
+          "1830s",
+          "1890s",
+          "puritan",
+          "english colony"
+        ],
+        "occult": [
+          "folk horror",
+          "folklore horror",
+          "ritual",
+          "paganism",
+          "pagan cult",
+          "witchcraft",
+          "black magic",
+          "occult",
+          "religious fanaticism"
+        ],
+        "psychological": [
+          "psychological horror",
+          "psychological thriller",
+          "paranoia",
+          "hallucination",
+          "delusion",
+          "insanity",
+          "mind game",
+          "psychological manipulation"
+        ],
+        "isolation": [
+          "isolation",
+          "claustrophobia",
+          "alone",
+          "trapped",
+          "isolated farmhouse",
+          "lost at sea"
+        ],
+        "body": [
+          "body horror",
+          "body mutilation",
+          "disfigurement",
+          "mutation",
+          "transformation",
+          "mutagen"
+        ],
+        "identity": [
+          "identity",
+          "doppelgänger",
+          "doppelganger",
+          "split personality",
+          "self image",
+          "beauty standards",
+          "aging",
+          "body double"
+        ],
+        "hidden spaces": [
+          "secret room",
+          "basement",
+          "underground",
+          "subterranean",
+          "hidden room"
+        ],
+        "intrusion": [
+          "home invasion",
+          "abduction",
+          "stalking",
+          "stalker",
+          "followed",
+          "voyeurism",
+          "trespassing"
+        ],
+        "supernatural threat": [
+          "supernatural horror",
+          "unseen danger",
+          "evil force",
+          "haunting presence",
+          "demonic spirit",
+          "entity",
+          "supernatural"
+        ]
       }
     }
   },

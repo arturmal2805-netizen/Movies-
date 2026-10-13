@@ -29,7 +29,7 @@ class ProductionPolicyTests(unittest.TestCase):
   trending=dict(mid,id=7100002,popularity=100)
   self.assertGreater(audience_production_score(trending),audience_production_score(large))
   with patch('recommend.match_score',side_effect=lambda m,t:100 if m['id']==mid['id'] else -100):
-   self.assertEqual(rank_candidates([mid,large],[],[],now=NOW)[0][1]['id'],large['id'])
+   self.assertEqual(rank_candidates([mid,large],[],[],now=NOW)[0][1]['id'],mid['id'])
   self.assertTrue(math.isfinite(budget_priority_score({'budget':1e308})))
  def test_popular_indie_is_removed_and_cannot_bypass_policy(self):
   cheap=horror(7100000,budget=100000,popularity=1e6)

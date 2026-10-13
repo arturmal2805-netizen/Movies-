@@ -1,3 +1,4 @@
+import math
 """Regression checks for audience priority and the three-film search bottleneck."""
 import datetime,math,unittest
 from unittest.mock import Mock,patch
@@ -157,3 +158,15 @@ class AudiencePriorityTests(unittest.TestCase):
    with self.assertRaisesRegex(ValueError,'Discovery request limit'):load_config()
 
 if __name__=='__main__':unittest.main()
+
+
+class JointRankingTests(unittest.TestCase):
+ def test_personal_fit_changes_real_order_without_filtering_negative_scores(self):
+  from audience_priority import selection_priority_score,confidence_quality
+  m={'popularity':10,'vote_count':1000,'vote_average':7,'budget':5000000}
+  self.assertGreater(selection_priority_score(m,2),selection_priority_score(m,-2))
+  self.assertTrue(math.isfinite(selection_priority_score(m,-10000)))
+  self.assertTrue(math.isfinite(confidence_quality(dict(m,vote_count=1e308))))
+ def test_low_vote_bad_reviews_no_longer_inherit_a_middle_quality_tier(self):
+  from audience_priority import confidence_quality
+  self.assertLess(confidence_quality({'vote_average':3.8,'vote_count':100}),5)

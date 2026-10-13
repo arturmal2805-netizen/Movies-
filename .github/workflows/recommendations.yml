@@ -32,6 +32,9 @@ on:
       - 'scripts/interests.py'
       - 'scripts/check_interests_access.py'
       - 'scripts/test_interests.py'
+      - 'scripts/budget_evidence.py'
+      - 'scripts/test_budget_evidence.py'
+      - 'scripts/probe_recommendations.py'
       - 'scripts/test_production_policy.py'
       - 'scripts/test_audience_priority.py'
       - 'scripts/test_production_model.py'
@@ -78,6 +81,9 @@ jobs:
       - name: Refresh personal history for the new model
         if: ${{ github.event_name == 'push' }}
         run: python3 scripts/warm_personal_history.py
+      - name: Read-only validation of a full candidate batch
+        if: ${{ github.event_name == 'push' }}
+        run: python3 scripts/probe_recommendations.py
       - name: Add private personalized films
         env:
           TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
