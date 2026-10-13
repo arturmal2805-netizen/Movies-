@@ -20,8 +20,7 @@ def style_affinity(movie,model=None):
     groups=sum(bool(words.intersection(group)) for group in POLICY.get('style_groups',[]))
     return groups*.5 if groups>=2 else 0.
 
-def production_exclusion(movie,require_budget=True,legacy=False,interests=None):
-    # Compatibility options never restore removed financial gates.
+def production_exclusion(movie,interests=None):
     ids=movie.get('genreIds')
     if not isinstance(ids,list):ids=[g.get('id') for g in movie.get('genres',[]) if isinstance(g,dict)] if isinstance(movie.get('genres'),list) else movie.get('genre_ids',[])
     ids=set(i for i in ids if type(i) is int) if isinstance(ids,list) else set()

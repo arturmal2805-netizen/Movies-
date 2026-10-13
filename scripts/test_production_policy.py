@@ -37,7 +37,7 @@ class ProductionPolicyTests(unittest.TestCase):
    with patch('recommend.discover',return_value=(candidates,[])):
     self.assertEqual(recommend_user(b,{'user_id':'test'},NOW,dict(load_config(),history_enrichment_per_run=0),manual=True),min(30,n))
    self.assertEqual(len(b.collection),min(30,n))
-   self.assertTrue(all(not any(k.startswith('recommendationBudget')for k in row['metadata'])for row in b.collection))
+   self.assertTrue(all('productionBudget'not in row['metadata']and 'budgetEvidence'not in row['metadata']and not any(k.startswith('recommendationBudget')for k in row['metadata'])for row in b.collection))
  def test_horror_comedy_and_camp_still_refill_to_thirty(self):
   first=[horror(7100000+i)for i in range(80)];later=[horror(7200000+i,budget=None)for i in range(40)]
   b=FakeBackend();b.movie=lambda path:dict(next(m for m in first+later if m['id']==int(path.split('/')[1].split('?')[0])),genreIds=[27,35]if int(path.split('/')[1].split('?')[0])<7200000 else[27])

@@ -83,7 +83,7 @@ def preferred_keyword_groups(ratings):
 
 def valid_candidate(movie,minimum_votes,today,require_target=None,interests=None):
  if not isinstance(movie,dict) or type(movie.get('id')) is not int or movie['id']<=0:return False
- if movie.get('adult') or not movie.get('poster_path') or not eligible_for_discovery(movie,require_target=require_target) or production_exclusion(movie,require_budget=require_target is not False,interests=interests):return False
+ if movie.get('adult') or not movie.get('poster_path') or not eligible_for_discovery(movie,require_target=require_target) or production_exclusion(movie,interests=interests):return False
  try:
   released=datetime.date.fromisoformat(movie.get('release_date',''))
   count=float(movie.get('vote_count',0));rating=float(movie.get('vote_average',0));popularity=float(movie.get('popularity',0))
@@ -110,7 +110,7 @@ def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None,pre
   themes=sorted((normalize(k if isinstance(k,str) else k.get('name')) for k in keywords(movie) if supported_preference(tastes,('keyword',normalize(k if isinstance(k,str) else k.get('name'))))),key=lambda name:tastes[('keyword',name)],reverse=True)
   reason='Совпадает с вашими оценками: '+', '.join(GENRES.get(g,'Жанр') for g in favorite[:2])+'.' if favorite else 'Для знакомства с новым жанром; учтены оценки и популярность TMDB.'
   if themes:reason='По вашим оценкам подходят темы: '+', '.join(themes[:2])+'.'
-  elif personal<=0 and ratings:reason='Выбран по популярности TMDB, размеру аудитории и бюджету; личное совпадение пока слабое.'
+  elif personal<=0 and ratings:reason='Выбран по популярности TMDB и размеру аудитории; личное совпадение пока слабое.'
   if style_affinity(movie,getattr(tastes,'style_model',None))>0:reason='Совпадает сочетание тем из понравившихся примеров; учтены отзывы и популярность.'
   if not ratings:reason='Стартовая рекомендация по оценкам TMDB. После ваших оценок подбор станет персональным.'
   if 'horror' in categories:reason='Приоритет хоррорам. '+reason
@@ -493,7 +493,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   try:
    detail=b.movie(detail_path(movie['id']))
    if not isinstance(detail,dict)or detail.get('id')!=movie['id']:return reject('identity_mismatch')
-   exclusion=production_exclusion(detail,require_budget=False,interests=tastes.interests)
+   exclusion=production_exclusion(detail,interests=tastes.interests)
    if exclusion:
     production_rejections.add(movie['id']);return reject(exclusion)
    if not eligible_for_discovery(detail,require_target=False):return reject('year_country_or_excluded_genre')

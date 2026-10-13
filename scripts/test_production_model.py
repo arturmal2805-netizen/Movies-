@@ -59,7 +59,7 @@ class ProductionTests(unittest.TestCase):
    self.assertEqual(production_features({'production_companies':invalid,'credits':{'cast':invalid}}),{})
   detail=dict(movie(2100000),budget=0,production_companies=[{'id':101},{'id':101},{'id':True}],credits={'cast':[{'id':201},{'id':201},{'name':'Unverified'}]})
   meta=feature_metadata(detail)
-  self.assertEqual(meta['companyIds'],[101]);self.assertEqual(meta['castIds'],[201]);self.assertIsNone(meta['productionBudget']);self.assertTrue(meta['productionChecked'])
+  self.assertEqual(meta['companyIds'],[101]);self.assertEqual(meta['castIds'],[201]);self.assertNotIn('productionBudget',meta);self.assertTrue(meta['productionChecked'])
   self.assertEqual(production_features(detail),production_features(meta))
 
  def test_refresh_preserves_opinions_and_dates_and_is_resumable(self):

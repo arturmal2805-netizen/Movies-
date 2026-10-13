@@ -194,10 +194,7 @@ def feature_metadata(detail):
  credits=detail.get('credits');credits=credits if isinstance(credits,dict) else {}
  cast=credits.get('cast');cast=cast if isinstance(cast,list) else []
  result['castIds']=list(dict.fromkeys(c['id'] for c in cast if isinstance(c,dict) and type(c.get('id')) is int and c['id']>0))[:6]
- budget=detail.get('budget')
- result['productionBudget']=budget if type(budget) in (int,float) and math.isfinite(budget) and budget>0 else None
  if detail.get('directorAliases'):result['directorAliases']=detail['directorAliases']
- if isinstance(detail.get('budgetEvidence'),dict):result['budgetEvidence']=detail['budgetEvidence']
  return result
 
 
