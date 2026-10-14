@@ -95,17 +95,15 @@ class PublicImdbIndex:
     prior=movie.get('remoteMetrics');prior=dict(prior)if isinstance(prior,dict)and prior.get('imdbId')in(None,proof['imdbId'])else{}
     movie['remoteMetrics']={**prior,**proof};resolved+=1
   return resolved
- def candidates(self,minimum_year,maximum_year,limit=1500,target_genre="Horror",minimum_votes=1000):
-  if target_genre not in ("Horror","Thriller"):raise ValueError("Unsupported retrieval genre")
-  if type(minimum_votes)is not int or minimum_votes<1000:raise ValueError("Invalid retrieval audience floor")
+ def candidates(self,minimum_year,maximum_year,limit=1500):
   if self.metadata()is None:return []
   with sqlite3.connect('file:'+str(self.path)+'?mode=ro',uri=True)as c:
-   results=c.execute('SELECT a.id,a.rating,a.votes,f.year,f.genres FROM audience a JOIN films f ON f.id=a.id WHERE f.kind=? AND f.year>=? AND f.year<=? AND a.votes>=? AND instr(f.genres,?)>0 AND instr(f.genres,?)=0 AND instr(f.genres,?)=0 AND instr(f.genres,?)=0 AND instr(f.genres,?)=0 AND instr(f.genres,?)=0 ORDER BY a.votes DESC,a.id LIMIT ?',('movie',minimum_year,maximum_year,minimum_votes,*[json.dumps(g)for g in (target_genre,'Comedy','Adult','Animation','Family','Documentary')],max(1,min(5000,limit))))
+   results=c.execute('SELECT a.id,a.rating,a.votes,f.year,f.genres FROM audience a JOIN films f ON f.id=a.id WHERE f.kind=? AND f.year>=? AND f.year<=? AND a.votes>=1000 AND instr(f.genres,?)>0 AND instr(f.genres,?)=0 AND instr(f.genres,?)=0 AND instr(f.genres,?)=0 AND instr(f.genres,?)=0 AND instr(f.genres,?)=0 ORDER BY a.votes DESC,a.id LIMIT ?',('movie',minimum_year,maximum_year,*[json.dumps(g)for g in ('Horror','Comedy','Adult','Animation','Family','Documentary')],max(1,min(5000,limit))))
    # Genre restrictions constrain this retrieval route, not global eligibility.
    found=[]
    for identity,rating,votes,year,genres in results:
     tags=json.loads(genres)
-    if target_genre in tags and not set(tags)&{'Comedy','Adult','Animation','Family','Documentary'}:found.append((identity,rating,votes,year))
+    if 'Horror'in tags and not set(tags)&{'Comedy','Adult','Animation','Family','Documentary'}:found.append((identity,rating,votes,year))
    return sorted(found,key=lambda r:(-(r[1]-4.5)*math.log2(1+r[2]),-r[2],r[0]))
  def mapping(self,identities):return {i:self._mapping[i]for i in identities if i in self._mapping}
  def record_mapping(self,identity,mid):
