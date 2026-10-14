@@ -3,7 +3,7 @@ import math
 from production_policy import POLICY,style_affinity
 from imdb_audience import validated_imdb_metrics,validated_critics_score
 
-SELECTION_VERSION='audience-first55'
+SELECTION_VERSION='audience-first56'
 
 def public_quality_tier(movie):
     rating=movie.get('rating',movie.get('vote_average'))
@@ -13,14 +13,14 @@ def public_quality_tier(movie):
     estimate=6+(rating-6)*(votes/(votes+500))
     return 2 if estimate>=6.25 else 1 if estimate>=5.5 else 0
 
-def audience_production_score(movie,legacy=False,style_model=None):
+def audience_production_score(movie,legacy=False,style_model=None,imdb_breadth_weight=None):
     remote=movie.get('remoteMetrics');remote=remote if isinstance(remote,dict) else {}
     score=0 if legacy else 6*style_affinity(movie,style_model)
     for field,remote_field,weight in (('popularity','popularity',POLICY['popularity_weight']),('vote_count','voteCount',POLICY['votes_weight'])):
         raw=movie.get(field)
         if raw is None:raw=remote.get(remote_field)
         if type(raw) in (int,float) and math.isfinite(raw) and raw>0:score+=weight*math.log2(1+raw)
-    return score+imdb_audience_bonus(movie)+critics_bonus(movie)
+    return score+imdb_audience_bonus(movie,breadth_weight=imdb_breadth_weight)+critics_bonus(movie)
 
 def audience_first_score(movie):
     """First sorting key, not a cutoff: trending reach plus audience breadth."""
@@ -90,15 +90,22 @@ def selection_priority_score(movie,personal=0.,style_model=None):
 
 
 
-def imdb_audience_bonus(movie):
+def imdb_audience_bonus(movie,breadth_weight=None):
     evidence=validated_imdb_metrics(movie)
     if not evidence:return 0.
     floor=POLICY['imdb_audience_floor']
     quality=max(0.,min(1.,(evidence['rating']-6)*2))
     support=min(1.,evidence['votes']/floor)
-    return quality*support*(POLICY['imdb_audience_weight']+6*math.log2(1+evidence['votes']/floor))
+    weight=POLICY['imdb_votes_weight']if breadth_weight is None else breadth_weight
+    return quality*support*(POLICY['imdb_audience_weight']+weight*math.log2(1+evidence['votes']/floor))
 
 
 def critics_bonus(movie):
     score=validated_critics_score(movie)
     return 0. if score is None else POLICY['critics_weight']*max(0.,min(2.,(score-60)/10))
+
+
+def selection_priority_score55(movie,personal=0.,style_model=None):
+    """Same-pool reference for this release; 55 used six for IMDb breadth."""
+    fit=7*math.tanh(personal/3)if type(personal)in(int,float)and math.isfinite(personal)else 0.
+    return audience_production_score(movie,legacy=True,imdb_breadth_weight=6)+10*(confidence_quality(movie)-6)+fit+6*style_affinity(movie,style_model)

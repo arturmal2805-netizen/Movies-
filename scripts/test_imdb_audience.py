@@ -101,3 +101,20 @@ class ImdbEvidenceExpansionTests(unittest.TestCase):
   b=Mock();b.request.side_effect=lambda url,headers:response(parse_qs(urlsplit(url).query)['i'][0],Genre='Horror, Comedy')
   with patch.dict(os.environ,{'OMDB_API_KEY':'fake-for-test'}):s=enrich_audience(b,films,100,eligible=lambda m:not production_exclusion(m))
   self.assertEqual(s['imdbRequests'],100)
+
+class Popularity56Tests(unittest.TestCase):
+ def test_extra_priority_rewards_confirmed_breadth_without_rewarding_poor_reviews(self):
+  from audience_priority import selection_priority_score55
+  base={'popularity':5,'vote_count':500,'vote_average':6.8}
+  films=[dict(base,remoteMetrics=parse_metrics(response(imdbVotes=str(v)),'tt1234567'))for v in (5000,500000)]
+  delta=[selection_priority_score(m)-selection_priority_score55(m)for m in films]
+  self.assertGreater(delta[1],delta[0]);self.assertGreater(delta[0],0)
+  for score in ('5.0','6.0'):
+   film=dict(base,remoteMetrics=parse_metrics(response(imdbRating=score,imdbVotes='500000'),'tt1234567'))
+   self.assertEqual(selection_priority_score(film),selection_priority_score55(film))
+ def test_unknown_audience_and_private_fit_keep_the_previous_behavior(self):
+  from audience_priority import selection_priority_score55
+  base={'popularity':5,'vote_count':500,'vote_average':6.8}
+  for change in ({},{'remoteMetrics':{'imdb':8,'imdbVoteCount':500000}},{'remoteMetrics':{'imdbId':'tt1234567','imdbVerified':False,'imdb':8,'imdbVoteCount':500000}}):
+   film={**base,**change}
+   for personal in (-100,0,100):self.assertEqual(selection_priority_score(film,personal),selection_priority_score55(film,personal))

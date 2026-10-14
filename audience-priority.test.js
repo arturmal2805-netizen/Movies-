@@ -6,7 +6,7 @@ test('public reach gives a material soft priority and both metadata shapes agree
  assert.ok(audienceScore({popularity:30})-audienceScore({popularity:2})>.8);
  assert.ok(audienceScore({vote_count:20000})>audienceScore({vote_count:200}));
  assert.equal(audienceScore({remoteMetrics:{popularity:30,voteCount:2000}}),audienceScore({popularity:30,vote_count:2000}));
- assert.equal(selectionVersion,'audience-first55');
+ assert.equal(selectionVersion,'audience-first56');
 });
 test('unknown public reach is neutral and extreme data cannot drown out personal evidence',()=>{
  for(const value of [undefined,null,0,-1,NaN,Infinity,true,'100'])assert.equal(audienceScore({popularity:value,vote_count:value}),0);
@@ -62,4 +62,14 @@ test('only verified canonical IMDb audience evidence affects public recognition'
  assert.ok(imdbAudienceBonus({...film,remoteMetrics})>0);
  for(const changes of [{imdbVerified:false},{imdbVoteCount:null},{imdbId:'bad'},{imdb:NaN}])assert.equal(selectionPriorityScore({...film,remoteMetrics:{...remoteMetrics,...changes}}),selectionPriorityScore(film));
  assert.equal(selectionPriorityScore({...film,imdb_id:'tt9999999',remoteMetrics}),selectionPriorityScore(film));
+});
+
+test('release56 rewards verified large audiences while preserving weak-review and missing-data behavior',async()=>{
+ const {selectionPriorityScore55}=await import('./audience-priority.js');
+ const base={popularity:5,vote_count:500,vote_average:6.8};
+ const film=v=>({...base,remoteMetrics:{imdbId:'tt1234567',imdbVerified:true,imdb:6.8,imdbVoteCount:v}});
+ const delta=v=>selectionPriorityScore(film(v))-selectionPriorityScore55(film(v));
+ assert.ok(delta(500000)>delta(5000));assert.ok(delta(5000)>0);
+ for(const rating of [5,6]){const m={...film(500000),remoteMetrics:{...film(500000).remoteMetrics,imdb:rating}};assert.equal(selectionPriorityScore(m),selectionPriorityScore55(m));}
+ for(const change of [{},{remoteMetrics:{imdb:8,imdbVoteCount:500000}},{remoteMetrics:{imdbId:'tt1234567',imdbVerified:false,imdb:8,imdbVoteCount:500000}}])for(const fit of [-100,0,100])assert.equal(selectionPriorityScore({...base,...change},fit),selectionPriorityScore55({...base,...change},fit));
 });

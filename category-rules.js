@@ -354,7 +354,8 @@ export const categoryRules = {
       },
       "imdb_audience_weight": 12,
       "imdb_audience_floor": 10000,
-      "critics_weight": 6
+      "critics_weight": 6,
+      "imdb_votes_weight": 7
     }
   },
   "keyword_groups": {
