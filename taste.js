@@ -1,8 +1,8 @@
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality54';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality55';
 import {normalizeRating} from './ratings.js?v=quality43';
 import {fitMargin,marginFeatures,tasteModelVersion} from './taste-model.js?v=quality43';
 import {fitSynopsis,synopsisScore} from './synopsis-model.js?v=quality43';
-import {fitProduction,productionScore} from './production-model.js?v=quality54';
+import {fitProduction,productionScore} from './production-model.js?v=quality55';
 const generic=new Set(['based on novel or book','based on true story','sequel','remake','duringcreditsstinger','aftercreditsstinger','independent film','low budget','microbudget','micro budget','woman director']);
 const normalize=value=>String(value||'').toLocaleLowerCase('ru').replace(/[-_]/g,' ').replace(/\s+/g,' ').trim();
 export function tasteFeatures(film,includeDirectorAliases=true){

@@ -1,7 +1,7 @@
-import {hasVerifiedGenre,verifiedImdbYear} from './imdb-audience.js?v=quality54';
+import {hasVerifiedGenre,verifiedImdbYear} from './imdb-audience.js?v=quality55';
 // Explicit content preferences. Financial metadata has no role in admission or ranking.
-import {directorSelected,patternAffinity} from './interests.js?v=quality54';
-import {categoryRules} from './category-rules.js?v=quality54';
+import {directorSelected,patternAffinity} from './interests.js?v=quality55';
+import {categoryRules} from './category-rules.js?v=quality55';
 export const productionPolicy=categoryRules.selection.production;
 const normalize=value=>String(value||'').toLowerCase().replace(/[-_]/g,' ').replace(/\s+/g,' ').trim();
 function providerWords(movie){let raw=movie.keywords||[];if(!Array.isArray(raw))raw=raw?.keywords||[];if(!Array.isArray(raw))return [];return raw.filter(k=>typeof k==='string'||k&&typeof k==='object').map(k=>normalize(typeof k==='string'?k:k.name));}

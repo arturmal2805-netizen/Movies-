@@ -29,6 +29,13 @@
       "adapter": "simkl",
       "enabled": true,
       "candidate_limit": 60
+    },
+    {
+      "id": "imdb",
+      "adapter": "imdb_dataset",
+      "enabled": true,
+      "candidate_limit": 100,
+      "resolution_limit": 1000
     }
   ],
   "discovery_workers": 4,

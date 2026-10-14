@@ -3,7 +3,7 @@ import math
 from production_policy import POLICY,style_affinity
 from imdb_audience import validated_imdb_metrics,validated_critics_score
 
-SELECTION_VERSION='audience-first54'
+SELECTION_VERSION='audience-first55'
 
 def public_quality_tier(movie):
     rating=movie.get('rating',movie.get('vote_average'))

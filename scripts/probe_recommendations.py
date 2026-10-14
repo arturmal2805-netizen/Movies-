@@ -6,10 +6,10 @@ def summarize(report,error=None):
  path=os.environ.get('GITHUB_STEP_SUMMARY')
  evidence=json.dumps(report,sort_keys=True,separators=(',',':'))
  suffix=(' error='+error)if error else ''
- print('::'+('error'if error else'notice')+' title=Read-only search54::'+(evidence+suffix).replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
+ print('::'+('error'if error else'notice')+' title=Read-only search55::'+(evidence+suffix).replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
  if not path:return
  with open(path,'a')as out:
-  out.write('### Read-only candidate search54\n\n')
+  out.write('### Read-only candidate search55\n\n')
   out.write('| Aggregate | Result |\n| --- | --- |\n')
   for key,value in report.items():out.write('| '+key+' | '+str(value)+' |\n')
   out.write('\nNo ratings, collection, profile timestamps or preferences were written.\n')
@@ -24,6 +24,7 @@ if __name__=='__main__':
    backend.search_report={}
    count=recommend_user(backend,user,datetime.datetime.now(datetime.timezone.utc),load_config(),manual=True,dry_run=True)
    print('Read-only search result:',count,'permitted distinct candidates; no database writes.')
+   if os.environ.get('REQUIRE_IMDB_DATASET')=='true'and not backend.search_report.get('imdbDatasetReady'):raise RuntimeError('Public IMDb source unavailable; broader audience verification not established')
    if count<15:raise RuntimeError('Search returned fewer than 15 permitted candidates; quantity target not verified')
    summarize(backend.search_report)
  except Exception as error:

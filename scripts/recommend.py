@@ -13,6 +13,7 @@ from production_model import production_score
 from audience_priority import audience_production_score,public_quality_score,public_quality_tier,selection_priority_score,confidence_quality,SELECTION_VERSION
 from interests import normalize_interests,build_style_model,style_key
 from imdb_audience import enrich_audience,validated_imdb_metrics,validated_critics_score
+from imdb_datasets import PublicImdbIndex,default_path
 from production_policy import production_exclusion,POLICY,director_focus,style_affinity
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 SEARCH_GENERIC=GENERIC|{'spin off','prequel','reboot','franchise','based on short film','based on play or musical'}
@@ -149,7 +150,7 @@ def audience_votes(movie):
  if value is None:value=(movie.get('remoteMetrics')or{}).get('voteCount')if isinstance(movie.get('remoteMetrics'),dict)else None
  return value if type(value)in(int,float)and math.isfinite(value)and value>0 else 0
 
-def selection54_diagnostics(final,target,tastes,ratings,collection):
+def selection55_diagnostics(final,target,tastes,ratings,collection):
  chosen=[e[1]for e in final[:target]];pool=[e[1]for e in final]
  def previous(m):
   remote=m.get('remoteMetrics');remote=remote if isinstance(remote,dict)else{}
@@ -199,7 +200,7 @@ class Backend:
   # API tokens contain no whitespace; clipboard wrapping must not break HTTP headers.
   self.key=''.join(os.environ['SUPABASE_SERVICE_ROLE_KEY'].split())
   self.tmdb=''.join(os.environ['TMDB_ACCESS_TOKEN'].split())
-  self._movie_cache={};self._cache_lock=threading.Lock()
+  self._movie_cache={};self._cache_lock=threading.Lock();self.imdb_index=PublicImdbIndex(default_path())
   try:
    parsed=urllib.parse.urlsplit(self.url)
    valid=parsed.scheme=='https' and bool(parsed.hostname) and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment and parsed.path in ('','/') and not any(c.isspace() for c in self.url)
@@ -535,6 +536,9 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   try:
    detail=b.movie(detail_path(movie['id']))
    if not isinstance(detail,dict)or detail.get('id')!=movie['id']:return reject('identity_mismatch')
+   detail=dict(detail)
+   index=getattr(b,'imdb_index',None)
+   if isinstance(index,PublicImdbIndex):index.enrich([detail])
    exclusion=production_exclusion(detail,interests=tastes.interests)
    if exclusion:
     production_rejections.add(movie['id']);return reject(exclusion)
@@ -606,7 +610,9 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   if i<len(alternative):lanes.append(alternative[i])
   for m in lanes:
    if m['id']not in seen_imdb:ordered.append(m);seen_imdb.add(m['id'])
- imdb_stats=enrich_audience(b,ordered,320 if manual else 12,eligible=lambda m:eligible_for_discovery(m)and not production_exclusion(m),good_target=min(15,budget))
+ dataset_index=getattr(b,'imdb_index',None)
+ dataset_ready=isinstance(dataset_index,PublicImdbIndex)and dataset_index.metadata()is not None
+ imdb_stats=enrich_audience(b,ordered,(40 if dataset_ready else 320)if manual else 12,eligible=lambda m:eligible_for_discovery(m)and not production_exclusion(m),good_target=min(15,budget))
  rescued=0
  for mid,m in potential.items():
   if eligible_for_discovery(m)and not production_exclusion(m):details[mid]=m;rescued+=1
@@ -625,6 +631,8 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
  evidence=[validated_imdb_metrics(e[1])for e in final[:budget]]
  evidence=[m for m in evidence if m]
  b.search_report.update(imdb_stats)
+ index=getattr(b,'imdb_index',None)
+ b.search_report.update(imdbDatasetReady=isinstance(index,PublicImdbIndex)and index.metadata()is not None,imdbDatasetResolved=sum((m.get('remoteMetrics')or{}).get('imdbSource')=='IMDb datasets'for m in details.values()),imdbDatasetIdentities=search_config['_discovery_stats'].get('imdbDatasetIdentities',0))
  critics=[validated_critics_score(e[1])for e in final[:budget]];critics=[v for v in critics if v is not None]
  b.search_report.update(imdbGenreRescued=rescued,selectedCritics70=sum(v>=70 for v in critics),selectedEstablishedGood=sum(m['rating']>=6.5 and m['votes']>=10000 for m in evidence),medianMetascore=median(critics)if critics else None,
   selectedImdb6_5=sum(m['rating']>=6.5 for m in evidence),poolImdb6_5=sum(bool(validated_imdb_metrics(m))and validated_imdb_metrics(m)['rating']>=6.5 for m in details.values()))
@@ -632,7 +640,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   medianImdbVoteCount=median([m['votes']for m in evidence])if evidence else None,
   medianImdbRating=median([m['rating']for m in evidence])if evidence else None,
   knownImdbPool10000=sum(bool(validated_imdb_metrics(m))and validated_imdb_metrics(m)['votes']>=10000 for m in details.values()))
- b.search_report.update(selection54_diagnostics(final,budget,tastes,ratings,collection))
+ b.search_report.update(selection55_diagnostics(final,budget,tastes,ratings,collection))
  if attempted and not fetched_any:raise RequestFailure('Candidate metadata unavailable; retry next run')
  if not final and (search_unavailable or metadata_failures):raise RequestFailure('Search incomplete: provider requests failed; retry the manual request')
  if len(final)<budget:print('Batch below target:',len(final),'of',budget,'after bounded search; excluded films are not used as filler.')
@@ -649,7 +657,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   if detail.get('remoteMetrics',{}).get('imdbVerified')is True:metadata['remoteMetrics'].update(detail['remoteMetrics'])
   if 'horror'in classify(detail):metadata['genre']='Ужасы'
   metadata.update(feature_metadata(detail))
-  metadata.update(recommendationSearchVersion='audience-search54',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
+  metadata.update(recommendationSearchVersion='audience-search55',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
   metadata['recommendationAudienceScore']=round(audience_production_score(detail,style_model=tastes.style_model),6)
   metadata['recommendationAudiencePriority']=round(audience_production_score(detail,style_model=tastes.style_model),6)
   metadata.update(audience_summary)
@@ -734,7 +742,7 @@ def run():
    except Exception as error:
     failures+=1;print('Private batch failed:',error_summary(error),'; existing collection retained. Retry on next run.')
   print('Profiles processed:',len(users),'failed:',failures)
-  if not failures and os.environ.get('GITHUB_ACTIONS')=='true':print('::notice title=Recommendation batch54::'+json.dumps({'added':added,'manual':manual,'profiles':len(users)},separators=(',',':')))
+  if not failures and os.environ.get('GITHUB_ACTIONS')=='true':print('::notice title=Recommendation batch55::'+json.dumps({'added':added,'manual':manual,'profiles':len(users)},separators=(',',':')))
   if failures:raise RuntimeError('Some private batches failed')
   if request_id:finish_manual_job(b,request_id,target,'completed',added)
  except Exception:

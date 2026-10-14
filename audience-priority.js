@@ -1,16 +1,16 @@
-import {validatedImdbMetrics,validatedCriticsScore} from './imdb-audience.js?v=quality54';
-export {validatedImdbMetrics} from './imdb-audience.js?v=quality54';
+import {validatedImdbMetrics,validatedCriticsScore} from './imdb-audience.js?v=quality55';
+export {validatedImdbMetrics} from './imdb-audience.js?v=quality55';
 // Match the server's audience prior; missing values are neutral, never a veto.
-import {normalizeInterests,buildStyleModel} from './interests.js?v=quality54';
-import {tasteScore,buildTasteProfile} from './taste.js?v=quality54';
-import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality54';
-import {productionPolicy,productionExclusion,styleAffinity} from './production-policy.js?v=quality54';
+import {normalizeInterests,buildStyleModel} from './interests.js?v=quality55';
+import {tasteScore,buildTasteProfile} from './taste.js?v=quality55';
+import {filmCategories,isEligibleForDiscovery} from './categories.js?v=quality55';
+import {productionPolicy,productionExclusion,styleAffinity} from './production-policy.js?v=quality55';
 export function buildSelectionProfile(films,reactions,interests){
  const profile=buildTasteProfile(films,reactions),preferences=normalizeInterests(interests),key=JSON.stringify(preferences);
  if(profile.styleKey!==key){profile.interests=preferences;profile.styleModel=buildStyleModel(films,reactions,preferences);profile.styleKey=key;}
  return profile;
 }
-export const selectionVersion='audience-first54';
+export const selectionVersion='audience-first55';
 export function isEligibleForSelection(film,interests){return isEligibleForDiscovery(film)&&!productionExclusion(film,{interests});}
 export function publicQualityTier(film){
  const rating=film.rating??film.vote_average,votes=film.vote_count??film.remoteMetrics?.voteCount;

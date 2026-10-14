@@ -289,6 +289,44 @@ def tmdb_candidates(backend, preferred, config):
     return pool
 
 
+def imdb_dataset_candidates(backend,preferred,config):
+    """Retrieve known horror independently of TMDB genre tagging and OMDb quota."""
+    from imdb_datasets import PublicImdbIndex
+    from movie_features import eligible_for_discovery
+    from production_policy import production_exclusion
+    index=getattr(backend,'imdb_index',None)
+    if not isinstance(index,PublicImdbIndex)or index.metadata()is None:raise ValueError('Optional public index unavailable')
+    now=config.get('_now')or datetime.datetime.now(datetime.timezone.utc)
+    choices=index.candidates(RULES['selection']['minimum_year'],now.year,limit=3000)
+    limit=max(1,min(240,config.get('candidate_limit',120)));bound=max(limit,min(1500,config.get('resolution_limit',1000)))
+    result=[];attempted=0
+    def fetch(entry):
+        identity=entry[0]
+        try:
+            mapping=index.mapping([identity]);mid=mapping.get(identity)
+            if mid is None:
+                data=backend.movie('find/'+identity+'?external_source=imdb_id&language=ru-RU')
+                found=data.get('movie_results')if isinstance(data,dict)else None
+                if not isinstance(found,list)or len(found)!=1:return None
+                mid=found[0].get('id')
+            if type(mid)is not int or mid<=0 or excluded(config,mid):return None
+            detail=backend.movie(detail_path(mid))
+            if not isinstance(detail,dict)or detail.get('id')!=mid or detail.get('imdb_id')!=identity:return None
+            index.record_mapping(identity,mid)
+            detail=dict(detail);index.enrich([detail])
+            if not eligible_for_discovery(detail)or production_exclusion(detail):return None
+            return detail
+        except Exception:return None
+    with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4))as executor:
+        for start in range(0,min(bound,len(choices)),40):
+            wave=choices[start:min(start+40,bound)];attempted+=len(wave)
+            result.extend(m for m in executor.map(fetch,wave)if m is not None)
+            if len(result)>=limit:break
+    stats=config.get('_discovery_stats')
+    if isinstance(stats,dict):stats['imdbDatasetIdentities']=stats.get('imdbDatasetIdentities',0)+attempted
+    return result[:limit]
+
+
 def tmdb_id_feed(backend, preferred, config):
     """Future provider bridge: HTTPS JSON {tmdb_ids: [123, ...]}.
 
@@ -346,7 +384,7 @@ def trakt_candidates(backend, preferred, config):
     return candidates
 
 
-ADAPTERS = {'tmdb_discover': tmdb_candidates, 'tmdb_id_feed': tmdb_id_feed, 'trakt': trakt_candidates, 'simkl': simkl_candidates}
+ADAPTERS = {'tmdb_discover': tmdb_candidates, 'imdb_dataset':imdb_dataset_candidates,'tmdb_id_feed': tmdb_id_feed, 'trakt': trakt_candidates, 'simkl': simkl_candidates}
 
 
 def discover(backend, preferred, config):
@@ -367,7 +405,7 @@ def discover(backend, preferred, config):
                                 ('_preferred_movie_ids',[]),('_include_similar',False),('_evidence_routes',False),
                                 ('_anchor_batch_size',6),('_preferred_keywords',[]),('_preferred_keyword_groups',[]),
                                 ('_preferred_periods',[]),('_preferred_directors',[]),('_preferred_companies',[]),
-                                ('_preferred_cast',[]),('_director_anchor_ids',{}),('_discovery_pages',{}),
+                                ('_preferred_cast',[]),('_preferred_languages',[]),('_director_anchor_ids',{}),('_discovery_pages',{}),
                                 ('_discovery_totals',{}),('_discovery_stats',{}),('_anchor_coverage',set()),
                                 ('_genre_priority',['horror','dystopian'])]:
                 options[key]=config.get(key,default)

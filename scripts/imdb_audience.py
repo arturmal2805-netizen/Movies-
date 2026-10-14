@@ -56,7 +56,9 @@ def enrich_audience(backend,movies,limit,eligible=None,good_target=15):
  groups={}
  for movie in movies:
   identity=movie.get('imdb_id')
-  if isinstance(identity,str)and ID.fullmatch(identity)and not verified_remote(movie):groups.setdefault(identity,[]).append(movie)
+  proof=verified_remote(movie);metrics=validated_imdb_metrics(movie)
+  needs_critics=bool(proof and proof.get('imdbSource')=='IMDb datasets'and metrics and metrics['rating']>=6 and validated_critics_score(movie)is None)
+  if isinstance(identity,str)and ID.fullmatch(identity)and(proof is None or needs_critics):groups.setdefault(identity,[]).append(movie)
  chosen=list(groups)[:max(0,min(320,limit))];lock=threading.Lock()
  def fetch(identity):
   with lock:
@@ -72,7 +74,12 @@ def enrich_audience(backend,movies,limit,eligible=None,good_target=15):
     if proof:
      for movie in groups[identity]:
       remote=movie.get('remoteMetrics');remote=dict(remote)if isinstance(remote,dict)else{}
-      movie['remoteMetrics']={**remote,**proof}
+      if remote.get('imdbSource')=='IMDb datasets':
+       merged={**proof,**remote}
+       if 'metascore'in proof:merged['metascore']=proof['metascore'];merged['omdbUpdatedAt']=proof['imdbUpdatedAt']
+       merged['imdbGenres']=list(dict.fromkeys(remote.get('imdbGenres',[])+proof.get('imdbGenres',[])))
+       movie['remoteMetrics']=merged
+      else:movie['remoteMetrics']={**remote,**proof}
      stats['imdbResolved']+=1
     else:stats['imdbDataRejected']+=1
   except Exception:
