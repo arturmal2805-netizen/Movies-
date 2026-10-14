@@ -292,8 +292,7 @@ def tmdb_candidates(backend, preferred, config):
 def imdb_dataset_candidates(backend,preferred,config):
     """Retrieve known horror independently of TMDB genre tagging and OMDb quota."""
     from imdb_datasets import PublicImdbIndex
-    from movie_features import eligible_for_discovery
-    from production_policy import production_exclusion
+    from candidate_policy import valid_candidate
     index=getattr(backend,'imdb_index',None)
     if not isinstance(index,PublicImdbIndex)or index.metadata()is None:raise ValueError('Optional public index unavailable')
     now=config.get('_now')or datetime.datetime.now(datetime.timezone.utc)
@@ -314,7 +313,8 @@ def imdb_dataset_candidates(backend,preferred,config):
             if not isinstance(detail,dict)or detail.get('id')!=mid or detail.get('imdb_id')!=identity:return None
             index.record_mapping(identity,mid)
             detail=dict(detail);index.enrich([detail])
-            if not eligible_for_discovery(detail)or production_exclusion(detail):return None
+            if not valid_candidate(detail,config.get('minimum_votes',100),now.date()):return None
+            if not detail.get('title')or type(detail.get('runtime'))not in(int,float)or detail['runtime']<=0:return None
             return detail
         except Exception:return None
     with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4))as executor:

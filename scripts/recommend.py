@@ -14,6 +14,7 @@ from audience_priority import audience_production_score,public_quality_score,pub
 from interests import normalize_interests,build_style_model,style_key
 from imdb_audience import enrich_audience,validated_imdb_metrics,validated_critics_score
 from imdb_datasets import PublicImdbIndex,default_path
+from candidate_policy import valid_candidate
 from production_policy import production_exclusion,POLICY,director_focus,style_affinity
 GENRES={28:'Боевик',12:'Приключения',16:'Анимация',35:'Комедия',80:'Криминал',99:'Документальный',18:'Драма',10751:'Семейный',14:'Фэнтези',36:'История',27:'Ужасы',10402:'Музыка',9648:'Детектив',10749:'Мелодрама',878:'Фантастика',10770:'Телефильм',53:'Триллер',10752:'Военный',37:'Вестерн'}
 SEARCH_GENERIC=GENERIC|{'spin off','prequel','reboot','franchise','based on short film','based on play or musical'}
@@ -93,14 +94,6 @@ def preferred_keyword_groups(ratings):
  return selected
 
 
-def valid_candidate(movie,minimum_votes,today,require_target=None,interests=None):
- if not isinstance(movie,dict) or type(movie.get('id')) is not int or movie['id']<=0:return False
- if movie.get('adult') or not movie.get('poster_path') or not eligible_for_discovery(movie,require_target=require_target) or production_exclusion(movie,interests=interests):return False
- try:
-  released=datetime.date.fromisoformat(movie.get('release_date',''))
-  count=float(movie.get('vote_count',0));rating=float(movie.get('vote_average',0));popularity=float(movie.get('popularity',0))
-  return released<=today and count>=minimum_votes and 0<=rating<=10 and all(math.isfinite(v) for v in (count,rating,popularity))
- except (ValueError,TypeError):return False
 
 def rank_candidates(candidates,ratings,collection,minimum_votes=100,now=None,preliminary=False,tastes=None):
  excluded={int(r['tmdb_id']) for r in ratings+collection}|set(IDS.values())

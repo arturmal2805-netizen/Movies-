@@ -29,6 +29,7 @@ on:
       - 'scripts/production_model.py'
       - 'scripts/imdb_audience.py'
       - 'scripts/imdb_datasets.py'
+      - 'scripts/candidate_policy.py'
       - 'scripts/test_imdb_datasets.py'
       - 'scripts/test_imdb_audience.py'
       - 'scripts/audience_priority.py'
@@ -72,7 +73,7 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
       OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
-      IMDB_DATASET_PATH: ${{ runner.temp }}/nightshift-imdb/public.db
+      IMDB_DATASET_PATH: /tmp/nightshift-imdb/public.db
     permissions:
       contents: read
     steps:
@@ -89,7 +90,7 @@ jobs:
       - uses: actions/cache/restore@v4
         id: imdb-cache
         with:
-          path: ${{ runner.temp }}/nightshift-imdb/public.db
+          path: /tmp/nightshift-imdb/public.db
           key: imdb-public-v1-${{ steps.imdb-date.outputs.date }}
           restore-keys: imdb-public-v1-
       - name: Prepare public IMDb audience and horror index
@@ -98,7 +99,7 @@ jobs:
       - uses: actions/cache/save@v4
         if: ${{ steps.imdb-cache.outputs.cache-hit != 'true' && steps.imdb-index.outputs.fresh == 'true' }}
         with:
-          path: ${{ runner.temp }}/nightshift-imdb/public.db
+          path: /tmp/nightshift-imdb/public.db
           key: imdb-public-v1-${{ steps.imdb-date.outputs.date }}
       - name: Refresh personal history for the new model
         if: ${{ github.event_name == 'push' }}
