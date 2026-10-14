@@ -35,7 +35,10 @@
       "adapter": "imdb_dataset",
       "enabled": true,
       "candidate_limit": 100,
-      "resolution_limit": 1000
+      "resolution_limit": 1000,
+      "popular_thriller_fallback": true,
+      "thriller_resolution_limit": 600,
+      "thriller_candidate_limit": 40
     }
   ],
   "discovery_workers": 4,

@@ -298,7 +298,7 @@ def imdb_dataset_candidates(backend,preferred,config):
     now=config.get('_now')or datetime.datetime.now(datetime.timezone.utc)
     choices=index.candidates(RULES['selection']['minimum_year'],now.year,limit=3000)
     limit=max(1,min(240,config.get('candidate_limit',120)));bound=max(limit,min(1500,config.get('resolution_limit',1000)))
-    result=[];attempted=0
+    result=[];attempted=0;visited=set()
     def fetch(entry):
         identity=entry[0]
         try:
@@ -319,12 +319,31 @@ def imdb_dataset_candidates(backend,preferred,config):
         except Exception:return None
     with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4))as executor:
         for start in range(0,min(bound,len(choices)),40):
-            wave=choices[start:min(start+40,bound)];attempted+=len(wave)
+            wave=choices[start:min(start+40,bound)];attempted+=len(wave);visited.update(entry[0]for entry in wave)
             result.extend(m for m in executor.map(fetch,wave)if m is not None)
             if len(result)>=limit:break
+    result=result[:limit]
+    # IMDb can tag a psychological horror only as Thriller. This route supplies
+    # established titles for canonical checking; it never admits plain thrillers.
+    from imdb_audience import validated_imdb_metrics
+    established=sum(bool(validated_imdb_metrics(m))and validated_imdb_metrics(m)['rating']>=6.5 and validated_imdb_metrics(m)['votes']>=10000 for m in result)
+    fallback=[];fallback_attempted=0
+    if config.get('popular_thriller_fallback')is True and established<15:
+        fallback_bound=max(0,min(1000,config.get('thriller_resolution_limit',600)))
+        fallback_target=max(1,min(80,config.get('thriller_candidate_limit',40)))
+        alternate=[e for e in index.candidates(RULES['selection']['minimum_year'],now.year,limit=3000,target_genre='Thriller',minimum_votes=10000)if e[0]not in visited]
+        with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4))as executor:
+            for start in range(0,min(fallback_bound,len(alternate)),40):
+                wave=alternate[start:min(start+40,fallback_bound)];fallback_attempted+=len(wave)
+                fallback.extend(m for m in executor.map(fetch,wave)if m is not None)
+                if len(fallback)>=fallback_target:break
+        fallback=fallback[:fallback_target]
     stats=config.get('_discovery_stats')
-    if isinstance(stats,dict):stats['imdbDatasetIdentities']=stats.get('imdbDatasetIdentities',0)+attempted
-    return result[:limit]
+    if isinstance(stats,dict):
+        stats['imdbDatasetIdentities']=stats.get('imdbDatasetIdentities',0)+attempted+fallback_attempted
+        stats['imdbThrillerIdentities']=stats.get('imdbThrillerIdentities',0)+fallback_attempted
+        stats['imdbThrillerResolved']=stats.get('imdbThrillerResolved',0)+len(fallback)
+    return result+fallback
 
 
 def tmdb_id_feed(backend, preferred, config):
