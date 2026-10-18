@@ -1,5 +1,5 @@
-import {hasVerifiedGenre} from './imdb-audience.js?v=quality56';
-import {categoryRules} from './category-rules.js?v=quality56';
+import {hasVerifiedGenre} from './imdb-audience.js?v=quality57';
+import {categoryRules} from './category-rules.js?v=quality57';
 export const categoryOptions = [
  ['all','✦','Все фильмы'],
  ['horror','☠','Horror'],

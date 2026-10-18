@@ -19,6 +19,11 @@ def validated_imdb_metrics(movie):
  if type(rating)not in(int,float)or not math.isfinite(rating)or not 0<rating<=10 or type(votes)not in(int,float)or not math.isfinite(votes)or not 0<votes<=10**10 or votes!=int(votes):return None
  return {'rating':rating,'votes':int(votes)}
 
+def has_established_audience(movie):
+ # Independent, canonical audience evidence can cover a sparse TMDB listing.
+ evidence=validated_imdb_metrics(movie)
+ return bool(evidence and evidence['rating']>=6.5 and evidence['votes']>=10000)
+
 def validated_critics_score(movie):
  remote=verified_remote(movie);value=remote.get('metascore')if remote else None
  return value if type(value)is int and 0<=value<=100 else None

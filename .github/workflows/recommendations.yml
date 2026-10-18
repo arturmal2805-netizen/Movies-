@@ -39,6 +39,7 @@ on:
       - 'scripts/test_interests.py'
       - 'scripts/test_recommendation_probe.py'
       - 'scripts/probe_recommendations.py'
+      - 'scripts/release_validation.py'
       - 'scripts/test_production_policy.py'
       - 'scripts/test_audience_priority.py'
       - 'scripts/test_production_model.py'
@@ -108,6 +109,7 @@ jobs:
         if: ${{ github.event_name == 'push' }}
         env:
           REQUIRE_IMDB_DATASET: 'true'
+          VALIDATE_RELEASE_RANKING: 'true'
         run: python3 scripts/probe_recommendations.py
       - name: Add private personalized films
         if: ${{ github.event_name != 'push' }}

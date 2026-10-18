@@ -104,7 +104,7 @@ class ImdbEvidenceExpansionTests(unittest.TestCase):
 
 class Popularity56Tests(unittest.TestCase):
  def test_extra_priority_rewards_confirmed_breadth_without_rewarding_poor_reviews(self):
-  from audience_priority import selection_priority_score55
+  from audience_priority import selection_priority_score55,selection_priority_score56 as selection_priority_score
   base={'popularity':5,'vote_count':500,'vote_average':6.8}
   films=[dict(base,remoteMetrics=parse_metrics(response(imdbVotes=str(v)),'tt1234567'))for v in (5000,500000)]
   delta=[selection_priority_score(m)-selection_priority_score55(m)for m in films]
@@ -113,7 +113,7 @@ class Popularity56Tests(unittest.TestCase):
    film=dict(base,remoteMetrics=parse_metrics(response(imdbRating=score,imdbVotes='500000'),'tt1234567'))
    self.assertEqual(selection_priority_score(film),selection_priority_score55(film))
  def test_unknown_audience_and_private_fit_keep_the_previous_behavior(self):
-  from audience_priority import selection_priority_score55
+  from audience_priority import selection_priority_score55,selection_priority_score56 as selection_priority_score
   base={'popularity':5,'vote_count':500,'vote_average':6.8}
   for change in ({},{'remoteMetrics':{'imdb':8,'imdbVoteCount':500000}},{'remoteMetrics':{'imdbId':'tt1234567','imdbVerified':False,'imdb':8,'imdbVoteCount':500000}}):
    film={**base,**change}

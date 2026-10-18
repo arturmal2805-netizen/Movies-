@@ -6,7 +6,7 @@ test('public reach gives a material soft priority and both metadata shapes agree
  assert.ok(audienceScore({popularity:30})-audienceScore({popularity:2})>.8);
  assert.ok(audienceScore({vote_count:20000})>audienceScore({vote_count:200}));
  assert.equal(audienceScore({remoteMetrics:{popularity:30,voteCount:2000}}),audienceScore({popularity:30,vote_count:2000}));
- assert.equal(selectionVersion,'audience-first56');
+ assert.equal(selectionVersion,'audience-first57');
 });
 test('unknown public reach is neutral and extreme data cannot drown out personal evidence',()=>{
  for(const value of [undefined,null,0,-1,NaN,Infinity,true,'100'])assert.equal(audienceScore({popularity:value,vote_count:value}),0);
@@ -65,11 +65,29 @@ test('only verified canonical IMDb audience evidence affects public recognition'
 });
 
 test('release56 rewards verified large audiences while preserving weak-review and missing-data behavior',async()=>{
- const {selectionPriorityScore55}=await import('./audience-priority.js');
+ const {selectionPriorityScore55,selectionPriorityScore56:selectionPriorityScore}=await import('./audience-priority.js');
  const base={popularity:5,vote_count:500,vote_average:6.8};
  const film=v=>({...base,remoteMetrics:{imdbId:'tt1234567',imdbVerified:true,imdb:6.8,imdbVoteCount:v}});
  const delta=v=>selectionPriorityScore(film(v))-selectionPriorityScore55(film(v));
  assert.ok(delta(500000)>delta(5000));assert.ok(delta(5000)>0);
  for(const rating of [5,6]){const m={...film(500000),remoteMetrics:{...film(500000).remoteMetrics,imdb:rating}};assert.equal(selectionPriorityScore(m),selectionPriorityScore55(m));}
  for(const change of [{},{remoteMetrics:{imdb:8,imdbVoteCount:500000}},{remoteMetrics:{imdbId:'tt1234567',imdbVerified:false,imdb:8,imdbVoteCount:500000}}])for(const fit of [-100,0,100])assert.equal(selectionPriorityScore({...base,...change},fit),selectionPriorityScore55({...base,...change},fit));
+});
+
+test('reach priority prefers corroborated public audiences without excluding the smaller fallback',async()=>{
+ const {publicRecognitionBonus,selectionPriorityScore56}=await import('./audience-priority.js');
+ const small={popularity:10,vote_count:100,vote_average:6.8},known={...small,vote_count:5000};
+ assert.ok(publicRecognitionBonus(known)>publicRecognitionBonus(small));
+ assert.ok(selectionPriorityScore(known)-selectionPriorityScore56(known)>selectionPriorityScore(small)-selectionPriorityScore56(small));
+ assert.equal(publicRecognitionBonus({...small,vote_average:6}),0);
+ assert.equal(publicRecognitionBonus({}),0);
+ assert.equal(publicRecognitionBonus({remoteMetrics:{imdbId:'tt1234567',imdbVerified:true,imdb:7,imdbVoteCount:10000}}),6);
+ assert.equal(publicRecognitionBonus({remoteMetrics:{imdbId:'tt1234567',imdbVerified:false,imdb:7,imdbVoteCount:10000}}),0);
+});
+test('availability counts existing unrated canonical films independently from new additions',async()=>{
+ const {collectionAvailability}=await import('./audience-priority.js');
+ const row=(id,votes,changes={})=>({tmdb_id:id,metadata:{id:10000000+id,tmdbId:id,title:'Film',year:2020,genreIds:[27],remoteMetrics:{voteCount:votes},...changes}});
+ const collection=[row(1,5000),row(1,5000),row(2,100),row(3,5000),row(4,5000,{originalLanguage:'ja'}),row(5,5000,{genreIds:[27,35]}),row(6,5000,{year:1999}),row(7,5000,{tmdbId:99})];
+ assert.deepEqual(collectionAvailability(collection,[{tmdb_id:3,impression:'dislike'}]),{unrated:2,established:1});
+ assert.deepEqual(collectionAvailability(collection,[{tmdb_id:1},{tmdb_id:2},{tmdb_id:3}]),{unrated:0,established:0});
 });

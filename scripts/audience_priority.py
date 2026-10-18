@@ -3,7 +3,7 @@ import math
 from production_policy import POLICY,style_affinity
 from imdb_audience import validated_imdb_metrics,validated_critics_score
 
-SELECTION_VERSION='audience-first56'
+SELECTION_VERSION='audience-first57'
 
 def public_quality_tier(movie):
     rating=movie.get('rating',movie.get('vote_average'))
@@ -13,14 +13,14 @@ def public_quality_tier(movie):
     estimate=6+(rating-6)*(votes/(votes+500))
     return 2 if estimate>=6.25 else 1 if estimate>=5.5 else 0
 
-def audience_production_score(movie,legacy=False,style_model=None,imdb_breadth_weight=None):
+def audience_production_score(movie,legacy=False,style_model=None,imdb_breadth_weight=None,recognition_weight=None):
     remote=movie.get('remoteMetrics');remote=remote if isinstance(remote,dict) else {}
     score=0 if legacy else 6*style_affinity(movie,style_model)
     for field,remote_field,weight in (('popularity','popularity',POLICY['popularity_weight']),('vote_count','voteCount',POLICY['votes_weight'])):
         raw=movie.get(field)
         if raw is None:raw=remote.get(remote_field)
         if type(raw) in (int,float) and math.isfinite(raw) and raw>0:score+=weight*math.log2(1+raw)
-    return score+imdb_audience_bonus(movie,breadth_weight=imdb_breadth_weight)+critics_bonus(movie)
+    return score+imdb_audience_bonus(movie,breadth_weight=imdb_breadth_weight)+critics_bonus(movie)+public_recognition_bonus(movie,recognition_weight)
 
 def audience_first_score(movie):
     """First sorting key, not a cutoff: trending reach plus audience breadth."""
@@ -108,4 +108,21 @@ def critics_bonus(movie):
 def selection_priority_score55(movie,personal=0.,style_model=None):
     """Same-pool reference for this release; 55 used six for IMDb breadth."""
     fit=7*math.tanh(personal/3)if type(personal)in(int,float)and math.isfinite(personal)else 0.
-    return audience_production_score(movie,legacy=True,imdb_breadth_weight=6)+10*(confidence_quality(movie)-6)+fit+6*style_affinity(movie,style_model)
+    return audience_production_score(movie,legacy=True,imdb_breadth_weight=6,recognition_weight=0)+10*(confidence_quality(movie)-6)+fit+6*style_affinity(movie,style_model)
+
+
+def public_recognition_bonus(movie,weight=None):
+    """Bounded priority for independently verified public reach; never a gate."""
+    remote=movie.get('remoteMetrics');remote=remote if isinstance(remote,dict)else{}
+    votes=movie.get('vote_count');votes=remote.get('voteCount')if votes is None else votes
+    rating=movie.get('rating',movie.get('vote_average'));supports=[]
+    if type(votes)in(int,float)and math.isfinite(votes)and votes>0 and type(rating)in(int,float)and math.isfinite(rating)and 0<rating<=10:
+        supports.append(max(0.,min(1.,(rating-6)/.5))*min(1.,votes/1000))
+    proof=validated_imdb_metrics(movie)
+    if proof:supports.append(max(0.,min(1.,(proof['rating']-6)/.5))*min(1.,proof['votes']/10000))
+    return (POLICY['audience_reach_weight']if weight is None else weight)*max(supports,default=0.)
+
+
+def selection_priority_score56(movie,personal=0.,style_model=None):
+    fit=7*math.tanh(personal/3)if type(personal)in(int,float)and math.isfinite(personal)else 0.
+    return audience_production_score(movie,legacy=True,imdb_breadth_weight=7,recognition_weight=0)+10*(confidence_quality(movie)-6)+fit+6*style_affinity(movie,style_model)

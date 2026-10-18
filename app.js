@@ -1,12 +1,12 @@
-import {normalizeInterests} from './interests.js?v=quality56';
-import {ratingSummary} from './selection-quality.js?v=quality56';
+import {normalizeInterests} from './interests.js?v=quality57';
+import {ratingSummary} from './selection-quality.js?v=quality57';
 import {installMobileFeed} from './mobile-feed.js?v=quality43';
-import {categoryOptions,filmCategories} from './categories.js?v=quality56';
-import * as initialRanking from './audience-priority.js?v=quality56';
-import {RankingReleaseMonitor} from './ranking-release.js?v=quality56';
+import {categoryOptions,filmCategories} from './categories.js?v=quality57';
+import * as initialRanking from './audience-priority.js?v=quality57';
+import {RankingReleaseMonitor} from './ranking-release.js?v=quality57';
 import {ManualRecommendations} from './manual-recommendations.js';
 import {kyivTime,recentRecommendations,nextRecommendationRun} from './time.js';
-import {ServerStore,ratingFeedbackMetadata} from './server.js?v=quality56';
+import {ServerStore,ratingFeedbackMetadata} from './server.js?v=quality57';
 import {normalizeRating,isArchived,worstRating,bestRating,neutralRating,ratingLabel} from './ratings.js?v=quality43';
 import {cardRule,sourceDefinitions,sourceState,hasCompleteMetadata} from './sources.js';
 export const films = [
@@ -29,13 +29,14 @@ const genreIds={'Фантастика':878,'Комедия':35,'Мелодрам
 films.forEach(f=>{f.tmdbId=tmdbIds[f.id];f.genreIds=[genreIds[f.genre]];f.moods=filmCategories(f);});
 const moodOptions=categoryOptions;
 if(typeof document!=='undefined'){
-let ranking=initialRanking,rankingAssetVersion='quality56';
+let ranking=initialRanking,rankingAssetVersion='quality57';
 let interests=normalizeInterests(),interestDraft=normalizeInterests(),savingInterests=false,loadingInterests=false,interestEpoch=0;
 let accountRatingRows=[],qualityWorker=null,qualityReport=null,qualityReportKey=null,lastPresentation={model:null,sort:null,tab:null,scores:new Map()};
 let recommendationRows=[],collectionSyncedAt=null,collectionSyncFailed=false;
 let mobileFeed=null;const $=id=>document.getElementById(id);const server=new ServerStore();let savingRating=false,savingCollection=false;let snapshot=null,snapshotStatus='loading',archiving=false;const posterFailures=new Set();let mood='all',savedOnly=false,saved=[],tab='discover',reactions={};try{const raw=JSON.parse(localStorage.getItem('nightshift.reactions')||'{}');if(raw&&typeof raw==='object'&&!Array.isArray(raw))reactions=Object.fromEntries(Object.entries(raw).map(([id,value])=>[id,normalizeRating(value)]).filter(([,value])=>value));}catch{}try{const raw=JSON.parse(localStorage.getItem('afterglow.saved')||'[]');if(Array.isArray(raw))saved=raw.filter(id=>films.some(f=>f.id===id));}catch{}const legacyRatings={...reactions},legacySaved=[...saved];reactions={};saved=[];let toastTimer;
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),2300);}
 function renderManualState(state){
+ const anchor=mobileFeed?.captureAnchor();
  const active=['starting','queued','running'].includes(state.status);
  document.querySelectorAll('[data-recommend]').forEach(button=>{
   button.disabled=active;button.setAttribute('aria-busy',String(active));
@@ -44,9 +45,15 @@ function renderManualState(state){
  const result=$('manual-result');result.hidden=state.status==='idle';
  const failures={github_rejected:'GitHub не принял запуск. Проверьте подключение ручного подбора.',github_unavailable:'Не удалось связаться с GitHub. Попробуйте снова.',workflow_failed:'Подбор завершился с ошибкой. Уже добавленные фильмы сохранены.'};
  result.textContent=state.connectionLost?'Связь временно прервалась. Продолжаем ждать результат.':state.status==='starting'?'Отправляем запрос на подбор…':state.status==='queued'?(state.accepted_at?'Запрос принят. Ожидаем запуск GitHub.':'Запрос отправлен. Ждём подтверждения GitHub.'):state.status==='running'?'Подбираем новые фильмы. Можно продолжать пользоваться сайтом.':state.status==='completed'?(state.syncPending?'Подбор завершён. Обновите страницу, чтобы загрузить новые фильмы.':Number(state.added_count)>0?'Подбор завершён · Добавлено +'+state.added_count:'Поиск завершён. Новых подходящих фильмов пока не найдено.'):state.status==='failed'?(failures[state.error_code]||failures.workflow_failed):state.message||'';
+ if(state.status==='completed'&&!state.syncPending&&!state.connectionLost&&Number(state.added_count)<30){
+  const available=ranking.collectionAvailability(recommendationRows,accountRatingRows,interests);
+  if(available.unrated)result.textContent=`Новых +${Number(state.added_count)||0}. В коллекции: ${available.unrated} неоценённых, с большой аудиторией — ${available.established}.`;
+ }
+
  if(/^https:\/\/github\.com\/arturmal2805-netizen\/Movies-\/actions\/runs\/\d+$/.test(state.run_url||'')){
   const link=document.createElement('a');link.href=state.run_url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Открыть запуск';result.append(' ',link);
  }
+ mobileFeed?.restoreAnchor(anchor);
 }
 const manualRecommendations=new ManualRecommendations(server,{onState:renderManualState,onComplete:async()=>{await syncAccount();toast('Подбор завершён');}});
 async function startManualRecommendations(){if(!requireAccount())return;try{await manualRecommendations.start();}catch(error){toast(error.message);}}
@@ -68,7 +75,7 @@ async function quickRate(id,impression='dislike'){
  if(savingRating||savingCollection||archiving||!requireAccount())return;
  const film=films.find(f=>f.id===id);if(!film)return;
  savingRating=true;document.querySelectorAll('[data-reject],[data-praise],[data-neutral],[data-impression]').forEach(button=>button.disabled=true);
- try{const rating=impression==='like'?bestRating():impression==='neutral'?neutralRating():worstRating();rating.presentationModel=lastPresentation.scores.has(id)?lastPresentation.model:null;rating.presentationScore=lastPresentation.scores.get(id);rating.presentationSort=lastPresentation.sort;rating.presentationTab=lastPresentation.tab;rating.uiVersion='quality56';await server.saveRating(film,rating);updateQualityRating(film,rating);reactions[id]=rating;await archiveWithAnimation(id,'archive',impression==='like'?'Самый разъёб · 10/10 · Фильм в архиве':impression==='neutral'?'Норм · 5/10 · Фильм в архиве':'Полная хуйня · 1/10 · Фильм в архиве');}
+ try{const rating=impression==='like'?bestRating():impression==='neutral'?neutralRating():worstRating();rating.presentationModel=lastPresentation.scores.has(id)?lastPresentation.model:null;rating.presentationScore=lastPresentation.scores.get(id);rating.presentationSort=lastPresentation.sort;rating.presentationTab=lastPresentation.tab;rating.uiVersion='quality57';await server.saveRating(film,rating);updateQualityRating(film,rating);reactions[id]=rating;await archiveWithAnimation(id,'archive',impression==='like'?'Самый разъёб · 10/10 · Фильм в архиве':impression==='neutral'?'Норм · 5/10 · Фильм в архиве':'Полная хуйня · 1/10 · Фильм в архиве');}
  catch(error){toast(error.message);if($('details').open)showDetails(id);}
  finally{savingRating=false;document.querySelectorAll('[data-reject],[data-praise],[data-neutral]').forEach(button=>button.disabled=false);}
 }

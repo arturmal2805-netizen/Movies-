@@ -2,6 +2,7 @@
 import datetime,math
 from movie_features import eligible_for_discovery
 from production_policy import production_exclusion
+from imdb_audience import has_established_audience
 
 def valid_candidate(movie,minimum_votes,today,require_target=None,interests=None):
  if not isinstance(movie,dict) or type(movie.get('id')) is not int or movie['id']<=0:return False
@@ -9,5 +10,5 @@ def valid_candidate(movie,minimum_votes,today,require_target=None,interests=None
  try:
   released=datetime.date.fromisoformat(movie.get('release_date',''))
   count=float(movie.get('vote_count',0));rating=float(movie.get('vote_average',0));popularity=float(movie.get('popularity',0))
-  return released<=today and count>=minimum_votes and 0<=rating<=10 and all(math.isfinite(v) for v in (count,rating,popularity))
+  return released<=today and type(movie.get('vote_count'))is not bool and count>=0 and (count>=minimum_votes or has_established_audience(movie)) and 0<=rating<=10 and all(math.isfinite(v) for v in (count,rating,popularity))
  except (ValueError,TypeError):return False

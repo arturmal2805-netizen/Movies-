@@ -111,7 +111,7 @@ class ImdbDatasetRouteBudgetTests(unittest.TestCase):
     if path.startswith('find/'):
      identity=path.split('/')[1].split('?')[0];return {'movie_results':[{'id':5000000+int(identity[2:])-1000000}]}
     mid=int(path.split('/')[1].split('?')[0]);i=mid-5000000
-    return dict(movie(mid),imdb_id='tt'+str(1000000+i),vote_count=90 if i<40 else 200)
+    return dict(movie(mid),imdb_id='tt'+str(1000000+i),vote_count=-1 if i<40 else 200)
    b.movie=api
    found=imdb_dataset_candidates(b,[],{'_now':NOW,'candidate_limit':15,'resolution_limit':80,'minimum_votes':100})
    self.assertEqual(len(found),15);self.assertTrue(all(m['id']>=5000040 for m in found))

@@ -10,7 +10,7 @@ from movie_features import profile,match_score,rejection_score,genres,keywords,d
 from import_catalog import IDS
 from synopsis_model import synopsis_score
 from production_model import production_score
-from audience_priority import audience_production_score,public_quality_score,public_quality_tier,selection_priority_score,selection_priority_score55,confidence_quality,SELECTION_VERSION
+from audience_priority import audience_production_score,public_quality_score,public_quality_tier,selection_priority_score,selection_priority_score55,selection_priority_score56,confidence_quality,SELECTION_VERSION
 from interests import normalize_interests,build_style_model,style_key
 from imdb_audience import enrich_audience,validated_imdb_metrics,validated_critics_score
 from imdb_datasets import PublicImdbIndex,default_path
@@ -143,7 +143,7 @@ def audience_votes(movie):
  if value is None:value=(movie.get('remoteMetrics')or{}).get('voteCount')if isinstance(movie.get('remoteMetrics'),dict)else None
  return value if type(value)in(int,float)and math.isfinite(value)and value>0 else 0
 
-def selection56_diagnostics(final,target,tastes,ratings,collection):
+def selection57_diagnostics(final,target,tastes,ratings,collection):
  chosen=[e[1]for e in final[:target]];pool=[e[1]for e in final]
  def previous(m):
   remote=m.get('remoteMetrics');remote=remote if isinstance(remote,dict)else{}
@@ -158,10 +158,12 @@ def selection56_diagnostics(final,target,tastes,ratings,collection):
   metrics=validated_imdb_metrics(m)
   return bool(metrics and metrics['votes']>=minimum)
  old_votes=[validated_imdb_metrics(m)['votes']for m in before55 if validated_imdb_metrics(m)]
+ before56=sorted(pool,key=lambda m:(-selection_priority_score56(m,match_score(m,tastes),tastes.style_model),-(match_score(m,tastes)+public_quality_score(m,tastes.predictive)),m['id']))[:target]
+ votes56=[validated_imdb_metrics(m)['votes']for m in before56 if validated_imdb_metrics(m)]
  rated={r['tmdb_id']for r in ratings}
  queued=[r['metadata']for r in collection if r.get('tmdb_id')not in rated and isinstance(r.get('metadata'),dict)and eligible_for_discovery(r['metadata'])and not production_exclusion(r['metadata'])]
  recent=sorted([r for r in ratings if (r.get('metadata')or{}).get('recommendationMode')in('manual','scheduled')],key=lambda r:str(r.get('updated_at')or''),reverse=True)[:30]
- return {'previous55MedianImdbVoteCount':median(old_votes)if old_votes else None,'previous55Imdb100000':sum(known(m,100000)for m in before55),'selectedImdb100000':sum(known(m,100000)for m in chosen),'selectedImdb200000':sum(known(m,200000)for m in chosen),
+ return {'previous56MedianImdbVoteCount':median(votes56)if votes56 else None,'previous56MedianVoteCount':median([audience_votes(m)for m in before56])if before56 else 0,'selectedIndependentAudience':sum(audience_votes(m)<100 and known(m,10000)for m in chosen),'previous55MedianImdbVoteCount':median(old_votes)if old_votes else None,'previous55Imdb100000':sum(known(m,100000)for m in before55),'selectedImdb100000':sum(known(m,100000)for m in chosen),'selectedImdb200000':sum(known(m,200000)for m in chosen),
          'audiencePool1000':sum(audience_votes(m)>=1000 for m in pool),
          'audiencePool3000':sum(audience_votes(m)>=3000 for m in pool),
          'selectedAudience1000':sum(audience_votes(m)>=1000 for m in chosen),
@@ -470,9 +472,11 @@ def focus_reference_ids(backend,ratings,interests=None):
     return list(dict.fromkeys(result+[r['tmdb_id'] for r in focused]))[:12]
 
 def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False):
+ b.search_report={'manual':manual,'requestedTarget':config.get('manual_batch_target',30)if manual else config['base_per_hour'],'added':0}
  slot=schedule_slot(now)
  previous=parsed_time(user.get('last_recommendation_at'))
  if not manual and previous and schedule_slot(previous)>=slot:
+  b.search_report['skipReason']='scheduled_hour_completed'
   print('Private batch skipped: this scheduled hour has already completed.')
   return 0
  uid=user['user_id'];ratings=read_rows(b,'ratings?user_id=eq.'+uid+'&select=*&order=tmdb_id');collection=read_rows(b,'collection?user_id=eq.'+uid+'&select=*&order=tmdb_id')
@@ -524,6 +528,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
  budget=config.get('manual_batch_target',30) if manual else min(max(0,hourly_limit(config,ranked)-in_slot),max(0,config['maximum_per_hour']-recent))
  if manual:print('Manual request: hourly guards bypassed; per-request target:',budget)
  if not budget:
+  b.search_report['skipReason']='hourly_budget_exhausted'
   print('Private batch skipped: scheduled-hour budget or rolling 60-minute maximum reached.')
   return 0
  production_rejections=set();detail_rejections=Counter();rejection_lock=threading.Lock();potential={}
@@ -639,7 +644,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   medianImdbVoteCount=median([m['votes']for m in evidence])if evidence else None,
   medianImdbRating=median([m['rating']for m in evidence])if evidence else None,
   knownImdbPool10000=sum(bool(validated_imdb_metrics(m))and validated_imdb_metrics(m)['votes']>=10000 for m in details.values()))
- b.search_report.update(selection56_diagnostics(final,budget,tastes,ratings,collection))
+ b.search_report.update(selection57_diagnostics(final,budget,tastes,ratings,collection))
  if attempted and not fetched_any:raise RequestFailure('Candidate metadata unavailable; retry next run')
  if not final and (search_unavailable or metadata_failures):raise RequestFailure('Search incomplete: provider requests failed; retry the manual request')
  if len(final)<budget:print('Batch below target:',len(final),'of',budget,'after bounded search; excluded films are not used as filler.')
@@ -656,7 +661,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   if detail.get('remoteMetrics',{}).get('imdbVerified')is True:metadata['remoteMetrics'].update(detail['remoteMetrics'])
   if 'horror'in classify(detail):metadata['genre']='Ужасы'
   metadata.update(feature_metadata(detail))
-  metadata.update(recommendationSearchVersion='audience-search56',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
+  metadata.update(recommendationSearchVersion='audience-search57',recommendationAnchorIds=detail.get('_liked_anchor_ids',[]),recommendationDirectorSeeds=detail.get('_liked_directors',[]),recommendationModel=tastes.model_version,recommendationScore=round(match_score(detail,tastes),6),recommendationConfidence=round(rejection_score(detail,tastes),6),recommendationTrainingCount=tastes.training_count,recommendationPositiveCount=tastes.positive_count,recommendationNegativeCount=tastes.negative_count)
   metadata['recommendationAudienceScore']=round(audience_production_score(detail,style_model=tastes.style_model),6)
   metadata['recommendationAudiencePriority']=round(audience_production_score(detail,style_model=tastes.style_model),6)
   metadata.update(audience_summary)
@@ -690,6 +695,8 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   inserted=[{}] if dry_run else b.db('collection?on_conflict=user_id,tmdb_id','POST',{'user_id':uid,'tmdb_id':detail['id'],'metadata':metadata,'reason':reason},'resolution=ignore-duplicates,return=representation')
   if inserted:added+=1
  if not manual and not dry_run:b.db('profiles?user_id=eq.'+uid,'PATCH',{'last_recommendation_at':now.isoformat()})
+ b.search_report['added']=added
+ b.search_report['shortfallReason']=None if added>=budget else 'new_candidate_pool_exhausted'if len(final)<budget else 'concurrent_insert_conflicts'
  print('Read-only candidate probe; would add:' if dry_run else 'Private recommendation batch complete; added:',added)
  return added
 def validated_uuid(value,label):
@@ -737,11 +744,13 @@ def run():
   if target and not users:raise RequestFailure('The requested user profile does not exist')
   failures=0;added=0
   for user in users:
-   try:added+=recommend_user(b,user,now,config,manual=manual,request_id=request_id or None)
+   try:
+    added+=recommend_user(b,user,now,config,manual=manual,request_id=request_id or None)
+    if os.environ.get('GITHUB_ACTIONS')=='true':print('::notice title=Candidate search57::'+json.dumps(b.search_report,separators=(',',':')))
    except Exception as error:
     failures+=1;print('Private batch failed:',error_summary(error),'; existing collection retained. Retry on next run.')
   print('Profiles processed:',len(users),'failed:',failures)
-  if not failures and os.environ.get('GITHUB_ACTIONS')=='true':print('::notice title=Recommendation batch56::'+json.dumps({'added':added,'manual':manual,'profiles':len(users)},separators=(',',':')))
+  if not failures and os.environ.get('GITHUB_ACTIONS')=='true':print('::notice title=Recommendation batch57::'+json.dumps({'added':added,'manual':manual,'profiles':len(users)},separators=(',',':')))
   if failures:raise RuntimeError('Some private batches failed')
   if request_id:finish_manual_job(b,request_id,target,'completed',added)
  except Exception:
