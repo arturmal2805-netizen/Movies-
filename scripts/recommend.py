@@ -472,7 +472,7 @@ def focus_reference_ids(backend,ratings,interests=None):
     return list(dict.fromkeys(result+[r['tmdb_id'] for r in focused]))[:12]
 
 def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False):
- b.search_report={'manual':manual,'requestedTarget':config.get('manual_batch_target',30)if manual else config['base_per_hour'],'added':0}
+ b.search_report={'manual':manual,'requestedTarget':config.get('manual_batch_target',30)if manual else config['base_per_hour'],('wouldAdd'if dry_run else'added'):0}
  slot=schedule_slot(now)
  previous=parsed_time(user.get('last_recommendation_at'))
  if not manual and previous and schedule_slot(previous)>=slot:
@@ -695,7 +695,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   inserted=[{}] if dry_run else b.db('collection?on_conflict=user_id,tmdb_id','POST',{'user_id':uid,'tmdb_id':detail['id'],'metadata':metadata,'reason':reason},'resolution=ignore-duplicates,return=representation')
   if inserted:added+=1
  if not manual and not dry_run:b.db('profiles?user_id=eq.'+uid,'PATCH',{'last_recommendation_at':now.isoformat()})
- b.search_report['added']=added
+ b.search_report['wouldAdd'if dry_run else'added']=added
  b.search_report['shortfallReason']=None if added>=budget else 'new_candidate_pool_exhausted'if len(final)<budget else 'concurrent_insert_conflicts'
  print('Read-only candidate probe; would add:' if dry_run else 'Private recommendation batch complete; added:',added)
  return added

@@ -25,6 +25,7 @@ class ReadOnlySearchTests(unittest.TestCase):
   with patch('recommend.discover',return_value=(candidates,[])):
    self.assertEqual(recommend_user(b,{'user_id':'test'},NOW,load_config(),manual=True,dry_run=True),30)
   self.assertEqual(b.collection,[]);self.assertEqual(b.patched,[])
+  self.assertEqual(b.search_report['wouldAdd'],30);self.assertNotIn('added',b.search_report)
  def test_probe_does_not_claim_validated_quantity_below_minimum(self):
   import runpy
   from pathlib import Path
