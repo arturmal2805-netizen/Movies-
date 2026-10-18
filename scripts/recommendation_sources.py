@@ -429,6 +429,13 @@ def discover(backend, preferred, config):
                 mid = movie['id']
                 if mid not in pool:
                     pool[mid] = dict(movie, discovery_sources=[])
+                elif movie.get('imdb_id')and type(movie.get('runtime'))in(int,float)and movie['runtime']>0:
+                    from imdb_audience import validated_imdb_metrics
+                    if validated_imdb_metrics(movie):
+                        # Full canonical details supersede a sparse earlier list.
+                        # Replace stale genre_ids as well; preserve discovery provenance.
+                        routes={key:value for key,value in pool[mid].items()if key.startswith('_')or key=='discovery_sources'}
+                        pool[mid]={**movie,**routes}
                 for field in ('_liked_anchor_ids','_liked_directors','_matched_theme_groups','_personal_routes'):
                     if movie.get(field):pool[mid][field]=list(dict.fromkeys(pool[mid].get(field,[])+movie[field]))
                 if movie.get('_director_alias_ids'):pool[mid].setdefault('_director_alias_ids',{}).update(movie['_director_alias_ids'])
