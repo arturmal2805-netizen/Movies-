@@ -8,10 +8,9 @@ on:
       - 'site-version.json'
       - '*.js'
       - 'style.css'
-      - 'scripts/import_catalog.py'
-      - 'scripts/simkl_source.py'
+      - 'scripts/**'
+      - 'config/recommendations.json'
       - 'config/category-rules.json'
-      - 'scripts/test_import_catalog.py'
       - '.github/workflows/catalog.yml'
   schedule:
     - cron: '17 * * * *'
