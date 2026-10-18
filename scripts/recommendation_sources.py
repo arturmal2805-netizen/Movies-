@@ -1,6 +1,8 @@
 """Discovery adapters return canonical TMDB IDs; metadata providers do not count."""
 import os
 import datetime
+import threading
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
 from simkl_source import FEED_URL, HEADERS, entries
@@ -298,7 +300,10 @@ def imdb_dataset_candidates(backend,preferred,config):
     now=config.get('_now')or datetime.datetime.now(datetime.timezone.utc)
     choices=index.candidates(RULES['selection']['minimum_year'],now.year,limit=3000)
     limit=max(1,min(240,config.get('candidate_limit',120)));bound=max(limit,min(1500,config.get('resolution_limit',1000)))
-    result=[];attempted=0
+    result=[];attempted=0;rejections=Counter();rejection_lock=threading.Lock()
+    def reject(reason):
+        with rejection_lock:rejections[reason]+=1
+        return None
     def fetch(entry):
         identity=entry[0]
         try:
@@ -306,24 +311,33 @@ def imdb_dataset_candidates(backend,preferred,config):
             if mid is None:
                 data=backend.movie('find/'+identity+'?external_source=imdb_id&language=ru-RU')
                 found=data.get('movie_results')if isinstance(data,dict)else None
-                if not isinstance(found,list)or len(found)!=1:return None
+                if not isinstance(found,list)or len(found)!=1:return reject('unresolved_identity')
                 mid=found[0].get('id')
-            if type(mid)is not int or mid<=0 or excluded(config,mid):return None
+            if type(mid)is not int or mid<=0:return reject('invalid_identity')
+            if excluded(config,mid):return reject('already_known')
             detail=backend.movie(detail_path(mid))
-            if not isinstance(detail,dict)or detail.get('id')!=mid or detail.get('imdb_id')!=identity:return None
+            if not isinstance(detail,dict)or detail.get('id')!=mid or detail.get('imdb_id')!=identity:return reject('identity_mismatch')
             index.record_mapping(identity,mid)
             detail=dict(detail);index.enrich([detail])
-            if not valid_candidate(detail,config.get('minimum_votes',100),now.date()):return None
-            if not detail.get('title')or type(detail.get('runtime'))not in(int,float)or detail['runtime']<=0:return None
+            if not valid_candidate(detail,config.get('minimum_votes',100),now.date()):
+                from imdb_audience import validated_imdb_metrics
+                evidence=validated_imdb_metrics(detail)
+                complete=bool(detail.get('title'))and type(detail.get('runtime'))in(int,float)and detail['runtime']>0
+                established=bool(evidence and evidence['rating']>=6.5 and evidence['votes']>=10000)
+                if established and complete and valid_candidate(detail,0,now.date()):return reject('established_below_tmdb_floor')
+                return reject('canonical_filters')
+            if not detail.get('title')or type(detail.get('runtime'))not in(int,float)or detail['runtime']<=0:return reject('missing_title_or_runtime')
             return detail
-        except Exception:return None
+        except Exception:return reject('provider_request_failed')
     with ThreadPoolExecutor(max_workers=config.get('discovery_workers',4))as executor:
         for start in range(0,min(bound,len(choices)),40):
             wave=choices[start:min(start+40,bound)];attempted+=len(wave)
             result.extend(m for m in executor.map(fetch,wave)if m is not None)
             if len(result)>=limit:break
     stats=config.get('_discovery_stats')
-    if isinstance(stats,dict):stats['imdbDatasetIdentities']=stats.get('imdbDatasetIdentities',0)+attempted
+    if isinstance(stats,dict):
+        stats['imdbDatasetIdentities']=stats.get('imdbDatasetIdentities',0)+attempted
+        stats['imdbSourceRejections']=dict(Counter(stats.get('imdbSourceRejections',{}))+rejections)
     return result[:limit]
 
 

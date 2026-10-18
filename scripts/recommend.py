@@ -620,7 +620,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
   rejection=production_exclusion(m)
   if rejection:detail_rejections[rejection]+=1;production_rejections.add(mid);del details[mid]
  final=rank_candidates(list(details.values()),ratings,collection,config['minimum_votes'],now,tastes=tastes)
- b.search_report={'candidateCount':len(pool),'verifiedCount':len(details),'accepted':min(budget,len(final)),
+ b.search_report={'ratingRows':len(ratings),'collectionRows':len(collection),'requestedTarget':budget,'manual':manual,'candidateCount':len(pool),'verifiedCount':len(details),'accepted':min(budget,len(final)),
   'positivePersonal':sum(match_score(e[1],tastes)>0 for e in final[:budget]),
   'styleMatches':sum(style_affinity(e[1],tastes.style_model)>0 for e in final[:budget]),
   'detailsAttempted':len(attempted),'detailRejections':dict(detail_rejections),
@@ -631,7 +631,7 @@ def recommend_user(b,user,now,config,manual=False,request_id=None,dry_run=False)
  evidence=[m for m in evidence if m]
  b.search_report.update(imdb_stats)
  index=getattr(b,'imdb_index',None)
- b.search_report.update(imdbDatasetReady=isinstance(index,PublicImdbIndex)and index.metadata()is not None,imdbDatasetResolved=sum((m.get('remoteMetrics')or{}).get('imdbSource')=='IMDb datasets'for m in details.values()),imdbDatasetIdentities=search_config['_discovery_stats'].get('imdbDatasetIdentities',0))
+ b.search_report.update(imdbDatasetReady=isinstance(index,PublicImdbIndex)and index.metadata()is not None,imdbDatasetResolved=sum((m.get('remoteMetrics')or{}).get('imdbSource')=='IMDb datasets'for m in details.values()),imdbDatasetIdentities=search_config['_discovery_stats'].get('imdbDatasetIdentities',0),imdbSourceRejections=search_config['_discovery_stats'].get('imdbSourceRejections',{}))
  critics=[validated_critics_score(e[1])for e in final[:budget]];critics=[v for v in critics if v is not None]
  b.search_report.update(imdbGenreRescued=rescued,selectedCritics70=sum(v>=70 for v in critics),selectedEstablishedGood=sum(m['rating']>=6.5 and m['votes']>=10000 for m in evidence),medianMetascore=median(critics)if critics else None,
   selectedImdb6_5=sum(m['rating']>=6.5 for m in evidence),poolImdb6_5=sum(bool(validated_imdb_metrics(m))and validated_imdb_metrics(m)['rating']>=6.5 for m in details.values()))
