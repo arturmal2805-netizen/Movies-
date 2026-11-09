@@ -1,281 +1,110 @@
-import {normalizeInterests} from './interests.js?v=quality57';
-import {ratingSummary} from './selection-quality.js?v=quality57';
-import {installMobileFeed} from './mobile-feed.js?v=quality43';
-import {categoryOptions,filmCategories} from './categories.js?v=quality57';
-import * as initialRanking from './audience-priority.js?v=quality57';
-import {RankingReleaseMonitor} from './ranking-release.js?v=quality57';
-import {ManualRecommendations} from './manual-recommendations.js';
-import {kyivTime,recentRecommendations,nextRecommendationRun} from './time.js';
-import {ServerStore,ratingFeedbackMetadata} from './server.js?v=quality57';
-import {normalizeRating,isArchived,worstRating,bestRating,neutralRating,ratingLabel} from './ratings.js?v=quality43';
-import {cardRule,sourceDefinitions,sourceState,hasCompleteMetadata} from './sources.js';
-export const films = [
-{id:1,title:'Интерстеллар',original:'Interstellar',year:2014,genre:'Фантастика',minutes:169,rating:8.7,director:'Кристофер Нолан',moods:[],symbol:'◉',colors:['#8a9a96','#263a46'],caption:'Любовь за пределами времени',description:'Когда Земля становится непригодной для жизни, команда исследователей отправляется через червоточину искать новый дом для человечества. Масштабное путешествие о времени, семье и надежде.'},
-{id:2,title:'Отель «Гранд Будапешт»',original:'The Grand Budapest Hotel',year:2014,genre:'Комедия',minutes:99,rating:8.1,director:'Уэс Андерсон',moods:[],symbol:'♜',colors:['#de998f','#733e53'],caption:'Идеальный побег от рутины',description:'Легендарный консьерж и его юный помощник оказываются в центре истории о похищенной картине и огромном наследстве. Ироничное приключение в узнаваемых пастельных декорациях.'},
-{id:3,title:'Дюна: Часть вторая',original:'Dune: Part Two',year:2024,genre:'Фантастика',minutes:166,rating:8.5,director:'Дени Вильнёв',moods:[],symbol:'☀',colors:['#d5a468','#684d34'],caption:'Судьба написана в песках',description:'Пол Атрейдес объединяется с фременами и должен сделать выбор между любовью и судьбой целой вселенной. Эпическое кино о власти, пророчествах и цене мести.'},
-{id:4,title:'Ла-Ла Ленд',original:'La La Land',year:2016,genre:'Мелодрама',minutes:128,rating:8.0,director:'Дэмьен Шазелл',moods:[],symbol:'♫',colors:['#5767ad','#27294e'],caption:'Тем, кто продолжает мечтать',description:'Актриса и джазовый музыкант встречаются в Лос-Анджелесе. Они поддерживают мечты друг друга, но успех меняет их отношения. Музыкальная история любви и выбора.'},
-{id:5,title:'Достать ножи',original:'Knives Out',year:2019,genre:'Детектив',minutes:130,rating:7.9,director:'Райан Джонсон',moods:[],symbol:'♠',colors:['#ac965a','#3d3927'],caption:'У каждого есть свой секрет',description:'После смерти известного писателя детектив Бенуа Блан изучает запутанные отношения его семьи. Остроумный детектив, в котором у каждого есть мотив.'},
-{id:6,title:'Душа',original:'Soul',year:2020,genre:'Анимация',minutes:100,rating:8.0,director:'Пит Доктер',moods:[],symbol:'✧',colors:['#72bdb7','#264a50'],caption:'Жизнь происходит прямо сейчас',description:'Джазовый пианист получает долгожданный шанс выступить на сцене, но неожиданно оказывается в мире душ. Тёплая история о поиске смысла в обычных мгновениях.'},
-{id:7,title:'Прибытие',original:'Arrival',year:2016,genre:'Фантастика',minutes:116,rating:7.9,director:'Дени Вильнёв',moods:[],symbol:'⬭',colors:['#8b9f87','#344239'],caption:'Понять — значит изменить всё',description:'Лингвист пытается установить контакт с прибывшими на Землю существами. Знакомство с их языком меняет её представление о времени и собственной жизни.'},
-{id:8,title:'Амели',original:'Amélie',year:2001,genre:'Мелодрама',minutes:122,rating:8.3,director:'Жан-Пьер Жёне',moods:[],symbol:'♥',colors:['#8d9f52','#38533a'],caption:'Маленькие чудеса большого города',description:'Застенчивая парижанка решает незаметно менять жизни окружающих к лучшему. Но чтобы найти собственное счастье, ей предстоит набраться смелости.'},
-{id:9,title:'Безумный Макс: Дорога ярости',original:'Mad Max: Fury Road',year:2015,genre:'Боевик',minutes:120,rating:8.1,director:'Джордж Миллер',moods:[],symbol:'⚡',colors:['#d89345','#65371e'],caption:'Только вперёд',description:'В постапокалиптической пустыне Макс присоединяется к Фуриосе, которая спасает пленниц жестокого правителя. Захватывающая погоня с впечатляющими практическими эффектами.'},
-{id:10,title:'Патерсон',original:'Paterson',year:2016,genre:'Драма',minutes:118,rating:7.3,director:'Джим Джармуш',moods:[],symbol:'☷',colors:['#8caaa9','#42525a'],caption:'Поэзия каждого дня',description:'Водитель автобуса пишет стихи, гуляет с собакой и слушает разговоры пассажиров. Семь тихих дней, которые помогают увидеть красоту повседневной жизни.'},
-{id:11,title:'Назад в будущее',original:'Back to the Future',year:1985,genre:'Приключения',minutes:116,rating:8.5,director:'Роберт Земекис',moods:[],symbol:'↯',colors:['#698cb4','#403069'],caption:'Твоё будущее ещё не написано',description:'Марти Макфлай случайно попадает в прошлое на машине времени и мешает знакомству собственных родителей. Теперь нужно исправить историю и вернуться домой.'},
-{id:12,title:'Перед рассветом',original:'Before Sunrise',year:1995,genre:'Мелодрама',minutes:101,rating:8.1,director:'Ричард Линклейтер',moods:[],symbol:'☾',colors:['#af857a','#514249'],caption:'Одна ночь. Тысяча разговоров.',description:'Двое незнакомцев встречаются в поезде и проводят ночь, гуляя по Вене. Фильм о неожиданной близости, разговорах и мимолётности счастливых моментов.'}
-];
-export function selectFilms({mood='all',query='',genre='',duration=0,savedOnly=false,saved=[]}={}){const q=query.trim().toLocaleLowerCase('ru');return films.filter(f=>(mood==='all'||f.moods.includes(mood))&&(!q||`${f.title} ${f.original} ${f.director}`.toLocaleLowerCase('ru').includes(q))&&(!genre||f.genre===genre)&&(!Number(duration)||f.minutes<=Number(duration))&&(!savedOnly||saved.includes(f.id)));}
-const tmdbIds={1:157336,2:120467,3:693134,4:313369,5:546554,6:508442,7:329865,8:194,9:76341,10:370755,11:105,12:76};
-const genreIds={'Фантастика':878,'Комедия':35,'Мелодрама':10749,'Детектив':9648,'Анимация':16,'Боевик':28,'Драма':18,'Приключения':12};
-films.forEach(f=>{f.tmdbId=tmdbIds[f.id];f.genreIds=[genreIds[f.genre]];f.moods=filmCategories(f);});
-const moodOptions=categoryOptions;
-if(typeof document!=='undefined'){
-let ranking=initialRanking,rankingAssetVersion='quality57';
-let interests=normalizeInterests(),interestDraft=normalizeInterests(),savingInterests=false,loadingInterests=false,interestEpoch=0;
-let accountRatingRows=[],qualityWorker=null,qualityReport=null,qualityReportKey=null,lastPresentation={model:null,sort:null,tab:null,scores:new Map()};
-let recommendationRows=[],collectionSyncedAt=null,collectionSyncFailed=false;
-let mobileFeed=null;const $=id=>document.getElementById(id);const server=new ServerStore();let savingRating=false,savingCollection=false;let snapshot=null,snapshotStatus='loading',archiving=false;const posterFailures=new Set();let mood='all',savedOnly=false,saved=[],tab='discover',reactions={};try{const raw=JSON.parse(localStorage.getItem('nightshift.reactions')||'{}');if(raw&&typeof raw==='object'&&!Array.isArray(raw))reactions=Object.fromEntries(Object.entries(raw).map(([id,value])=>[id,normalizeRating(value)]).filter(([,value])=>value));}catch{}try{const raw=JSON.parse(localStorage.getItem('afterglow.saved')||'[]');if(Array.isArray(raw))saved=raw.filter(id=>films.some(f=>f.id===id));}catch{}const legacyRatings={...reactions},legacySaved=[...saved];reactions={};saved=[];let toastTimer;
-function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),2300);}
-function renderManualState(state){
- const anchor=mobileFeed?.captureAnchor();
- const active=['starting','queued','running'].includes(state.status);
- document.querySelectorAll('[data-recommend]').forEach(button=>{
-  button.disabled=active;button.setAttribute('aria-busy',String(active));
-  button.innerHTML=active?'Подбираем… <span aria-hidden="true" class="manual-spinner">◌</span>':'Подобрать фильм <span aria-hidden="true">+</span>';
- });
- const result=$('manual-result');result.hidden=state.status==='idle';
- const failures={github_rejected:'GitHub не принял запуск. Проверьте подключение ручного подбора.',github_unavailable:'Не удалось связаться с GitHub. Попробуйте снова.',workflow_failed:'Подбор завершился с ошибкой. Уже добавленные фильмы сохранены.'};
- result.textContent=state.connectionLost?'Связь временно прервалась. Продолжаем ждать результат.':state.status==='starting'?'Отправляем запрос на подбор…':state.status==='queued'?(state.accepted_at?'Запрос принят. Ожидаем запуск GitHub.':'Запрос отправлен. Ждём подтверждения GitHub.'):state.status==='running'?'Подбираем новые фильмы. Можно продолжать пользоваться сайтом.':state.status==='completed'?(state.syncPending?'Подбор завершён. Обновите страницу, чтобы загрузить новые фильмы.':Number(state.added_count)>0?'Подбор завершён · Добавлено +'+state.added_count:'Поиск завершён. Новых подходящих фильмов пока не найдено.'):state.status==='failed'?(failures[state.error_code]||failures.workflow_failed):state.message||'';
- if(state.status==='completed'&&!state.syncPending&&!state.connectionLost&&Number(state.added_count)<30){
-  const available=ranking.collectionAvailability(recommendationRows,accountRatingRows,interests);
-  if(available.unrated)result.textContent=`Новых +${Number(state.added_count)||0}. В коллекции: ${available.unrated} неоценённых, с большой аудиторией — ${available.established}.`;
- }
-
- if(/^https:\/\/github\.com\/arturmal2805-netizen\/Movies-\/actions\/runs\/\d+$/.test(state.run_url||'')){
-  const link=document.createElement('a');link.href=state.run_url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Открыть запуск';result.append(' ',link);
- }
- mobileFeed?.restoreAnchor(anchor);
+import {STAGES,FIELDS,STORAGE_KEY,validateOrder,parseBackup,moveOrder,mergeOrders} from './model.js';
+const $=s=>document.querySelector(s),form=$('#orderForm'),dialog=$('#orderDialog'),detail=$('#detailDialog');
+let orders=[],editing=null,selected=null,dragged=null,toastTimer;
+const stageOptions=()=>STAGES.map((s,i)=>new Option(s,String(i)));
+form.elements.stage.replaceChildren(...stageOptions());
+function toast(message){$('#toast').textContent=message;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,5000);}
+let storageBroken=false;
+try{const saved=localStorage.getItem(STORAGE_KEY);if(saved)orders=parseBackup(saved);}catch{storageBroken=true;toast('Не вдалося прочитати дані. Експортуйте резервну копію або перевірте доступ до сховища браузера.');}
+function persist(next){
+ if(storageBroken){toast('Сховище недоступне або пошкоджене. Щоб не втратити дані, спершу перевірте його в налаштуваннях браузера.');return false;}
+ try{localStorage.setItem(STORAGE_KEY,JSON.stringify({version:1,orders:next}));orders=next;$('#saveState').textContent='усі зміни збережені';render();return true;}
+ catch{toast('Не вдалося зберегти зміни. Сховище браузера заповнене або недоступне.');return false;}
 }
-const manualRecommendations=new ManualRecommendations(server,{onState:renderManualState,onComplete:async()=>{await syncAccount();toast('Подбор завершён');}});
-async function startManualRecommendations(){if(!requireAccount())return;try{await manualRecommendations.start();}catch(error){toast(error.message);}}
-async function toggleSave(id){
- if(savingCollection||savingRating||archiving)return;
- const f=films.find(f=>f.id===id);if(!f||!requireAccount())return;
- const value=!saved.includes(id);savingCollection=true;
- const buttons=document.querySelectorAll(`[data-save="${id}"],#detail-save`);buttons.forEach(b=>b.disabled=true);
+function element(tag,className,text){const el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;}
+function localDate(date){return date?new Intl.DateTimeFormat('uk-UA',{day:'2-digit',month:'short',year:'numeric',timeZone:'Europe/Kyiv'}).format(new Date(date)): 'Без дати';}
+function today(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Kyiv',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
+function reference(order){return 'AL · '+order.id.slice(0,6).toUpperCase();}
+function openForm(order=null,stage=0){
+ editing=order?.id||null;form.reset();$('#dialogTitle').textContent=order?'Редагувати замовлення':'Нове замовлення';
+ for(const field of FIELDS)form.elements[field].value=order?.[field]||'';
+ form.elements.stage.value=String(order?.stage??stage);
+ $('#stepOne').hidden=false;$('#stepTwo').hidden=true;form.elements.country.required=false;
+ dialog.showModal();form.elements.name.focus();
+}
+function nextStep(){if(!form.elements.name.reportValidity())return;$('#stepOne').hidden=true;$('#stepTwo').hidden=false;form.elements.country.required=true;form.elements.country.focus();}
+$('#next').onclick=nextStep;
+$('#back').onclick=()=>{$('#stepOne').hidden=false;$('#stepTwo').hidden=true;form.elements.country.required=false;form.elements.name.focus();};
+$('#add').onclick=()=>openForm();$('#emptyAdd').onclick=()=>openForm();
+$('#close').onclick=()=>dialog.close();document.querySelectorAll('.cancel').forEach(b=>b.onclick=()=>dialog.close());
+form.addEventListener('submit',event=>{
+ event.preventDefault();if(!$('#stepOne').hidden){nextStep();return;}
+ const now=new Date().toISOString(),previous=orders.find(o=>o.id===editing),data=Object.fromEntries(new FormData(form));
  try{
-  await server.saveCollection(f,value);saved=value?[...saved,id]:saved.filter(x=>x!==id);
-  if(value&&!isArchived(reactions[id]))await archiveWithAnimation(id,'queue','Фильм добавлен · На просмотр');
-  else{render();if($('details').open)showDetails(id);}
- }catch(error){toast(error.message);buttons.forEach(b=>b.disabled=false);}
- finally{savingCollection=false;}
-}
-function requireAccount(){if(server.session)return true;toast('Войдите: оценки сохраняются на сервере.');$('details').close();openAccount();return false;}
-
-async function quickRate(id,impression='dislike'){
- if(savingRating||savingCollection||archiving||!requireAccount())return;
- const film=films.find(f=>f.id===id);if(!film)return;
- savingRating=true;document.querySelectorAll('[data-reject],[data-praise],[data-neutral],[data-impression]').forEach(button=>button.disabled=true);
- try{const rating=impression==='like'?bestRating():impression==='neutral'?neutralRating():worstRating();rating.presentationModel=lastPresentation.scores.has(id)?lastPresentation.model:null;rating.presentationScore=lastPresentation.scores.get(id);rating.presentationSort=lastPresentation.sort;rating.presentationTab=lastPresentation.tab;rating.uiVersion='quality57';await server.saveRating(film,rating);updateQualityRating(film,rating);reactions[id]=rating;await archiveWithAnimation(id,'archive',impression==='like'?'Самый разъёб · 10/10 · Фильм в архиве':impression==='neutral'?'Норм · 5/10 · Фильм в архиве':'Полная хуйня · 1/10 · Фильм в архиве');}
- catch(error){toast(error.message);if($('details').open)showDetails(id);}
- finally{savingRating=false;document.querySelectorAll('[data-reject],[data-praise],[data-neutral]').forEach(button=>button.disabled=false);}
-}
-function quickRatingButtons(id){return `<div class="quick-ratings"><button class="quick-reject" data-reject="${id}" title="Не хочу смотреть. Приоритет: 1/10. Сохранить и отправить в архив."><span aria-hidden="true">−</span> Полная хуйня</button><button class="quick-neutral" data-neutral="${id}" title="Норм. Приоритет: 5/10. Сохранить и отправить в архив."><span aria-hidden="true">≈</span> Норм</button><button class="quick-praise" data-praise="${id}" title="Хочу смотреть. Приоритет: 10/10. Сохранить и отправить в архив и избранное."><span aria-hidden="true">+</span> Самый разъёб</button></div>`;}
-function bindQuickRatings(){document.querySelectorAll('[data-reject],[data-praise],[data-neutral]').forEach(button=>button.onclick=event=>{event.stopPropagation();quickRate(Number(button.dataset.reject||button.dataset.praise||button.dataset.neutral),button.hasAttribute('data-praise')?'like':button.hasAttribute('data-neutral')?'neutral':'dislike');});}
-function ratingForm(id){const r=normalizeRating(reactions[id])||{};return `<section class="personal-rating">${quickRatingButtons(id)}<div class="rating-step"><span>01</span><div><h3>Съёмка и сюжет</h3><p>Как снято? Насколько зацепила история?</p></div></div>${[['cinematography','Съёмка','Визуал, кадры, атмосфера'],['plot','Сюжет','История, логика, развитие']].map(([key,title,hint])=>`<label class="rating-scale" for="rate-${key}"><span><strong>${title}</strong><small>${hint}</small></span><output id="out-${key}">${r[key]??'—'}<small> / 10</small></output></label><div class="glass-rating-control"><button class="rating-adjust" data-adjust="${key}" data-delta="-1" aria-label="Уменьшить оценку: ${title}">−</button><input class="rating-slider" id="rate-${key}" type="range" min="1" max="10" step="1" value="${r[key]??5}" data-set="${Boolean(r[key])}" aria-label="${title}: оценка от 1 до 10"><button class="rating-adjust" data-adjust="${key}" data-delta="1" aria-label="Увеличить оценку: ${title}">+</button></div><div class="scale-ends"><span>Слабо</span><span>Отлично</span></div>`).join('')}<div class="rating-step final-step"><span>02</span><div><h3>Общее впечатление</h3><p id="rating-prompt">Сначала оцени съёмку и сюжет, затем выбери впечатление.</p></div></div><div class="impression-buttons">${[['dislike','Хуета','−'],['neutral','Норм','≈'],['like','Кайф','✦']].map(([value,label,icon])=>`<button class="impression ${r.impression===value?'selected':''}" data-impression="${value}" aria-pressed="${r.impression===value}" ${r.cinematography&&r.plot?'':'disabled'}><span>${icon}</span>${label}</button>`).join('')}</div><p class="rating-saved">${r.ratedAt?'Оценка сохранена. Можно изменить её в любой момент.':'Выбор впечатления сохранит оценку на сервере и отправит фильм в архив.'}</p>${reactions[id]?'<button id="remove-rating" class="reset">Убрать мою оценку</button>':''}</section>`;}
-function bindRating(id){bindQuickRatings();function update(){for(const key of ['cinematography','plot']){$('rate-'+key).style.setProperty('--rating-fill',((Number($('rate-'+key).value)-1)/9*100)+'%');$('rate-'+key).setAttribute('aria-valuetext',$('rate-'+key).dataset.set==='true'?$('rate-'+key).value+' из 10':'Оценка ещё не выбрана');document.querySelectorAll(`[data-adjust="${key}"]`).forEach(button=>button.disabled=Number(button.dataset.delta)<0?Number($('rate-'+key).value)<=1:Number($('rate-'+key).value)>=10);$('out-'+key).innerHTML=($('rate-'+key).dataset.set==='true'?$('rate-'+key).value:'—')+'<small> / 10</small>';}const ready=['cinematography','plot'].every(key=>$('rate-'+key).dataset.set==='true');document.querySelectorAll('[data-impression]').forEach(b=>b.disabled=!ready);$('rating-prompt').textContent=ready?'Выбери впечатление — и оценка сохранится.':'Сначала оцени съёмку и сюжет, затем выбери впечатление.';}
- for(const key of ['cinematography','plot']){$('rate-'+key).oninput=()=>{$('rate-'+key).dataset.set='true';update();};$('rate-'+key).onclick=()=>{$('rate-'+key).dataset.set='true';update();};}
- document.querySelectorAll('[data-adjust]').forEach(button=>button.onclick=()=>{const input=$('rate-'+button.dataset.adjust);input.value=Math.max(1,Math.min(10,Number(input.value)+Number(button.dataset.delta)));input.dispatchEvent(new Event('input',{bubbles:true}));});
- document.querySelectorAll('[data-impression]').forEach(b=>b.onclick=async()=>{if(b.disabled||archiving||savingRating||savingCollection)return;if(!requireAccount())return;
- const r={feedbackStage:'watched',cinematography:Number($('rate-cinematography').value),plot:Number($('rate-plot').value),impression:b.dataset.impression,ratedAt:new Date().toISOString()};
- savingRating=true;document.querySelectorAll('[data-impression]').forEach(button=>button.disabled=true);$('rating-prompt').textContent='Сохраняем на сервере…';
- try{await server.saveRating(films.find(f=>f.id===id),r);updateQualityRating(films.find(f=>f.id===id),r);reactions[id]=r;await archiveWithAnimation(id);}catch(error){toast(error.message);if($('details').open)update();}finally{savingRating=false;}
- });
- if($('remove-rating'))$('remove-rating').onclick=async()=>{if(!requireAccount())return;try{await server.deleteRating(films.find(f=>f.id===id));accountRatingRows=accountRatingRows.filter(row=>row.tmdb_id!==films.find(f=>f.id===id)?.tmdbId);qualityReport=null;delete reactions[id];render();showDetails(id);toast('Оценка удалена с сервера');}catch(error){toast(error.message);}};update();}
-async function archiveWithAnimation(id,destination='archive',message='Оценка сохранена · Фильм в архиве'){
- archiving=true;
- const dialog=$('details');
- const poster=document.querySelector(`[data-detail="${id}"]`);
- const target=document.querySelector(`[data-tab="${destination}"]`);
- const card=poster?.closest('.film');
- const mobile=matchMedia('(max-width:600px)').matches;
- const nextId=card?.nextElementSibling?.querySelector('[data-detail]')?.dataset.detail||card?.previousElementSibling?.querySelector('[data-detail]')?.dataset.detail;
- const inFeed=mobile&&card&&card.getBoundingClientRect().top<innerHeight&&card.getBoundingClientRect().bottom>0;
- let ghost;
- document.querySelectorAll('[data-impression]').forEach(button=>button.disabled=true);
- try{
-  if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
-   if(dialog.open)await dialog.animate([{opacity:1,transform:'scale(1)'},{opacity:0,transform:'scale(.96) translateY(10px)'}],{duration:160,easing:'ease-in',fill:'forwards'}).finished;
-   dialog.close();dialog.getAnimations().forEach(animation=>animation.cancel());
-   if(inFeed){await card.animate([{opacity:1,transform:'translateY(0) scale(1)'},{opacity:0,transform:'translateY(-45px) scale(.96)'}],{duration:280,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'}).finished;}
-   else if(poster&&target){
-    const from=poster.getBoundingClientRect(),to=target.getBoundingClientRect();
-    if(from.bottom>0&&from.top<innerHeight){
-     ghost=poster.cloneNode(true);ghost.removeAttribute('data-detail');ghost.removeAttribute('tabindex');ghost.removeAttribute('role');ghost.setAttribute('aria-hidden','true');ghost.querySelectorAll('button').forEach(button=>button.remove());
-     Object.assign(ghost.style,{position:'fixed',left:from.left+'px',top:from.top+'px',width:from.width+'px',height:from.height+'px',margin:'0',zIndex:'1000',pointerEvents:'none'});document.body.append(ghost);
-     const dx=to.left+to.width/2-from.left-from.width/2,dy=to.top+to.height/2-from.top-from.height/2;
-     card?.animate([{opacity:1,transform:'scale(1)'},{opacity:0,transform:'scale(.92)'}],{duration:350,fill:'forwards'});
-     await ghost.animate([{transform:'translate(0,0) scale(1)',opacity:.9,filter:'blur(0px)'},{transform:`translate(${dx*.55}px,${dy*.45-35}px) scale(.45) rotate(-5deg)`,opacity:.8,offset:.55},{transform:`translate(${dx}px,${dy}px) scale(.07) rotate(0deg)`,opacity:0,filter:'blur(3px)'}],{duration:650,easing:'cubic-bezier(.3,.05,.2,1)',fill:'forwards'}).finished;
-    }
-   }
-  }
- }catch{/* Cancelling an animation must not undo a confirmed server save. */}
- finally{
-  ghost?.remove();dialog.close();dialog.getAnimations().forEach(animation=>animation.cancel());archiving=false;render();
-  const archive=document.querySelector(`[data-tab="${destination}"]`);
-  if(!matchMedia('(prefers-reduced-motion: reduce)').matches)archive?.animate([{boxShadow:'0 0 0 0 #a7c8ff00'},{boxShadow:'0 0 0 5px #a7c8ff45',color:'#dceaff'},{boxShadow:'0 0 0 9px #a7c8ff00'}],{duration:550});
-  toast(message);
-  const next=inFeed&&nextId?document.querySelector(`[data-detail="${nextId}"]`):null;
-  if(next){next.closest('.film').scrollIntoView({block:'start',behavior:'instant'});}
-  (next||document.querySelector('[data-detail]')||archive)?.focus({preventScroll:true});
- }
-}
-function current(){let list=selectFilms({mood,query:$('search').value,genre:$('genre').value,duration:$('duration').value,savedOnly:tab==='queue',saved});if(tab==='discover')list=list.filter(f=>ranking.isEligibleForSelection(f,interests));list=list.filter(f=>tab==='favorites'?normalizeRating(reactions[f.id])?.impression==='like':tab==='archive'?isArchived(reactions[f.id]):!isArchived(reactions[f.id])&&(tab!=='discover'||!saved.includes(f.id)));if($('complete-only').checked)list=list.filter(f=>hasCompleteMetadata((snapshot?.films?.[f.id]||f.remoteMetrics)||{}));const sorting=$('sort').value;lastPresentation={model:null,sort:sorting,tab,scores:new Map(list.map(f=>[f.id,null]))};if(sorting==='year')return list.sort((a,b)=>b.year-a.year);if(sorting==='rating')return list.sort((a,b)=>b.rating-a.rating);const profile=ranking.buildSelectionProfile(films,reactions,interests),scores=new Map(list.map(f=>[f.id,ranking.selectionScore(f,profile)])),secondary=new Map(list.map(f=>[f.id,ranking.selectionSecondaryScore(f,profile)]));lastPresentation={model:ranking.selectionVersion+' / '+profile.modelVersion,sort:sorting,tab,scores};return list.sort((a,b)=>ranking.compareSelection(a,b,profile,scores,secondary));}
-function showDetails(id){const f=films.find(f=>f.id===id);$('detail-content').innerHTML=`<div class="eyebrow">${f.original} · ${f.year}</div><h2>${f.title}</h2><div class="detail-meta">★ ${f.rating.toFixed(1)} · ${f.genre} · ${f.minutes} мин.</div>${metrics(f)}<p>${f.description}</p><p>Режиссёр: ${f.director}</p>${ratingForm(id)}<button class="primary" id="detail-save">${saved.includes(id)?'✓ В моём списке — убрать':'+ Посмотреть позже'}</button><p style="font-size:10px">Ваши оценки сохраняются на сервере после входа. Данные IMDb обновляются через импорт OMDb; просмотр фильмов на сайте не предоставляется.</p>`;$('detail-save').onclick=()=>toggleSave(id);bindRating(id);if(!$('details').open)$('details').showModal();}
-
-function render(){renderHourlyStatus();if(archiving)return;if(mobileFeed?.deferRender(render))return;const anchor=mobileFeed?.captureAnchor();const list=current();$('count').textContent=saved.length;$('section-title').textContent=({discover:'Подобрать фильм',queue:'На просмотр',favorites:'Избранное',archive:'Архив'})[tab];$('tabs').innerHTML=[['discover','Подбор'],['queue','На просмотр'],['favorites','Избранное'],['archive','Архив']].map(([v,t])=>`<button class="tab ${tab===v?'active':''}" data-tab="${v}" aria-pressed="${tab===v}">${t}</button>`).join('');document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render();});const rated=Object.values(reactions).filter(r=>['like','neutral','dislike'].includes(normalizeRating(r)?.impression)).length;$('taste-summary').textContent=rated?`Оценок: ${rated}. Приоритет: популярность и размер аудитории. Основной поиск — хорроры; твои оценки и атмосфера уточняют подбор. Без хоррор-комедий.`:'Оцени несколько фильмов — и начнём узнавать твой вкус.';$('saved').style.color=savedOnly?'var(--accent)':'';$('result-count').textContent=`Найдено фильмов: ${list.length}`;$('empty').hidden=list.length>0;$('films').innerHTML=list.map(f=>`<article class="film"><div class="poster" style="--c1:${f.colors[0]};--c2:${f.colors[1]}" data-detail="${f.id}" tabindex="0" role="button" aria-label="Подробнее: ${f.title}"><span class="rating">${f.ratingSource==='TMDB'&&!f.remoteMetrics?.imdb?'TMDB':'IMDb'} ${((snapshot?.films?.[f.id]||f.remoteMetrics)?.imdb??f.rating).toFixed(1)}${(snapshot?.films?.[f.id]||f.remoteMetrics)?.imdb?'':' *'}</span><button class="save ${saved.includes(f.id)?'selected':''}" data-save="${f.id}" aria-label="${saved.includes(f.id)?'Убрать из списка':'Сохранить'}: ${f.title}" aria-pressed="${saved.includes(f.id)}">${saved.includes(f.id)?'✓':'+'}</button>${(snapshot?.films?.[f.id]||f.remoteMetrics)?.poster&&!posterFailures.has(f.id)?`<img class="poster-image" src="${(snapshot?.films?.[f.id]||f.remoteMetrics).poster}" alt="Постер: ${f.title}" loading="lazy" data-poster="${f.id}">`:`<span class="poster-art">${f.symbol}</span><span class="poster-missing">Фото пока не импортировано</span>`}<div class="poster-title">${f.original}<span class="poster-caption">${f.caption}</span></div></div><h3>${f.title}</h3><p>${f.year} · ${f.genre} · ${f.minutes} мин.</p>${metrics(f)}<p class="film-description">${f.description}</p>${f.recommendationReason?`<p class="recommendation-reason">✧ ${f.recommendationReason}</p>`:''}${!isArchived(reactions[f.id])?quickRatingButtons(f.id):''}${reactions[f.id]?`<p class="my-rating">${reactions[f.id].feedbackStage==='interest'?'Мой интерес':'Моя оценка'}: ${ratingLabel(reactions[f.id])}${reactions[f.id].cinematography?` · Съёмка ${reactions[f.id].cinematography}/10 · Сюжет ${reactions[f.id].plot}/10`: ''}</p>`:''}${f.moods.length?`<span class="tag">${f.moods.map(id=>moodOptions.find(m=>m[0]===id)?.[2]).filter(Boolean).join(" · ")}</span>`:""}</article>`).join('');document.querySelectorAll('[data-poster]').forEach(img=>img.onerror=()=>{img.onerror=null;posterFailures.add(Number(img.dataset.poster));const poster=img.closest('.poster');img.style.display='none';img.classList.remove('poster-image');const missing=document.createElement('span');missing.className='poster-missing';missing.textContent='Фото пока не импортировано';poster.append(missing);});bindQuickRatings();document.querySelectorAll('[data-save]').forEach(b=>b.onclick=e=>{e.stopPropagation();toggleSave(Number(b.dataset.save));});document.querySelectorAll('[data-detail]').forEach(b=>{b.onclick=()=>showDetails(Number(b.dataset.detail));b.onkeydown=e=>{if(e.target===b&&['Enter',' '].includes(e.key)){e.preventDefault();showDetails(Number(b.dataset.detail));}};});document.querySelectorAll('[data-mood]').forEach(b=>{b.classList.toggle('active',b.dataset.mood===mood);b.setAttribute('aria-pressed',String(b.dataset.mood===mood));});mobileFeed?.restoreAnchor(anchor);}
-$('moods').innerHTML=moodOptions.map(([id,icon,title])=>`<button class="mood" data-mood="${id}">${icon} &nbsp; ${title}</button>`).join('');document.querySelectorAll('[data-mood]').forEach(b=>b.onclick=()=>{mood=b.dataset.mood;render();});[...new Set(films.map(f=>f.genre))].sort().forEach(g=>{const o=document.createElement('option');o.value=g;o.textContent=g;$('genre').append(o);});['search','genre','duration','sort','complete-only'].forEach(id=>$(id).addEventListener(id==='search'?'input':'change',render));$('reset').onclick=()=>{mood='all';$('search').value='';$('genre').value='';$('duration').value='0';$('complete-only').checked=false;render();};$('saved').onclick=()=>{tab=tab==='queue'?'discover':'queue';savedOnly=tab==='queue';render();$('discover').scrollIntoView({behavior:'smooth'});};document.querySelectorAll('[data-recommend]').forEach(button=>button.onclick=startManualRecommendations);$('clear-taste').onclick=async()=>{if(!requireAccount())return;if(!confirm('Удалить все ваши оценки с сервера?'))return;try{await server.clearRatings();accountRatingRows=[];qualityReport=null;qualityWorker?.terminate();qualityWorker=null;reactions={};render();toast('Серверные оценки сброшены');}catch(error){toast(error.message);}};$('close').onclick=()=>$('details').close();$('details').addEventListener('click',e=>{if(e.target===$('details')){const r=$('details').getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)$('details').close();}});render();
-function metrics(f){const data=(snapshot?.films?.[f.id]||f.remoteMetrics)||{};return `<div class="card-metrics"><div><span>IMDb score</span><strong>${(data.imdb??(f.ratingSource==='TMDB'?null:f.rating))?.toFixed(1)??'—'}<small>${data.imdb?' / 10':' *'}</small></strong></div><div><span>Popularity · TMDB</span><strong>${Number.isFinite(data.popularity)?data.popularity.toFixed(1):'—'}</strong></div></div><p class="metadata-note">${data.imdb?'IMDb · OMDb':f.ratingSource==='TMDB'?'IMDb пока не импортирован':'* IMDb: ручная оценка'}${data.tmdbUpdatedAt?' · Обновлено '+new Date(data.tmdbUpdatedAt).toLocaleDateString('ru'): ' · Импорт не подключён'}</p>`;}
-function renderSources(){const labels={local:'Встроен',scheduled:'Ожидает подтверждения',not_connected:'Не подключён',ok:'Импорт успешен',degraded:'Частичный сбой',error:'Ошибка импорта',stale:'Данные устарели'};$('sources-check').textContent=snapshotStatus==='error'?'Снимок обновлений недоступен. Используется встроенный каталог.':snapshot?.checkedAt?'Последняя попытка импорта: '+kyivTime(snapshot.checkedAt)+' · Киев':'Внешний импорт ещё не запускался. Используется локальный каталог.';$('source-list').innerHTML=sourceDefinitions.map(base=>{const s=sourceState(base.id,snapshot,Date.now(),recommendationRows);return `<section class="source-row"><div class="source-heading"><strong>${s.url?`<a href="${s.url}" target="_blank" rel="noopener noreferrer">${s.name}</a>`:s.name}</strong><span class="source-status ${s.status}">${['trakt','simkl'].includes(s.id)&&s.status==='ok'?'Подключён':labels[s.status]||'Не проверен'}</span></div><p>${s.purpose}</p><small>${['trakt','simkl'].includes(s.id)?s.note:s.status==='not_connected'||s.status==='local'||s.status==='scheduled'?s.note:s.status==='ok'?'Последний импорт завершён. Это не гарантия доступности сейчас.':'Импорт требует внимания; сохранённые данные не удалены.'}</small>${s.lastSuccess?`<small>Последний успех: ${kyivTime(s.lastSuccess)+' · Киев'}</small>`:''}</section>`;}).join('');}
-$('card-rule-text').textContent=cardRule;
-$('sources-open').onclick=()=>{renderSources();$('sources-dialog').showModal();};$('sources-close').onclick=()=>$('sources-dialog').close();
-async function loadSnapshot(){try{const response=await fetch('data/catalog.json',{cache:'no-store',signal:AbortSignal.timeout(10000)});if(!response.ok)throw new Error();const data=await response.json();if(data.schemaVersion!==1||!data.films||!data.sources)throw new Error();snapshot=data;snapshotStatus='ok';}catch{snapshotStatus='error';}render();if($('sources-dialog').open)renderSources();}
-mobileFeed=installMobileFeed($('films'));initializeAccount();loadSnapshot();setInterval(loadSnapshot,5*60*1000);
-
-const rankingReleases=new RankingReleaseMonitor({
- version:rankingAssetVersion,
- fetchManifest:async()=>{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);try{const response=await fetch(new URL('./site-version.json?release='+Date.now(),import.meta.url),{cache:'no-store',credentials:'omit',signal:controller.signal});if(!response.ok)throw new Error('Unavailable release');return await response.json();}finally{clearTimeout(timer);}},
- loadRanking:version=>import('./audience-priority.js?v='+version+'&release='+Date.now()),
- canApply:()=>!document.hidden&&!archiving&&!savingRating&&!savingCollection&&!savingInterests&&!document.querySelector('dialog[open]')&&!document.activeElement?.matches('input,textarea,select'),
- onUpdate:(next,version)=>{ranking=next;rankingAssetVersion=version;qualityWorker?.terminate();qualityWorker=null;qualityReport=null;qualityReportKey=null;render();startQualityCheck();renderQuality();toast('Подбор обновлён.');}
+  let order=validateOrder({...data,id:previous?.id||crypto.randomUUID(),stage:previous?.stage??Number(data.stage),createdAt:previous?.createdAt||now,updatedAt:now,history:previous?.history||[{stage:Number(data.stage),at:now}]});
+  order=moveOrder(order,Number(data.stage),now);
+  if(persist(previous?orders.map(o=>o.id===order.id?order:o):[order,...orders])){dialog.close();toast(previous?'Зміни збережено':'Папку замовлення створено');}
+ }catch(error){toast(error.message);}
 });
-setInterval(()=>{if(!document.hidden)rankingReleases.check();},60000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)rankingReleases.check();});
-window.addEventListener('pageshow',()=>rankingReleases.check());
-rankingReleases.check();
-
-function escapeText(text){return String(text).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
-function safeMovie(raw){if(!raw||!Number.isInteger(raw.id)||!Number.isInteger(raw.tmdbId)||!raw.title)return null;const f={...raw};for(const k of ['title','original','genre','director','caption','description','recommendationReason'])f[k]=escapeText(f[k]||'');f.colors=['#4c6478','#263443'];f.symbol='✦';f.genreIds=Array.isArray(raw.genreIds)?raw.genreIds.filter(Number.isInteger):[];f.moods=filmCategories(f);f.rating=Number.isFinite(raw.rating)?raw.rating:0;f.remoteMetrics={...raw.remoteMetrics};if(!/^https:\/\/image\.tmdb\.org\/t\/p\//.test(f.remoteMetrics.poster||''))delete f.remoteMetrics.poster;return f;}
-async function syncAccount(){let rows,collection;
- const preferenceEpoch=interestEpoch;try{const loaded=await server.loadInterests();if(preferenceEpoch===interestEpoch&&!savingInterests)interests=loaded;}catch{if($('interests-dialog').open)$('interest-status').textContent='Интересы пока не загрузились. Повторите открытие вкладки.';}
-try{[rows,collection]=await server.load();}catch(error){collectionSyncFailed=true;renderHourlyStatus();throw error;}accountRatingRows=rows;qualityReport=null;qualityReportKey=null;recommendationRows=collection;collectionSyncedAt=Date.now();collectionSyncFailed=false;reactions={};saved=[];films.splice(12);for(const row of [...collection,...rows]){if(!films.some(f=>f.tmdbId===row.tmdb_id)){const f=safeMovie(row.metadata);if(f)films.push(f);}}for(const row of rows){const f=films.find(f=>f.tmdbId===row.tmdb_id);if(f)reactions[f.id]={cinematography:row.cinematography,plot:row.plot,impression:row.impression,ratedAt:row.updated_at,feedbackStage:row.metadata?.ratingFeedbackStage||'unknown',interestLevel:row.metadata?.ratingInterestLevel};}for(const row of collection){const f=films.find(f=>f.tmdbId===row.tmdb_id);if(f&&row.saved)saved.push(f.id);}for(const g of new Set(films.map(f=>f.genre))){if(![...$('genre').options].some(o=>o.value===g)){const o=document.createElement('option');o.value=g;o.textContent=g;$('genre').append(o);}}render();renderAccount();if($('account-dialog').open)startQualityCheck();if($('sources-dialog').open)renderSources();}
-function renderHourlyStatus(){
- const now=Date.now();$('kyiv-clock').textContent=kyivTime(now,false)+' · Киев';$('kyiv-clock').dateTime=new Date(now).toISOString();
- const next=nextRecommendationRun(now);
- document.querySelector('.hourly-schedule').textContent='Следующий подбор ~'+kyivTime(next,false);
- document.querySelector('.hourly-schedule').title='Плановый запуск: '+kyivTime(next)+' · Киев. GitHub может задержать запуск.';
- const status=$('hourly-added');
- if(!server.session){status.textContent='Войдите, чтобы видеть пополнения';status.title='Личные рекомендации сохраняются в серверной коллекции';return;}
- if(collectionSyncedAt===null){status.textContent=collectionSyncFailed?'Пополнения недоступны · повторим проверку':'Проверяем пополнения…';return;}
- const {count,latest}=recentRecommendations(recommendationRows,now);
- const ending=new Intl.PluralRules('ru').select(count);const word=ending==='one'?'фильм':ending==='few'?'фильма':'фильмов';
- status.textContent=`За последний час: +${count} ${word}${latest?' · Добавлено в '+kyivTime(latest,false):' · Пополнений ещё не было'}${collectionSyncFailed?' · данные не обновлены':''}`;
- status.title=`Следующий плановый подбор: ${kyivTime(next)} · Киев. Персональный подбор за последние 60 минут. Синхронизация: ${kyivTime(collectionSyncedAt)} · Киев.${latest?' Последнее добавление: '+kyivTime(latest)+' · Киев.':''}`;
+function changeStage(id,stage){
+ const order=orders.find(o=>o.id===id);if(!order||order.stage===stage)return;
+ try{if(persist(orders.map(o=>o.id===id?moveOrder(o,stage):o))){toast('Етап: '+STAGES[stage]);if(detail.open)showDetail(id,false);}}catch(error){toast(error.message);}
 }
-setInterval(renderHourlyStatus,30*1000);
-const qualityPercent=value=>value===null?'—':new Intl.NumberFormat('ru',{style:'percent',maximumFractionDigits:1}).format(value);
-function updateQualityRating(film,rating){
- accountRatingRows=accountRatingRows.filter(row=>row.tmdb_id!==film.tmdbId);
- accountRatingRows.push({tmdb_id:film.tmdbId,metadata:{...film,...ratingFeedbackMetadata(rating)},impression:rating.impression,plot:rating.plot,cinematography:rating.cinematography,updated_at:rating.ratedAt});
- qualityReport=null;qualityWorker?.terminate();qualityWorker=null;
+function makeCard(order){
+ const card=element('article','card');card.draggable=true;card.dataset.id=order.id;
+ const open=element('button','card-open');open.type='button';open.setAttribute('aria-label','Відкрити папку '+order.name);
+ const ref=element('div','card-reference');ref.append(element('span','folder-icon','▱'),element('span','',reference(order)));
+ open.append(ref,element('h3','',order.name),element('span','country-tag',order.country));
+ open.append(element('div','card-route',(order.manufacturer||'Виробник')+' → Київ'));
+ const bottom=element('div','card-bottom');
+ const late=order.eta&&order.eta<today()&&order.stage!==6;
+ bottom.append(element('span',late?'late':'',order.eta?localDate(order.eta+'T12:00:00Z'):'Без дати'));
+ bottom.append(element('span','',order.carrier?'↗ '+order.carrier:'Перевізник не вказаний'));
+ open.append(bottom);open.onclick=()=>showDetail(order.id);
+ const stage=document.createElement('select');stage.className='card-stage';stage.setAttribute('aria-label','Етап замовлення '+order.name);stage.replaceChildren(...stageOptions());stage.value=String(order.stage);stage.onchange=()=>changeStage(order.id,Number(stage.value));
+ card.append(open,stage);
+ card.addEventListener('dragstart',e=>{if(e.target.closest('select')){e.preventDefault();return;}dragged=order.id;e.dataTransfer.setData('text/plain',order.id);e.dataTransfer.effectAllowed='move';card.classList.add('dragging');});
+ card.addEventListener('dragend',()=>{dragged=null;card.classList.remove('dragging');document.querySelectorAll('.drag-over').forEach(c=>c.classList.remove('drag-over'));});
+ return card;
 }
-function renderQuality(){
- const logged=Boolean(server.session);$('selection-quality').hidden=!logged;
- if(!logged){accountRatingRows=[];qualityReport=null;qualityReportKey=null;qualityWorker?.terminate();qualityWorker=null;return;}
- const {all,recommended,latest}=ratingSummary(accountRatingRows);
- $('quality-value').textContent=qualityPercent(recommended.precision);
- $('quality-counts').textContent=`Рекомендации: ${recommended.like} хороших · ${recommended.dislike} плохих · ${recommended.neutral} нейтральных`;
- $('quality-latest').textContent=`Последние ${latest.total} оценённых рекомендаций: ${qualityPercent(latest.precision)} · ${latest.like} хороших / ${latest.dislike} плохих / ${latest.neutral} нейтральных.`;
- $('quality-all').textContent=`Все оценки: ${all.total} · ${all.like} хороших / ${all.dislike} плохих / ${all.neutral} нейтральных / ${all.watched} просмотрено. Доля хороших: ${qualityPercent(all.precision)}.`;
- if(!qualityReport){$('quality-comparison').textContent=accountRatingRows.length?'Проверяем на более поздних оценках…':'Пока нет оценок для проверки.';$('quality-evidence').textContent='';return;}
- if(qualityReport.status!=='evaluated'){$('quality-comparison').textContent=qualityReport.status==='error'?'Проверка временно недоступна.':'Пока недостаточно оценок с датами для проверки.';return;}
- if(!qualityReport.positives){
-  $('quality-comparison').textContent=`В проверочной выборке: 0 понравившихся из ${qualityReport.tested}.`;
-  $('quality-evidence').textContent='В ней пока нет хороших примеров, поэтому улучшение порядка рекомендаций оценить нельзя. Фактические результаты последних рекомендаций показаны выше.';return;
- }
- const {before,after}=qualityReport;
- $('quality-comparison').textContent=`В первых 30 — по популярности: ${qualityPercent(before.precision)} (${before.liked}/${before.accepted}) → с персонализацией: ${qualityPercent(after.precision)} (${after.liked}/${after.accepted}). В первых 10: ${before.likes_at_10} → ${after.likes_at_10} понравившихся.`;
- $('quality-evidence').textContent=`Проверка на ${qualityReport.tested} более поздних фильмах, понравились ${qualityReport.positives}. Сравниваем популярность без персонализации и текущий подбор на одинаковой выборке прошлых оценок; это не результат новой живой подборки.${qualityReport.positives<10?' Хороших примеров мало — результат предварительный.':''}`;
+function render(){
+ $('#total').textContent=orders.length;$('#navCount').textContent=orders.length;
+ $('#transit').textContent=orders.filter(o=>[1,2,3].includes(o.stage)).length;
+ $('#customs').textContent=orders.filter(o=>[4,5].includes(o.stage)).length;
+ $('#delivered').textContent=orders.filter(o=>o.stage===6).length;
+ const filter=$('#countryFilter'),country=filter.value;
+ filter.replaceChildren(new Option('Усі країни',''),...[...new Set(orders.map(o=>o.country))].sort((a,b)=>a.localeCompare(b,'uk')).map(c=>new Option(c,c)));
+ if([...filter.options].some(o=>o.value===country))filter.value=country;
+ const query=$('#search').value.trim().toLocaleLowerCase('uk');
+ const visible=orders.filter(o=>(!filter.value||o.country===filter.value)&&(!query||FIELDS.some(f=>o[f].toLocaleLowerCase('uk').includes(query))||reference(o).toLowerCase().includes(query)));
+ $('#shown').textContent=visible.length+' папок';$('#board').replaceChildren();
+ STAGES.forEach((label,i)=>{
+  const col=element('section','column'),head=element('div','column-head'),items=visible.filter(o=>o.stage===i);
+  head.append(element('span','step-num',String(i+1).padStart(2,'0')),element('span','',label),element('span','col-count',String(items.length)));
+  const cards=element('div','cards');items.forEach(o=>cards.append(makeCard(o)));
+  const add=element('button','add-column','＋');add.type='button';add.setAttribute('aria-label','Додати замовлення: '+label);add.onclick=()=>openForm(null,i);cards.append(add);col.append(head,cards);
+  col.addEventListener('dragover',e=>{if(!dragged)return;e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('drag-over');});
+  col.addEventListener('dragleave',e=>{if(!col.contains(e.relatedTarget))col.classList.remove('drag-over');});
+  col.addEventListener('drop',e=>{e.preventDefault();col.classList.remove('drag-over');if(dragged&&e.dataTransfer.getData('text/plain')===dragged)changeStage(dragged,i);dragged=null;});
+  $('#board').append(col);
+ });
+ $('#empty').hidden=visible.length>0;
+ $('#empty h2').textContent=orders.length?'Нічого не знайдено':'Перший маршрут починається тут';
+ $('#empty p').textContent=orders.length?'Змініть пошук або оберіть іншу країну.':'Створіть папку замовлення, додайте виробника й перевізника та відстежуйте доставку до Києва.';
+ $('#emptyAdd').hidden=orders.length>0;
 }
-function startQualityCheck(){
- if(!server.session||!accountRatingRows.length)return;
- const owner=server.session.user.id;
- const key=owner+'|'+JSON.stringify(interests)+'|'+JSON.stringify(accountRatingRows.map(r=>[r.tmdb_id,r.updated_at,r.impression,r.plot,r.cinematography,r.metadata]));
- if(key===qualityReportKey&&(qualityReport&&qualityReport.status!=='error'||qualityWorker))return;
- qualityWorker?.terminate();qualityReport=null;qualityReportKey=key;
- try{
-  const worker=new Worker(new URL('./quality-worker.js?v='+rankingAssetVersion,import.meta.url),{type:'module'});qualityWorker=worker;
-  let timer;
-  const finish=report=>{clearTimeout(timer);worker.terminate();if(qualityWorker!==worker||server.session?.user?.id!==owner)return;qualityWorker=null;qualityReport=report;renderQuality();};
-  timer=setTimeout(()=>finish({status:'error'}),20000);
-  worker.onmessage=event=>finish(event.data.report||{status:'error'});worker.onerror=()=>finish({status:'error'});
-  worker.postMessage({interests,rows:accountRatingRows.map(({tmdb_id,metadata,impression,plot,cinematography,updated_at})=>({tmdb_id,metadata,impression,plot,cinematography,updated_at}))});
- }catch{qualityWorker=null;qualityReport={status:'error'};renderQuality();}
+function showDetail(id,open=true){
+ selected=id;const order=orders.find(o=>o.id===id);if(!order)return;
+ $('#detailId').textContent=reference(order);$('#detailTitle').textContent=order.name;
+ const content=$('#detailContent');content.replaceChildren();
+ const stageBox=element('div','detail-stage'),select=document.createElement('select');select.setAttribute('aria-label','Поточний етап');select.replaceChildren(...stageOptions());select.value=String(order.stage);select.onchange=()=>changeStage(id,Number(select.value));stageBox.append(element('span','','Поточний етап'),select);content.append(stageBox);
+ const fields=[['Країна відправника',order.country],['Перевізник',order.carrier],['Виробник · точка А',order.manufacturer],['Адреса забору',order.origin],['Точка Б · Київ',order.destination],['Очікувана доставка',order.eta?localDate(order.eta+'T12:00:00Z'):''],['Номер відстеження',order.tracking],['Вага',order.weight?order.weight+' кг':''],['Контакт',order.contact],['Примітки',order.notes]];
+ const grid=element('dl','detail-grid');for(const [label,value]of fields){const wrap=element('div');wrap.append(element('dt','',label),element('dd','',value||'Не вказано'));grid.append(wrap);}content.append(grid);
+ const history=element('div','history');history.append(element('strong','','Історія маршруту'));const list=element('ol');for(const h of [...order.history].reverse()){list.append(element('li','',STAGES[h.stage]+' · '+new Intl.DateTimeFormat('uk-UA',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Kyiv'}).format(new Date(h.at))));}history.append(list);content.append(history);
+ if(open)detail.showModal();
 }
-function renderAccount(){renderQuality();renderHourlyStatus();const logged=Boolean(server.session);$('account-open').textContent=logged?'✓ Аккаунт':'Войти';$('account-status').textContent=!server.configured?'Сервер ещё не настроен. Оценки доступны после подключения Supabase.':logged?'Оценки и коллекция синхронизируются с сервером.':'Войдите по коду из письма. На этом устройстве вход сохранится после закрытия браузера.';$('auth-form').hidden=logged||!server.configured;$('account-logout').hidden=!logged;$('export-ratings').hidden=!logged;$('import-local').hidden=!logged||(!Object.keys(legacyRatings).length&&!legacySaved.length);}
-$('export-ratings').onclick=async()=>{
- const button=$('export-ratings');button.disabled=true;
- try{
-  const rows=await server.exportRatings();
-  const url=URL.createObjectURL(new Blob([JSON.stringify(rows,null,2)],{type:'application/json;charset=utf-8'}));
-  const link=document.createElement('a');link.href=url;link.download='nightshift-ratings-'+new Date().toISOString().slice(0,10)+'.json';
-  document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
-  toast('Скачано оценок: '+rows.length);
- }catch(error){toast(error.message);}finally{button.disabled=false;}
+$('#detailClose').onclick=()=>detail.close();
+$('#edit').onclick=()=>{const order=orders.find(o=>o.id===selected);detail.close();if(order)openForm(order);};
+$('#delete').onclick=()=>{const order=orders.find(o=>o.id===selected);if(order&&confirm('Видалити папку «'+order.name+'»? Цю дію неможливо скасувати без резервної копії.')&&persist(orders.filter(o=>o.id!==selected))){detail.close();toast('Папку видалено');}};
+$('#search').oninput=render;$('#countryFilter').onchange=render;$('#allOrders').onclick=()=>{$('#search').value='';$('#countryFilter').value='';render();};
+$('#export').onclick=()=>{
+ const blob=new Blob([JSON.stringify({version:1,exportedAt:new Date().toISOString(),orders},null,2)],{type:'application/json'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='artur-logistics-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Резервну копію експортовано');
 };
-function openAccount(){renderAccount();startQualityCheck();if(server.session)syncAccount().catch(()=>{});if(!$('account-dialog').open)$('account-dialog').showModal();}
-$('account-code').addEventListener('keydown',e=>{if(e.key==='Enter'&&!$('verify-code').disabled)$('verify-code').click();});
-window.addEventListener('storage',async e=>{if(e.key!=='nightshift.session')return;if(!e.newValue){server.session=null;interestEpoch++;loadingInterests=false;interests=normalizeInterests();interestDraft=normalizeInterests();$('interests-dialog').close();recommendationRows=[];collectionSyncedAt=null;reactions={};saved=[];films.splice(12);render();renderAccount();if($('sources-dialog').open)renderSources();}else try{if(await server.restore())await syncAccount();}catch{}});
-
-function renderInterests(message=''){
- const names={horror:'Horror',dystopian:'Антиутопия'};
- $('interest-genres').innerHTML=interestDraft.genrePriority.map((g,i)=>`<li class="interest-row"><small>${i+1}</small><span>${names[g]}</span><button data-interest-genre="${i}" aria-label="Сделать ${names[g]} ${i===0?'вторым':'первым'}">${i===0?'↓':'↑'}</button></li>`).join('');
- $('interest-directors').innerHTML=interestDraft.directors.map((d,i)=>`<div class="interest-row"><span>${escapeText(d.name)}</span><button data-interest-up="${i}" aria-label="Поднять ${escapeText(d.name)}" ${i===0?'disabled':''}>↑</button><button data-interest-remove="${i}" aria-label="Удалить ${escapeText(d.name)}">×</button></div>`).join('')||'<p class="interests-note">Добавь любимых режиссёров — будем искать близкие им темы и атмосферу.</p>';
- $('interest-status').textContent=message||(!server.session?'Войди в аккаунт, чтобы сохранить интересы.':'Список хранится в твоём аккаунте. Изменения применяются после сохранения.');
- $('interest-save').disabled=savingInterests||loadingInterests;
- $('interest-add').disabled=savingInterests||loadingInterests;
- $('interest-add-form').querySelector('button').disabled=savingInterests||loadingInterests;
- const changed=()=>renderInterests('Есть изменения — сохрани их, чтобы обновить подбор.');
- document.querySelectorAll('#interests-dialog .interest-row button').forEach(b=>{b.disabled=b.disabled||savingInterests||loadingInterests;});
- document.querySelectorAll('[data-interest-genre]').forEach(b=>b.onclick=()=>{interestDraft.genrePriority.reverse();changed();});
- document.querySelectorAll('[data-interest-up]').forEach(b=>b.onclick=()=>{const i=Number(b.dataset.interestUp);[interestDraft.directors[i-1],interestDraft.directors[i]]=[interestDraft.directors[i],interestDraft.directors[i-1]];changed();});
- document.querySelectorAll('[data-interest-remove]').forEach(b=>b.onclick=()=>{interestDraft.directors.splice(Number(b.dataset.interestRemove),1);changed();});
-}
-$('interests-open').onclick=async()=>{
- const epoch=++interestEpoch;interestDraft=normalizeInterests(interests);renderInterests();$('interests-dialog').showModal();
- $('interest-suggestions').innerHTML=[...new Set(films.flatMap(f=>[f.director,...(f.directorAliases||[])]).filter(Boolean))].sort().map(name=>`<option value="${escapeText(name)}"></option>`).join('');
- if(server.session){loadingInterests=true;renderInterests('Загружаем интересы…');try{const loaded=await server.loadInterests();if(epoch!==interestEpoch)return;interests=loaded;interestDraft=normalizeInterests(interests);loadingInterests=false;renderInterests('Интересы загружены из аккаунта.');}catch{if(epoch!==interestEpoch)return;loadingInterests=false;renderInterests('Не удалось загрузить интересы. Проверь список перед сохранением.');}}
+$('#import').onclick=()=>$('#importFile').click();
+$('#importFile').onchange=async event=>{
+ const file=event.target.files[0];event.target.value='';if(!file)return;
+ try{if(file.size>20*1024*1024)throw Error('Файл завеликий. Максимум 20 МБ.');const incoming=parseBackup(await file.text());if(!incoming.length){toast('У копії немає замовлень');return;}if(confirm('Додати '+incoming.length+' папок із резервної копії? Для однакових папок буде збережено новішу версію.')&&persist(mergeOrders(orders,incoming)))toast('Резервну копію імпортовано');}catch(error){toast('Імпорт не виконано: '+error.message);}
 };
-$('interests-close').onclick=()=>$('interests-dialog').close();
-$('interests-dialog').addEventListener('close',()=>{interestEpoch++;loadingInterests=false;});
-$('interest-add-form').onsubmit=e=>{e.preventDefault();if(savingInterests||loadingInterests)return;const name=$('interest-add').value.trim();if(!name)return;if(interestDraft.directors.length>=20){$('interest-status').textContent='Можно добавить до 20 режиссёров.';return;}if(normalizeInterests({...interestDraft,directors:[...interestDraft.directors,{name}]}).directors.length===interestDraft.directors.length){$('interest-status').textContent='Этот режиссёр уже в списке.';return;}interestDraft=normalizeInterests({...interestDraft,directors:[...interestDraft.directors,{name,aliases:[name]}]});$('interest-add').value='';renderInterests('Есть изменения — сохрани их, чтобы обновить подбор.');};
-$('interest-save').onclick=async()=>{
- if(!server.session){$('interests-dialog').close();openAccount();toast('Войди, чтобы сохранить интересы.');return;}
- if(savingInterests||loadingInterests)return;interestEpoch++;savingInterests=true;renderInterests('Сохраняем интересы…');
- try{interests=await server.saveInterests(interestDraft);interestDraft=normalizeInterests(interests);qualityWorker?.terminate();qualityWorker=null;qualityReport=null;qualityReportKey=null;render();renderInterests('Сохранено в аккаунте. Следующий подбор учтёт новые интересы.');toast('Интересы сохранены.');}
- catch(error){$('interest-status').textContent=error.message;}
- finally{savingInterests=false;renderInterests($('interest-status').textContent);}
-};
-$('account-open').onclick=openAccount;$('account-close').onclick=()=>$('account-dialog').close();
-let resendAt=0;
-function updateResend(){const seconds=Math.ceil((resendAt-Date.now())/1000);$('send-code').disabled=seconds>0;$('send-code').textContent=seconds>0?'Повторить через '+seconds+' с':'Получить код';}
-$('account-email').addEventListener('keydown',e=>{if(e.key==='Enter'&&!$('send-code').disabled)$('send-code').click();});
-$('send-code').onclick=async()=>{const email=$('account-email').value.trim();if(!email||!$('account-email').checkValidity()){toast('Введите корректный email');return;}const b=$('send-code');b.disabled=true;try{await server.sendCode(email,new URL('.',location.href).href);$('verify-fields').hidden=false;$('account-status').textContent='Код отправлен на '+email+'. Введите его ниже. Проверьте папку «Спам».';$('account-code').value='';$('account-code').focus();resendAt=Date.now()+60000;const interval=setInterval(()=>{updateResend();if(Date.now()>=resendAt)clearInterval(interval);},1000);}catch(error){$('account-status').textContent=error.message;$('verify-fields').hidden=true;toast(error.message);}finally{updateResend();}};
-$('verify-code').onclick=async()=>{const token=$('account-code').value.replace(/\s/g,'');if(!/^\d{6,10}$/.test(token)){toast('Введите цифровой код из письма');$('account-code').focus();return;}const b=$('verify-code');b.disabled=true;try{await server.verify($('account-email').value.trim(),token);await syncAccount();await manualRecommendations.resume();$('account-dialog').close();toast('Вход выполнен · Оценки на сервере');}catch(error){toast(error.message);}finally{b.disabled=false;}};
-$('account-logout').onclick=async()=>{try{await server.logout();}catch{}finally{manualRecommendations.stop();interestEpoch++;loadingInterests=false;$('interests-dialog').close();interests=normalizeInterests();interestDraft=normalizeInterests();renderManualState({status:'idle'});recommendationRows=[];collectionSyncedAt=null;collectionSyncFailed=false;reactions={};saved=[];films.splice(12);render();renderAccount();toast('Вы вышли из аккаунта');}};
-$('import-local').onclick=async()=>{const b=$('import-local');b.disabled=true;try{for(const [id,r] of Object.entries(legacyRatings)){const f=films.find(f=>f.id===Number(id));if(f)await server.saveRating(f,r);}for(const id of legacySaved){const f=films.find(f=>f.id===id);if(f)await server.saveCollection(f,true);}await syncAccount();localStorage.removeItem('nightshift.reactions');localStorage.removeItem('afterglow.saved');for(const key of Object.keys(legacyRatings))delete legacyRatings[key];legacySaved.length=0;renderAccount();toast('Старые оценки перенесены на сервер');}catch(error){toast(error.message+' Локальная копия сохранена.');}finally{b.disabled=false;}};
-async function initializeAccount(){
- const fragment=location.hash;
- const params=new URLSearchParams(fragment.slice(1));
- const callback=params.has('access_token')||params.has('error');
- // Remove login credentials from the address bar before any asynchronous work.
- if(callback)history.replaceState(null,'',location.pathname+location.search);
- renderAccount();
- if(server.configured){try{
-  const logged=callback?await server.acceptLink(fragment):await server.restore();
-  if(logged){await server.ensureProfile();await syncAccount();await manualRecommendations.resume();if(callback){toast('Вход выполнен');openAccount();}}
- }catch(error){toast(error.message);renderAccount();}}
- setInterval(async()=>{if(server.session&&!archiving&&!savingRating&&!savingCollection)try{await syncAccount();}catch{}},5*60*1000);
-}
-
-}
-
+window.addEventListener('storage',event=>{if(event.key!==STORAGE_KEY)return;try{orders=event.newValue?parseBackup(event.newValue):[];storageBroken=false;render();if(detail.open){if(orders.some(o=>o.id===selected))showDetail(selected,false);else detail.close();}toast('Оновлено з іншої вкладки');}catch{toast('Не вдалося прочитати зміни з іншої вкладки.');}});
+render();

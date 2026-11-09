@@ -1,65 +1,42 @@
-name: Refresh movie sources
+name: Publish ARTUR logistics
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - 'index.html'
-      - 'site-version.json'
-      - '*.js'
-      - 'style.css'
-      - 'scripts/**'
-      - 'config/recommendations.json'
-      - 'config/category-rules.json'
-      - '.github/workflows/catalog.yml'
-  schedule:
-    - cron: '17 * * * *'
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 concurrency:
-  group: movie-catalog
+  group: artur-logistics-pages
   cancel-in-progress: false
 jobs:
-  refresh:
+  publish:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          ref: main
-          fetch-depth: 0
-      - name: Test catalog, categories and provider checks
+          node-version: '22'
+      - name: Check application and order lifecycle
         run: |
-          python3 -m unittest discover -s scripts -p 'test_*.py'
+          node --check app.js
+          node --check model.js
           npm test
-      - name: Refresh metadata without exposing credentials
-        env:
-          TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
-          TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
-          SIMKL_CLIENT_ID: ${{ secrets.SIMKL_CLIENT_ID }}
-          OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
-        run: python3 scripts/import_catalog.py
-      - name: Commit catalog snapshot
+      - name: Package website without legacy integrations
         run: |
-          git add data/catalog.json
-          if git diff --cached --quiet; then exit 0; fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'Refresh movie metadata and source status'
-          git pull --rebase origin main
-          git push origin HEAD:main
-      - name: Prepare static website
-        run: |
-          mkdir -p /tmp/nightshift-site/data
-          cp imdb-audience.js interests.js production-policy.js site-version.json ranking-release.js audience-priority.js selection-quality.js quality-worker.js mobile-feed.js index.html style.css app.js categories.js category-rules.js taste.js taste-model.js synopsis-model.js production-model.js manual-recommendations.js sources.js ratings.js time.js server.js server-config.js .nojekyll /tmp/nightshift-site/
-          cp data/catalog.json /tmp/nightshift-site/data/
+          mkdir -p dist
+          cp index.html style.css app.js model.js icon.svg .nojekyll dist/
+          if grep -Eri 'supabase|themoviedb|omdbapi|trakt.tv|simkl.com|sb_publishable|service_role' dist; then
+            echo "Unexpected legacy integration in website"
+            exit 1
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: /tmp/nightshift-site
+          path: dist
       - uses: actions/deploy-pages@v4
         id: deployment
