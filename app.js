@@ -50,8 +50,23 @@ function changeStage(id,stage){
  const order=orders.find(o=>o.id===id);if(!order||order.stage===stage)return;
  try{if(persist(orders.map(o=>o.id===id?moveOrder(o,stage):o))){toast('Етап: '+stagesFor(order.transportType)[stage]);if(detail.open)showDetail(id,false);}}catch(error){toast(error.message);}
 }
+function toggleAttention(id){
+ const order=orders.find(o=>o.id===id);if(!order)return;
+ if(persist(orders.map(o=>o.id===id?{...o,attention:!o.attention,updatedAt:new Date().toISOString()}:o))){
+  toast(order.attention?'Позначку уваги знято':'На увазі · '+stagesFor(order.transportType)[order.stage]);
+  if(detail.open)showDetail(id,false);
+ }
+}
+function attentionButton(order){
+ const button=element('button','attention-button'+(order.attention?' is-active':''),order.attention?'★ На увазі':'☆ Поставити на увагу');
+ button.type='button';button.draggable=false;
+ button.setAttribute('aria-pressed',String(Boolean(order.attention)));
+ button.setAttribute('aria-label',(order.attention?'Зняти позначку уваги: ':'Поставити на увагу: ')+order.name);
+ button.title='Позначка для поточного етапу. При зміні етапу скидається.';
+ button.onclick=()=>toggleAttention(order.id);return button;
+}
 function makeCard(order){
- const card=element('article','card');card.draggable=true;card.dataset.id=order.id;
+ const card=element('article','card'+(order.attention?' needs-attention':''));card.draggable=true;card.dataset.id=order.id;
  const open=element('button','card-open');open.type='button';open.setAttribute('aria-label','Відкрити папку '+order.name);
  const ref=element('div','card-reference');ref.append(element('span','folder-icon','▱'),element('span','',reference(order)));
  open.append(ref,element('h3','',order.name),element('span','country-tag',order.country));
@@ -62,8 +77,8 @@ function makeCard(order){
  bottom.append(element('span','',order.carrier?'↗ '+order.carrier:'Перевізник не вказаний'));
  open.append(bottom);open.onclick=()=>showDetail(order.id);
  const stage=document.createElement('select');stage.className='card-stage';stage.setAttribute('aria-label','Етап замовлення '+order.name);stage.replaceChildren(...stageOptions(order.transportType));stage.value=String(order.stage);stage.onchange=()=>changeStage(order.id,Number(stage.value));
- card.append(open,stage);
- card.addEventListener('dragstart',e=>{if(e.target.closest('select')){e.preventDefault();return;}dragged=order.id;e.dataTransfer.setData('text/plain',order.id);e.dataTransfer.effectAllowed='move';card.classList.add('dragging');});
+ card.append(open,attentionButton(order),stage);
+ card.addEventListener('dragstart',e=>{if(e.target.closest('select,.attention-button')){e.preventDefault();return;}dragged=order.id;e.dataTransfer.setData('text/plain',order.id);e.dataTransfer.effectAllowed='move';card.classList.add('dragging');});
  card.addEventListener('dragend',()=>{dragged=null;card.classList.remove('dragging');document.querySelectorAll('.drag-over').forEach(c=>c.classList.remove('drag-over'));});
  return card;
 }
@@ -115,6 +130,7 @@ function showDetail(id,open=true){
   summary.append(metric);
  }
  content.append(summary);
+ const attentionRow=element('div','detail-attention');attentionRow.append(attentionButton(order),element('small','','Посилений контроль на поточному етапі. Позначка скинеться після зміни етапу.'));content.append(attentionRow);
  const fields=[['Тип перевезення',TRANSPORT_TYPES[order.transportType]],['Країна відправника',order.country],['Перевізник',order.carrier],['Виробник · точка А',order.manufacturer],['Номер відстеження',order.tracking],['Примітки',order.notes]];
  const grid=element('dl','detail-grid');for(const [label,value]of fields){const wrap=element('div');wrap.append(element('dt','',label),element('dd','',value||'Не вказано'));grid.append(wrap);}content.append(grid);
  const history=element('div','history');history.append(element('strong','','Історія маршруту'));const list=element('ol');for(const h of [...order.history].reverse()){list.append(element('li','',stagesFor(order.transportType)[h.stage]+' · '+new Intl.DateTimeFormat('uk-UA',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Kyiv'}).format(new Date(h.at))));}history.append(list);content.append(history);

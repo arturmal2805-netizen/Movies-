@@ -28,3 +28,13 @@ test('both transport types remain distinct across merging and backup',()=>{
  assert.equal(restored[0].transportType,'express');assert.equal(restored[1].transportType,'freight');assert.equal(stagesFor(restored[1].transportType)[2],'ПД · Попереднє декларування');
  assert.throws(()=>validateOrder({...order(),transportType:'unknown'}));
 });
+
+test('attention persists in backups and clears only when the order changes stage',()=>{
+ const marked=validateOrder({...order(),attention:true});
+ assert.equal(parseBackup(JSON.stringify({version:1,orders:[marked]}))[0].attention,true);
+ assert.equal(moveOrder(marked,marked.stage).attention,true);
+ assert.equal(moveOrder(marked,1).attention,false);
+ assert.equal(moveOrder(moveOrder(marked,1),0).attention,false);
+ const legacy={...order()};delete legacy.attention;assert.equal(validateOrder(legacy).attention,false);
+ assert.throws(()=>validateOrder({...order(),attention:'yes'}));
+});

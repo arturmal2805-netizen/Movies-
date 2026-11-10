@@ -17,6 +17,8 @@ export function validateOrder(raw){
  if(result.eta&&(!/^\d{4}-\d{2}-\d{2}$/.test(result.eta)||!Number.isFinite(Date.parse(result.eta))||new Date(result.eta).toISOString().slice(0,10)!==result.eta))throw Error('Перевірте дату доставки.');
  if(typeof raw.id!=='string'||!/^[a-zA-Z0-9-]{1,80}$/.test(raw.id))throw Error('Невірний ідентифікатор папки.');
  result.id=raw.id;result.stage=raw.stage;
+ if(raw.attention!==undefined&&typeof raw.attention!=='boolean')throw Error('Невірна позначка уваги.');
+ result.attention=raw.attention===true;
  for(const key of ['createdAt','updatedAt']){if(typeof raw[key]!=='string'||!Number.isFinite(Date.parse(raw[key])))throw Error('Невірна дата замовлення.');result[key]=raw[key];}
  result.history=(Array.isArray(raw.history)?raw.history:[]).slice(-100).map(h=>{if(!h||!Number.isInteger(h.stage)||h.stage<0||h.stage>=stages.length||typeof h.at!=='string'||!Number.isFinite(Date.parse(h.at)))throw Error('Невірна історія етапів.');return {stage:h.stage,at:h.at};});
  return result;
@@ -30,7 +32,7 @@ export function parseBackup(text){
 }
 export function moveOrder(order,stage,at=new Date().toISOString()){
  if(!Number.isInteger(stage)||stage<0||stage>=stagesFor(order.transportType).length)throw Error('Невідомий етап.');
- return order.stage===stage?order:{...order,stage,updatedAt:at,history:[...order.history,{stage,at}].slice(-100)};
+ return order.stage===stage?order:{...order,stage,attention:false,updatedAt:at,history:[...order.history,{stage,at}].slice(-100)};
 }
 export function mergeOrders(current,incoming){
  const result=new Map(current.map(o=>[o.id,o]));
