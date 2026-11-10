@@ -103,7 +103,19 @@ function showDetail(id,open=true){
  $('#detailId').textContent=reference(order);$('#detailTitle').textContent=order.name;
  const content=$('#detailContent');content.replaceChildren();
  const stageBox=element('div','detail-stage'),select=document.createElement('select');select.setAttribute('aria-label','Поточний етап');select.replaceChildren(...stageOptions(order.transportType));select.value=String(order.stage);select.onchange=()=>changeStage(id,Number(select.value));stageBox.append(element('span','','Поточний етап'),select);content.append(stageBox);
- const fields=[['Тип перевезення',TRANSPORT_TYPES[order.transportType]],['Країна відправника',order.country],['Перевізник',order.carrier],['Виробник · точка А',order.manufacturer],['Адреса забору',order.origin],['Точка Б · Київ',order.destination],['Очікувана доставка',order.eta?localDate(order.eta+'T12:00:00Z'):''],['Номер відстеження',order.tracking],['Вага',order.weight?order.weight+' кг':''],['Контакт',order.contact],['Примітки',order.notes]];
+ const summary=element('div','order-summary');
+ const overdue=Boolean(order.eta&&order.eta<today()&&order.stage!==stagesFor(order.transportType).length-1);
+ for(const [label,value,isLate] of [
+  ['Вага вантажу',order.weight?order.weight+' кг':'Не вказано',false],
+  ['Граничний строк поставки',order.eta?localDate(order.eta+'T12:00:00Z'):'Не вказано',overdue]
+ ]){
+  const metric=element('div','order-metric'+(isLate?' overdue':''));
+  metric.append(element('span','metric-label',label),element('strong','metric-value',value));
+  if(isLate)metric.append(element('span','deadline-status','Строк поставки минув'));
+  summary.append(metric);
+ }
+ content.append(summary);
+ const fields=[['Тип перевезення',TRANSPORT_TYPES[order.transportType]],['Країна відправника',order.country],['Перевізник',order.carrier],['Виробник · точка А',order.manufacturer],['Адреса забору',order.origin],['Точка Б · Київ',order.destination],['Номер відстеження',order.tracking],['Контакт',order.contact],['Примітки',order.notes]];
  const grid=element('dl','detail-grid');for(const [label,value]of fields){const wrap=element('div');wrap.append(element('dt','',label),element('dd','',value||'Не вказано'));grid.append(wrap);}content.append(grid);
  const history=element('div','history');history.append(element('strong','','Історія маршруту'));const list=element('ol');for(const h of [...order.history].reverse()){list.append(element('li','',stagesFor(order.transportType)[h.stage]+' · '+new Intl.DateTimeFormat('uk-UA',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Kyiv'}).format(new Date(h.at))));}history.append(list);content.append(history);
  if(open)detail.showModal();

@@ -13,3 +13,5 @@
 .board{min-height:270px}.column{min-height:270px}.cards{min-height:200px}
 select:disabled{opacity:.7}
 @media(max-width:700px){.board{grid-template-columns:repeat(var(--stages,7),190px)}.timeline-title{padding:12px}.timeline-title h2{font-size:13px}.timeline-title>div{gap:6px}.timeline-count{font-size:9px}.freight-note{margin:0 12px 12px;font-size:10px}}
+
+.order-summary{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 22px}.order-metric{padding:16px;background:#f3f5ed;border:1px solid #e0e6d7;border-radius:8px;display:flex;flex-direction:column;gap:7px}.metric-label{font-size:10px;color:#7c8b70}.metric-value{font-size:21px;font-weight:550;color:#304c39}.order-metric.overdue{background:#fff3eb;border-color:#edd9ca}.overdue .metric-value,.deadline-status{color:#a36342}.deadline-status{font-size:10px}@media(max-width:480px){.order-summary{grid-template-columns:1fr}.metric-value{font-size:20px}}
