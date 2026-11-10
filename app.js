@@ -1,4 +1,4 @@
-import {STAGES,TRANSPORT_TYPES,stagesFor,FIELDS,STORAGE_KEY,validateOrder,parseBackup,moveOrder,mergeOrders} from './model.js?v=attention-1';
+import {STAGES,TRANSPORT_TYPES,stagesFor,FIELDS,STORAGE_KEY,validateOrder,parseBackup,moveOrder,mergeOrders,latestReadyDate} from './model.js?v=readiness-2';
 const $=s=>document.querySelector(s),form=$('#orderForm'),dialog=$('#orderDialog'),detail=$('#detailDialog');
 let orders=[],editing=null,selected=null,dragged=null,toastTimer;
 const stageOptions=(type='express')=>stagesFor(type).map((s,i)=>new Option(s,String(i)));
@@ -41,7 +41,7 @@ form.addEventListener('submit',event=>{
  event.preventDefault();if(!$('#stepOne').hidden){nextStep();return;}
  const now=new Date().toISOString(),previous=orders.find(o=>o.id===editing),data=Object.fromEntries(new FormData(form));
  try{
-  let order=validateOrder({...previous,...data,transportType:previous?.transportType||data.transportType,id:previous?.id||crypto.randomUUID(),stage:previous?.stage??Number(data.stage),createdAt:previous?.createdAt||now,updatedAt:now,history:previous?.history||[{stage:Number(data.stage),at:now}]});
+  let order=validateOrder({...previous,...data,stageSchema:2,transportType:previous?.transportType||data.transportType,id:previous?.id||crypto.randomUUID(),stage:previous?.stage??Number(data.stage),createdAt:previous?.createdAt||now,updatedAt:now,history:previous?.history||[{stage:Number(data.stage),at:now}]});
   order=moveOrder(order,Number(data.stage),now);
   if(persist(previous?orders.map(o=>o.id===order.id?order:o):[order,...orders])){dialog.close();toast(previous?'Зміни збережено':'Папку замовлення створено');}
  }catch(error){toast(error.message);}
@@ -70,6 +70,9 @@ function makeCard(order){
  const open=element('button','card-open');open.type='button';open.setAttribute('aria-label','Відкрити папку '+order.name);
  const ref=element('div','card-reference');ref.append(element('span','folder-icon','▱'),element('span','',reference(order)));
  open.append(ref,element('h3','',order.name),element('span','country-tag',order.country));
+ const readiness=element('div','card-readiness'+(order.stage===0?' waiting':''));
+ readiness.append(element('span','','Дата готовності'),element('strong','',order.readyDate?localDate(order.readyDate+'T12:00:00Z'):'Ще не вказана'));
+ open.append(readiness);
  open.append(element('div','card-route',(order.manufacturer||'Виробник')+' → Київ'));
  const bottom=element('div','card-bottom');
  const late=order.eta&&order.eta<today()&&order.stage!==stagesFor(order.transportType).length-1;
@@ -100,8 +103,15 @@ function render(){
  stagesFor(type).forEach((label,i)=>{
   const col=element('section','column'),head=element('div','column-head'),items=typed.filter(o=>o.stage===i);
   head.append(element('span','step-num',String(i+1).padStart(2,'0')),element('span','',label),element('span','col-count',String(items.length)));
+  if(i===0){
+   const latest=latestReadyDate(orders,type),waiting=orders.filter(o=>o.transportType===type&&o.stage===0),missing=waiting.filter(o=>!o.readyDate).length;
+   const dateBlock=element('div','latest-readiness');
+   dateBlock.append(element('span','','Найпізніша дата готовності'),element('strong','',latest?localDate(latest+'T12:00:00Z'):'Дата ще не вказана'));
+   if(missing)dateBlock.append(element('small','',missing+' папок без дати'));
+   col.append(head,dateBlock);
+  }
   const cards=element('div','cards');items.forEach(o=>cards.append(makeCard(o)));
-  const add=element('button','add-column','＋');add.type='button';add.setAttribute('aria-label','Додати замовлення: '+label);add.onclick=()=>openForm(null,i,type);cards.append(add);col.append(head,cards);
+  const add=element('button','add-column','＋');add.type='button';add.setAttribute('aria-label','Додати замовлення: '+label);add.onclick=()=>openForm(null,i,type);cards.append(add);col.prepend(head);col.append(cards);
   col.addEventListener('dragover',e=>{if(!dragged||orders.find(o=>o.id===dragged)?.transportType!==type)return;e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('drag-over');});
   col.addEventListener('dragleave',e=>{if(!col.contains(e.relatedTarget))col.classList.remove('drag-over');});
   col.addEventListener('drop',e=>{e.preventDefault();col.classList.remove('drag-over');if(dragged&&orders.find(o=>o.id===dragged)?.transportType===type&&e.dataTransfer.getData('text/plain')===dragged)changeStage(dragged,i);dragged=null;});
@@ -121,6 +131,7 @@ function showDetail(id,open=true){
  const summary=element('div','order-summary');
  const overdue=Boolean(order.eta&&order.eta<today()&&order.stage!==stagesFor(order.transportType).length-1);
  for(const [label,value,isLate] of [
+  ['Дата готовності',order.readyDate?localDate(order.readyDate+'T12:00:00Z'):'Ще не вказана',false],
   ['Вага вантажу',order.weight?order.weight+' кг':'Не вказано',false],
   ['Граничний строк поставки',order.eta?localDate(order.eta+'T12:00:00Z'):'Не вказано',overdue]
  ]){
