@@ -4,7 +4,7 @@ export const FREIGHT_STAGES=[...STAGES.slice(0,3),'ПД · Попереднє д
 export function stagesFor(type='express'){return type==='freight'?FREIGHT_STAGES:STAGES;}
 export const FIELDS=['name','country','carrier','manufacturer','origin','destination','eta','readyDate','tracking','weight','contact','notes','logo'];
 export const STORAGE_KEY='artur-logistics.orders.v1';
-const limits={name:120,country:80,carrier:120,manufacturer:160,origin:240,destination:240,eta:10,readyDate:10,tracking:120,weight:30,contact:160,notes:3000,logo:4};
+const limits={name:120,country:80,carrier:120,manufacturer:160,origin:240,destination:240,eta:10,readyDate:10,tracking:120,weight:30,contact:160,notes:3000,logo:8};
 export function validateOrder(raw){
  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Невірний формат замовлення.');
  const transportType=raw.transportType??'express';
@@ -19,7 +19,7 @@ export function validateOrder(raw){
  }
  const result={transportType,stageSchema:2};
  for(const key of FIELDS){if(raw[key]!==undefined&&typeof raw[key]!=='string')throw Error('Невірне поле: '+key);result[key]=(raw[key]||'').trim();if(result[key].length>limits[key])throw Error('Завелике поле: '+key);}
- if(!['','apr','none'].includes(result.logo))throw Error('Невідомий логотип компанії.');
+ if(!['','apr','ekm','christ','none'].includes(result.logo))throw Error('Невідомий логотип компанії.');
  if(!result.name||!result.country)throw Error('Вкажіть назву папки та країну відправника.');
  if(!Number.isInteger(raw.stage)||raw.stage<0||raw.stage>=stages.length)throw Error('Невідомий етап доставки.');
  if(result.weight&&(!Number.isFinite(Number(result.weight))||Number(result.weight)<0||Number(result.weight)>10000000))throw Error('Перевірте вагу вантажу.');
@@ -53,8 +53,17 @@ export function latestReadyDate(orders,type){
  return orders.filter(o=>o.transportType===type&&o.stage===0&&o.readyDate).map(o=>o.readyDate).sort().at(-1)||'';
 }
 
+export const COMPANY_LOGOS={
+ apr:{src:'apr.avif',alt:'APR · Anton Paar'},
+ ekm:{src:'https://res.cloudinary.com/healthmanagement-org/image/upload/v1597334439/cp/00201270_cl_image.gif',alt:'EKM · Ekom'},
+ christ:{src:'https://cdn.brandfetch.io/idkbdO0tBy/w/263/h/48/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1771951944668',alt:'CHRIST'}
+};
 export function logoFor(order){
  if(order.logo==='none')return null;
- if(order.logo==='apr'||/\bapr\b|anton\s*paar|антон\s*паар/i.test((order.manufacturer||'')+' '+(order.name||'')))return {src:'apr.avif',alt:'APR · Anton Paar'};
+ if(Object.hasOwn(COMPANY_LOGOS,order.logo||''))return COMPANY_LOGOS[order.logo];
+ const text=(order.manufacturer||'')+' '+(order.name||'');
+ if(/\b(?:ekm|ekom)\b|еком|екм/i.test(text))return COMPANY_LOGOS.ekm;
+ if(/\bchrist\b|кріст|крист/i.test(text))return COMPANY_LOGOS.christ;
+ if(/\bapr\b|anton\s*paar|антон\s*паар/i.test(text))return COMPANY_LOGOS.apr;
  return null;
 }

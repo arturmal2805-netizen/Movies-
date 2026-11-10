@@ -66,3 +66,11 @@ test('APR logo is explicit or inferred only for matching orders and can be disab
  assert.equal(parseBackup(JSON.stringify({version:1,orders:[validateOrder({...order(),logo:'apr'})]}))[0].logo,'apr');
  assert.throws(()=>validateOrder({...order(),logo:'bad'}));
 });
+
+test('EKM and CHRIST logos match names and explicit selections override automatic matching',()=>{
+ for(const name of ['EKM 47','Ekom 10'])assert.equal(logoFor(validateOrder({...order(),name})).alt,'EKM · Ekom');
+ assert.equal(logoFor(validateOrder({...order(),name:'Christ 19'})).alt,'CHRIST');
+ assert.equal(logoFor(validateOrder({...order(),name:'APR 47',logo:'christ'})).alt,'CHRIST');
+ assert.equal(logoFor(validateOrder({...order(),name:'EKM',logo:'none'})),null);
+ for(const logo of ['ekm','christ'])assert.equal(parseBackup(JSON.stringify({version:1,orders:[validateOrder({...order(),logo})]}))[0].logo,logo);
+});

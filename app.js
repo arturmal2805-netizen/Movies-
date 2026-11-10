@@ -1,4 +1,4 @@
-import {STAGES,TRANSPORT_TYPES,stagesFor,FIELDS,STORAGE_KEY,validateOrder,parseBackup,moveOrder,mergeOrders,logoFor} from './model.js?v=company-logo-5';
+import {STAGES,TRANSPORT_TYPES,stagesFor,FIELDS,STORAGE_KEY,validateOrder,parseBackup,moveOrder,mergeOrders,logoFor} from './model.js?v=company-logos-7';
 const $=s=>document.querySelector(s),form=$('#orderForm'),dialog=$('#orderDialog'),detail=$('#detailDialog');
 let orders=[],editing=null,selected=null,dragged=null,toastTimer;
 const stageOptions=(type='express')=>stagesFor(type).map((s,i)=>new Option(s,String(i)));
@@ -68,7 +68,7 @@ function attentionButton(order){
 function makeCard(order){
  const card=element('article','card'+(order.attention?' needs-attention':''));card.draggable=true;card.dataset.id=order.id;
  const open=element('button','card-open');open.type='button';open.setAttribute('aria-label','Відкрити папку '+order.name);
- const logo=logoFor(order);if(logo){const image=document.createElement('img');image.className='company-logo';image.src=logo.src;image.alt=logo.alt;open.append(image);}
+ const logo=logoFor(order);if(logo){const image=document.createElement('img');image.className='company-logo';image.referrerPolicy='no-referrer';image.src=logo.src;image.alt=logo.alt;image.onerror=()=>{const fallback=element('span','company-logo logo-fallback',logo.alt);image.replaceWith(fallback);};open.append(image);}
  const ref=element('div','card-reference');ref.append(element('span','folder-icon','▱'),element('span','',reference(order)));
  open.append(ref,element('h3','',order.name),element('span','country-tag',order.country));
  const readiness=element('div','card-readiness'+(order.stage===0?' waiting':''));
@@ -121,7 +121,7 @@ function showDetail(id,open=true){
  selected=id;const order=orders.find(o=>o.id===id);if(!order)return;
  $('#detailId').textContent=reference(order);$('#detailTitle').textContent=order.name;
  const content=$('#detailContent');content.replaceChildren();
- const logo=logoFor(order);if(logo){const image=document.createElement('img');image.className='company-logo detail-company-logo';image.src=logo.src;image.alt=logo.alt;content.append(image);}
+ const logo=logoFor(order);if(logo){const image=document.createElement('img');image.className='company-logo detail-company-logo';image.referrerPolicy='no-referrer';image.src=logo.src;image.alt=logo.alt;image.onerror=()=>{const fallback=element('span','company-logo logo-fallback',logo.alt);image.replaceWith(fallback);};content.append(image);}
  const stageBox=element('div','detail-stage'),select=document.createElement('select');select.setAttribute('aria-label','Поточний етап');select.replaceChildren(...stageOptions(order.transportType));select.value=String(order.stage);select.onchange=()=>changeStage(id,Number(select.value));stageBox.append(element('span','','Поточний етап'),select);content.append(stageBox);
  const summary=element('div','order-summary');
  const overdue=Boolean(order.eta&&order.eta<today()&&order.stage!==stagesFor(order.transportType).length-1);
