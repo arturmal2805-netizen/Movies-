@@ -1,4 +1,4 @@
-import {STAGES,TRANSPORT_TYPES,stagesFor,FIELDS,STORAGE_KEY,validateOrder,parseBackup,moveOrder,mergeOrders} from './model.js';
+import {STAGES,TRANSPORT_TYPES,stagesFor,FIELDS,STORAGE_KEY,validateOrder,parseBackup,moveOrder,mergeOrders} from './model.js?v=attention-1';
 const $=s=>document.querySelector(s),form=$('#orderForm'),dialog=$('#orderDialog'),detail=$('#detailDialog');
 let orders=[],editing=null,selected=null,dragged=null,toastTimer;
 const stageOptions=(type='express')=>stagesFor(type).map((s,i)=>new Option(s,String(i)));
