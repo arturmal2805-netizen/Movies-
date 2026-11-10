@@ -1,4 +1,4 @@
-import {STAGES,TRANSPORT_TYPES,stagesFor,FIELDS,STORAGE_KEY,validateOrder,parseBackup,moveOrder,mergeOrders} from './model.js?v=readiness-exact-3';
+import {STAGES,TRANSPORT_TYPES,stagesFor,FIELDS,STORAGE_KEY,validateOrder,parseBackup,moveOrder,mergeOrders} from './model.js?v=comments-4';
 const $=s=>document.querySelector(s),form=$('#orderForm'),dialog=$('#orderDialog'),detail=$('#detailDialog');
 let orders=[],editing=null,selected=null,dragged=null,toastTimer;
 const stageOptions=(type='express')=>stagesFor(type).map((s,i)=>new Option(s,String(i)));
@@ -135,8 +135,22 @@ function showDetail(id,open=true){
  }
  content.append(summary);
  const attentionRow=element('div','detail-attention');attentionRow.append(attentionButton(order),element('small','','Посилений контроль на поточному етапі. Позначка скинеться після зміни етапу.'));content.append(attentionRow);
- const fields=[['Тип перевезення',TRANSPORT_TYPES[order.transportType]],['Країна відправника',order.country],['Перевізник',order.carrier],['Виробник · точка А',order.manufacturer],['Номер відстеження',order.tracking],['Примітки',order.notes]];
+ const fields=[['Тип перевезення',TRANSPORT_TYPES[order.transportType]],['Країна відправника',order.country],['Перевізник',order.carrier],['Виробник · точка А',order.manufacturer],['Номер відстеження',order.tracking]];
  const grid=element('dl','detail-grid');for(const [label,value]of fields){const wrap=element('div');wrap.append(element('dt','',label),element('dd','',value||'Не вказано'));grid.append(wrap);}content.append(grid);
+ const comments=element('section','order-comments');
+ const commentLabel=element('label','comment-label','Коментар');commentLabel.htmlFor='orderComment';
+ const note=element('textarea','comment-input');note.id='orderComment';note.rows=4;note.maxLength=3000;note.placeholder='Ваші нотатки до цього замовлення…';note.value=order.notes||'';
+ const commentActions=element('div','comment-actions'),commentStatus=element('span','comment-status','Збережено');
+ const saveComment=element('button','primary','Зберегти коментар');saveComment.type='button';saveComment.disabled=true;
+ const counter=element('span','comment-counter',note.value.length+' / 3000');
+ note.addEventListener('input',()=>{const current=orders.find(o=>o.id===id);saveComment.disabled=note.value===(current?.notes||'');commentStatus.textContent=saveComment.disabled?'Збережено':'Незбережені зміни';counter.textContent=note.value.length+' / 3000';});
+ saveComment.onclick=()=>{
+  const current=orders.find(o=>o.id===id);if(!current){toast('Замовлення вже видалене');return;}
+  if(persist(orders.map(o=>o.id===id?{...o,notes:note.value,updatedAt:new Date().toISOString()}:o))){
+   saveComment.disabled=true;commentStatus.textContent='Збережено';toast('Коментар збережено');
+  }
+ };
+ commentActions.append(commentStatus,saveComment);comments.append(commentLabel,note,counter,commentActions);content.append(comments);
  const history=element('div','history');history.append(element('strong','','Історія маршруту'));const list=element('ol');for(const h of [...order.history].reverse()){list.append(element('li','',stagesFor(order.transportType)[h.stage]+' · '+new Intl.DateTimeFormat('uk-UA',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Kyiv'}).format(new Date(h.at))));}history.append(list);content.append(history);
  if(open)detail.showModal();
 }
