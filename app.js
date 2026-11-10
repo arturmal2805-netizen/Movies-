@@ -1,4 +1,4 @@
-import {STAGES,TRANSPORT_TYPES,stagesFor,FIELDS,STORAGE_KEY,validateOrder,parseBackup,moveOrder,mergeOrders,latestReadyDate} from './model.js?v=readiness-2';
+import {STAGES,TRANSPORT_TYPES,stagesFor,FIELDS,STORAGE_KEY,validateOrder,parseBackup,moveOrder,mergeOrders} from './model.js?v=readiness-exact-3';
 const $=s=>document.querySelector(s),form=$('#orderForm'),dialog=$('#orderDialog'),detail=$('#detailDialog');
 let orders=[],editing=null,selected=null,dragged=null,toastTimer;
 const stageOptions=(type='express')=>stagesFor(type).map((s,i)=>new Option(s,String(i)));
@@ -71,7 +71,7 @@ function makeCard(order){
  const ref=element('div','card-reference');ref.append(element('span','folder-icon','▱'),element('span','',reference(order)));
  open.append(ref,element('h3','',order.name),element('span','country-tag',order.country));
  const readiness=element('div','card-readiness'+(order.stage===0?' waiting':''));
- readiness.append(element('span','','Дата готовності'),element('strong','',order.readyDate?localDate(order.readyDate+'T12:00:00Z'):'Ще не вказана'));
+ readiness.append(element('span','','Дата готовності вантажу'),element('strong','',order.readyDate?localDate(order.readyDate+'T12:00:00Z'):'Ще не вказана'));
  open.append(readiness);
  open.append(element('div','card-route',(order.manufacturer||'Виробник')+' → Київ'));
  const bottom=element('div','card-bottom');
@@ -103,13 +103,6 @@ function render(){
  stagesFor(type).forEach((label,i)=>{
   const col=element('section','column'),head=element('div','column-head'),items=typed.filter(o=>o.stage===i);
   head.append(element('span','step-num',String(i+1).padStart(2,'0')),element('span','',label),element('span','col-count',String(items.length)));
-  if(i===0){
-   const latest=latestReadyDate(orders,type),waiting=orders.filter(o=>o.transportType===type&&o.stage===0),missing=waiting.filter(o=>!o.readyDate).length;
-   const dateBlock=element('div','latest-readiness');
-   dateBlock.append(element('span','','Найпізніша дата готовності'),element('strong','',latest?localDate(latest+'T12:00:00Z'):'Дата ще не вказана'));
-   if(missing)dateBlock.append(element('small','',missing+' папок без дати'));
-   col.append(head,dateBlock);
-  }
   const cards=element('div','cards');items.forEach(o=>cards.append(makeCard(o)));
   const add=element('button','add-column','＋');add.type='button';add.setAttribute('aria-label','Додати замовлення: '+label);add.onclick=()=>openForm(null,i,type);cards.append(add);col.prepend(head);col.append(cards);
   col.addEventListener('dragover',e=>{if(!dragged||orders.find(o=>o.id===dragged)?.transportType!==type)return;e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('drag-over');});
@@ -131,7 +124,7 @@ function showDetail(id,open=true){
  const summary=element('div','order-summary');
  const overdue=Boolean(order.eta&&order.eta<today()&&order.stage!==stagesFor(order.transportType).length-1);
  for(const [label,value,isLate] of [
-  ['Дата готовності',order.readyDate?localDate(order.readyDate+'T12:00:00Z'):'Ще не вказана',false],
+  ['Дата готовності вантажу',order.readyDate?localDate(order.readyDate+'T12:00:00Z'):'Ще не вказана',false],
   ['Вага вантажу',order.weight?order.weight+' кг':'Не вказано',false],
   ['Граничний строк поставки',order.eta?localDate(order.eta+'T12:00:00Z'):'Не вказано',overdue]
  ]){
