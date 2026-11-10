@@ -29,7 +29,7 @@ jobs:
       - name: Package website without legacy integrations
         run: |
           mkdir -p dist
-          cp index.html style.css app.js model.js icon.svg .nojekyll dist/
+          cp index.html style.css app.js model.js icon.svg apr.avif .nojekyll dist/
           if grep -Eri 'supabase|themoviedb|omdbapi|trakt.tv|simkl.com|sb_publishable|service_role' dist; then
             echo "Unexpected legacy integration in website"
             exit 1

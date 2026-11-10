@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validateOrder,parseBackup,moveOrder,mergeOrders,STAGES,FREIGHT_STAGES,stagesFor,latestReadyDate} from './model.js';
+import {validateOrder,parseBackup,moveOrder,mergeOrders,STAGES,FREIGHT_STAGES,stagesFor,latestReadyDate,logoFor} from './model.js';
 const order=()=>validateOrder({stageSchema:2,id:'order-1',name:'Обладнання',country:'Польща',stage:0,createdAt:'2026-11-09T10:00:00Z',updatedAt:'2026-11-09T10:00:00Z',history:[{stage:0,at:'2026-11-09T10:00:00Z'}]});
 test('create and move a folder through all express stages without losing its data',()=>{let o=order();for(let stage=1;stage<STAGES.length;stage++)o=moveOrder(o,stage,'2026-11-09T12:00:00Z');assert.equal(o.stage,7);assert.equal(o.history.length,8);assert.equal(o.country,'Польща');assert.equal(o.name,'Обладнання');assert.equal(moveOrder(o,7),o);});
 test('export/import preserves folder details and full route history',()=>{const o=moveOrder({...order(),notes:'Документи готові',carrier:'Перевізник'},3);assert.deepEqual(parseBackup(JSON.stringify({version:1,orders:[o]})),[o]);});
@@ -55,4 +55,14 @@ test('readiness maximum uses only waiting folders of that transport type',()=>{
  assert.equal(latestReadyDate([],'express'),'');
  assert.throws(()=>folder('invalid','2026-02-30'));
  assert.equal(parseBackup(JSON.stringify({version:1,orders:rows}))[1].readyDate,'2026-12-15');
+});
+
+test('APR logo is explicit or inferred only for matching orders and can be disabled',()=>{
+ assert.equal(logoFor(validateOrder({...order(),logo:'apr'})).src,'apr.avif');
+ assert.equal(logoFor(validateOrder({...order(),name:'APR замовлення'})).alt,'APR · Anton Paar');
+ assert.equal(logoFor(validateOrder({...order(),manufacturer:'Anton Paar'})).src,'apr.avif');
+ assert.equal(logoFor(validateOrder({...order(),name:'APR',logo:'none'})),null);
+ assert.equal(logoFor(order()),null);
+ assert.equal(parseBackup(JSON.stringify({version:1,orders:[validateOrder({...order(),logo:'apr'})]}))[0].logo,'apr');
+ assert.throws(()=>validateOrder({...order(),logo:'bad'}));
 });
