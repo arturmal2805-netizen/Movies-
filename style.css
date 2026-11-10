@@ -33,3 +33,5 @@ select:disabled{opacity:.7}
 
 .company-logo{display:block;width:100%;height:56px;object-fit:contain;background:#fff;border:1px solid #edf0e7;border-radius:6px;margin:0 0 12px;padding:5px}
 .detail-company-logo{height:82px;max-width:260px;margin:0 0 20px}
+
+.card h3{font-size:19px;line-height:1.35;font-weight:700;margin:8px 0 12px;letter-spacing:-.2px}
