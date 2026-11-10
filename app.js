@@ -17,7 +17,7 @@ function today(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Kyiv',
 function reference(order){return 'AL · '+order.id.slice(0,6).toUpperCase();}
 function openForm(order=null,stage=0,type='express'){
  editing=order?.id||null;form.reset();$('#dialogTitle').textContent=order?'Редагувати замовлення':'Нове замовлення';
- for(const field of FIELDS)form.elements[field].value=order?.[field]||'';
+ for(const field of FIELDS)if(form.elements[field])form.elements[field].value=order?.[field]||'';
  form.elements.transportType.value=order?.transportType||type;
  form.elements.transportType.disabled=Boolean(order);
  form.elements.stage.replaceChildren(...stageOptions(form.elements.transportType.value));
@@ -41,7 +41,7 @@ form.addEventListener('submit',event=>{
  event.preventDefault();if(!$('#stepOne').hidden){nextStep();return;}
  const now=new Date().toISOString(),previous=orders.find(o=>o.id===editing),data=Object.fromEntries(new FormData(form));
  try{
-  let order=validateOrder({...data,transportType:previous?.transportType||data.transportType,id:previous?.id||crypto.randomUUID(),stage:previous?.stage??Number(data.stage),createdAt:previous?.createdAt||now,updatedAt:now,history:previous?.history||[{stage:Number(data.stage),at:now}]});
+  let order=validateOrder({...previous,...data,transportType:previous?.transportType||data.transportType,id:previous?.id||crypto.randomUUID(),stage:previous?.stage??Number(data.stage),createdAt:previous?.createdAt||now,updatedAt:now,history:previous?.history||[{stage:Number(data.stage),at:now}]});
   order=moveOrder(order,Number(data.stage),now);
   if(persist(previous?orders.map(o=>o.id===order.id?order:o):[order,...orders])){dialog.close();toast(previous?'Зміни збережено':'Папку замовлення створено');}
  }catch(error){toast(error.message);}
@@ -115,7 +115,7 @@ function showDetail(id,open=true){
   summary.append(metric);
  }
  content.append(summary);
- const fields=[['Тип перевезення',TRANSPORT_TYPES[order.transportType]],['Країна відправника',order.country],['Перевізник',order.carrier],['Виробник · точка А',order.manufacturer],['Адреса забору',order.origin],['Точка Б · Київ',order.destination],['Номер відстеження',order.tracking],['Контакт',order.contact],['Примітки',order.notes]];
+ const fields=[['Тип перевезення',TRANSPORT_TYPES[order.transportType]],['Країна відправника',order.country],['Перевізник',order.carrier],['Виробник · точка А',order.manufacturer],['Номер відстеження',order.tracking],['Примітки',order.notes]];
  const grid=element('dl','detail-grid');for(const [label,value]of fields){const wrap=element('div');wrap.append(element('dt','',label),element('dd','',value||'Не вказано'));grid.append(wrap);}content.append(grid);
  const history=element('div','history');history.append(element('strong','','Історія маршруту'));const list=element('ol');for(const h of [...order.history].reverse()){list.append(element('li','',stagesFor(order.transportType)[h.stage]+' · '+new Intl.DateTimeFormat('uk-UA',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Kyiv'}).format(new Date(h.at))));}history.append(list);content.append(history);
  if(open)detail.showModal();
